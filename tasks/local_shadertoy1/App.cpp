@@ -1,8 +1,14 @@
 #include "App.hpp"
+#include "shaders/UniformParams.h"
 
+#include <cstdint>
+#include <cstring>
 #include <etna/Etna.hpp>
 #include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
+#include <glm/fwd.hpp>
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_structs.hpp>
 
 
 App::App()
@@ -44,6 +50,8 @@ App::App()
     .resolution = resolution,
   });
 
+  osWindow->captureMouse = true;
+
   // But we also need to hook the OS window up to Vulkan manually!
   {
     // First, we ask GLFW to provide a "surface" for the window,
@@ -73,8 +81,32 @@ App::App()
   // How it is actually performed is not trivial, but we can skip this for now.
   commandManager = etna::get_context().createPerFrameCmdMgr();
 
+  // Shaders
+  etna::create_program("toy", {LOCAL_SHADERTOY_SHADERS_ROOT "toy.comp.spv"});
 
-  // TODO: Initialize any additional resources you require here!
+  // Resources
+  auto& ctx = etna::get_context();
+
+  mainImage = ctx.createImage(etna::Image::CreateInfo{
+    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+    .name = "main_image",
+    .format = vkWindow->getCurrentFormat(),
+    .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc});
+
+  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
+
+  uniformParams = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(UniformParams),
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .name = "uniform_params",
+  });
+
+  uniformParams.map();
+
+  // Pipeline(s)
+  auto& pipelineManager = ctx.getPipelineManager();
+  shadertoyPipeline = pipelineManager.createComputePipeline("toy", {});
 }
 
 App::~App()
@@ -87,6 +119,11 @@ void App::run()
   while (!osWindow->isBeingClosed())
   {
     windowing.poll();
+
+    params.iTime = static_cast<float>(windowing.getTime());
+    params.iResolution = resolution;
+    params.iMouse += osWindow->mouse.capturedPosDelta;
+    memcpy(uniformParams.data(), &params, sizeof(params));
 
     drawFrame();
   }
@@ -115,6 +152,78 @@ void App::drawFrame()
 
     ETNA_CHECK_VK_RESULT(currentCmdBuf.begin(vk::CommandBufferBeginInfo{}));
     {
+      etna::set_state(
+        currentCmdBuf,
+        mainImage.get(),
+        vk::PipelineStageFlagBits2::eComputeShader,
+        vk::AccessFlagBits2::eShaderStorageWrite,
+        vk::ImageLayout::eGeneral,
+        vk::ImageAspectFlagBits::eColor);
+      etna::flush_barriers(currentCmdBuf);
+
+      {
+        auto toyProgInfo = etna::get_shader_program("toy");
+        auto set = etna::create_descriptor_set(
+          toyProgInfo.getDescriptorLayoutId(0),
+          currentCmdBuf,
+          {
+            etna::Binding{7, uniformParams.genBinding()},
+            etna::Binding{8, mainImage.genBinding(defaultSampler.get(), vk::ImageLayout::eGeneral)},
+          });
+
+        currentCmdBuf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          shadertoyPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        currentCmdBuf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, shadertoyPipeline.getVkPipeline());
+
+        auto minGroupDim = [](uint32_t res) { return (res - 1) % 32 + 1; };
+        currentCmdBuf.dispatch(minGroupDim(resolution.x), minGroupDim(resolution.y), 1);
+      }
+
+      etna::set_state(
+        currentCmdBuf,
+        mainImage.get(),
+        vk::PipelineStageFlagBits2::eTransfer,
+        vk::AccessFlagBits2::eTransferRead,
+        vk::ImageLayout::eTransferSrcOptimal,
+        vk::ImageAspectFlagBits::eColor);
+      etna::set_state(
+        currentCmdBuf,
+        backbuffer,
+        vk::PipelineStageFlagBits2::eTransfer,
+        vk::AccessFlagBits2::eTransferWrite,
+        vk::ImageLayout::eTransferDstOptimal,
+        vk::ImageAspectFlagBits::eColor);
+      etna::flush_barriers(currentCmdBuf);
+
+      {
+        vk::ImageBlit blit{
+          .srcSubresource =
+            {.aspectMask = vk::ImageAspectFlagBits::eColor,
+             .mipLevel = 0,
+             .baseArrayLayer = 0,
+             .layerCount = 1},
+          .dstSubresource = {
+            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .mipLevel = 0,
+            .baseArrayLayer = 0,
+            .layerCount = 1}};
+        blit.srcOffsets[0] = blit.dstOffsets[0] = {0, 0, 0};
+        blit.srcOffsets[1] = blit.dstOffsets[1] = {(int32_t)resolution.x, (int32_t)resolution.y, 1};
+
+        currentCmdBuf.blitImage(
+          mainImage.get(),
+          vk::ImageLayout::eTransferSrcOptimal,
+          backbuffer,
+          vk::ImageLayout::eTransferDstOptimal,
+          {blit},
+          vk::Filter::eLinear);
+      }
+
       // First of all, we need to "initialize" th "backbuffer", aka the current swapchain
       // image, into a state that is appropriate for us working with it. The initial state
       // is considered to be "undefined" (aka "I contain trash memory"), by the way.
