@@ -32,8 +32,15 @@ struct Mesh
 class SceneManager
 {
 public:
+  enum class SceneAssetType
+  {
+    GENERIC,
+    BAKED
+  };
+
   SceneManager();
 
+  template <SceneAssetType SceneType = SceneAssetType::GENERIC>
   void selectScene(std::filesystem::path path);
 
   // Every instance is a mesh drawn with a certain transform
@@ -73,14 +80,22 @@ private:
 
   static_assert(sizeof(Vertex) == sizeof(float) * 8);
 
+  template <bool Baked>
   struct ProcessedMeshes
   {
-    std::vector<Vertex> vertices;
-    std::vector<std::uint32_t> indices;
+    using VertexDataCont = std::conditional_t<Baked, std::span<Vertex>, std::vector<Vertex>>;
+    using IndexDataCont =
+      std::conditional_t<Baked, std::span<std::uint32_t>, std::vector<std::uint32_t>>;
+
+    VertexDataCont vertices;
+    IndexDataCont indices;
     std::vector<RenderElement> relems;
     std::vector<Mesh> meshes;
   };
-  ProcessedMeshes processMeshes(const tinygltf::Model& model) const;
+
+  ProcessedMeshes<false> processMeshes(const tinygltf::Model& model) const;
+  ProcessedMeshes<true> processBakedMeshes(const tinygltf::Model& model) const;
+
   void uploadData(std::span<const Vertex> vertices, std::span<const std::uint32_t>);
 
 private:
