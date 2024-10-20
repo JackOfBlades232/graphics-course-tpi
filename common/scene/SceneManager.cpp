@@ -1,5 +1,6 @@
 #include "SceneManager.hpp"
 
+#include <filesystem>
 #include <stack>
 
 #include <spdlog/spdlog.h>
@@ -145,14 +146,14 @@ static std::uint32_t encode_normal(glm::vec3 normal)
   return sx | sy;
 }
 
-SceneManager::ProcessedMeshes SceneManager::processMeshes(const tinygltf::Model& model) const
+SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(const tinygltf::Model& model) const
 {
   // NOTE: glTF assets can have pretty wonky data layouts which are not appropriate
   // for real-time rendering, so we have to press the data first. In serious engines
   // this is mitigated by storing assets on the disc in an engine-specific format that
   // is appropriate for GPU upload right after reading from disc.
 
-  ProcessedMeshes result;
+  ProcessedMeshes<false> result;
 
   // Pre-allocate enough memory so as not to hit the
   // allocator on the memcpy hotpath
@@ -350,6 +351,56 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(const tinygltf::Model&
   return result;
 }
 
+SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(const tinygltf::Model& model) const
+{
+  ProcessedMeshes<true> result;
+
+  {
+    std::size_t totalPrimitives = 0;
+    for (const auto& mesh : model.meshes)
+      totalPrimitives += mesh.primitives.size();
+    result.relems.reserve(totalPrimitives);
+  }
+
+  result.meshes.reserve(model.meshes.size());
+
+  for (const auto& mesh : model.meshes)
+  {
+    result.meshes.push_back(Mesh{
+      .firstRelem = static_cast<std::uint32_t>(result.relems.size()),
+      .relemCount = static_cast<std::uint32_t>(mesh.primitives.size()),
+    });
+
+    for (const auto& prim : mesh.primitives)
+    {
+      if (prim.mode != TINYGLTF_MODE_TRIANGLES)
+      {
+        spdlog::warn(
+          "Encountered a non-triangles primitive, these are not supported for now, skipping it!");
+        --result.meshes.back().relemCount;
+        continue;
+      }
+
+      const tinygltf::Accessor &indAccessor = model.accessors[prim.indices];
+      const tinygltf::Accessor &posAccessor = model.accessors[prim.attributes.at("POSITION")];
+
+      result.relems.push_back(RenderElement{
+        .vertexOffset = static_cast<std::uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
+        .indexOffset = static_cast<std::uint32_t>(indAccessor.byteOffset / sizeof(std::uint32_t)),
+        .indexCount = static_cast<std::uint32_t>(indAccessor.count),
+      });
+    }
+  }
+
+  result.vertices = {
+    (Vertex*)model.buffers[0].data.data(), model.bufferViews[1].byteLength / sizeof(Vertex)};
+  result.indices = {
+    (std::uint32_t*)(result.vertices.data() + result.vertices.size()),
+    model.bufferViews[0].byteLength / sizeof(std::uint32_t)};
+
+  return result;
+}
+
 void SceneManager::uploadData(
   std::span<const Vertex> vertices, std::span<const std::uint32_t> indices)
 {
@@ -371,6 +422,7 @@ void SceneManager::uploadData(
   transferHelper.uploadBuffer<std::uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
 }
 
+template <SceneManager::SceneAssetType SceneType>
 void SceneManager::selectScene(std::filesystem::path path)
 {
   auto maybeModel = loadModel(path);
@@ -379,22 +431,32 @@ void SceneManager::selectScene(std::filesystem::path path)
 
   auto model = std::move(*maybeModel);
 
-  // By aggregating all SceneManager fields mutations here,
-  // we guarantee that we don't forget to clear something
-  // when re-loading a scene.
-
-  // NOTE: you might want to store these on the GPU for GPU-driven rendering.
   auto [instMats, instMeshes] = processInstances(model);
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
 
-  auto [verts, inds, relems, meshs] = processMeshes(model);
-
-  renderElements = std::move(relems);
-  meshes = std::move(meshs);
-
-  uploadData(verts, inds);
+  if constexpr (SceneType == SceneAssetType::GENERIC)
+  {
+    auto [verts, inds, relems, meshs] = processMeshes(model);
+    renderElements = std::move(relems);
+    meshes = std::move(meshs);
+    uploadData(verts, inds);
+  }
+  else if constexpr (SceneType == SceneAssetType::BAKED)
+  {
+    auto [verts, inds, relems, meshs] = processBakedMeshes(model);
+    renderElements = std::move(relems);
+    meshes = std::move(meshs);
+    uploadData(verts, inds);
+  }
+  else
+  {
+    static_assert(0, "Unprocessed SceneType");
+  }
 }
+
+template void SceneManager::selectScene<SceneManager::SceneAssetType::GENERIC>(std::filesystem::path);
+template void SceneManager::selectScene<SceneManager::SceneAssetType::BAKED>(std::filesystem::path);
 
 etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription()
 {
