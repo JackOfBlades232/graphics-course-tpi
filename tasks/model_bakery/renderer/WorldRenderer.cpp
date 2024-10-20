@@ -1,4 +1,5 @@
 #include "WorldRenderer.hpp"
+#include "scene/SceneManager.hpp"
 
 #include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
@@ -28,7 +29,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
 void WorldRenderer::loadScene(std::filesystem::path path)
 {
-  sceneMgr->selectScene(path);
+  sceneMgr->selectScene<SceneManager::SceneAssetType::BAKED>(path);
 }
 
 void WorldRenderer::loadShaders()
