@@ -1,4 +1,5 @@
 #include "SceneManager.hpp"
+#include "etna/Assert.hpp"
 
 #include <filesystem>
 #include <stack>
@@ -146,14 +147,16 @@ static std::uint32_t encode_normal(glm::vec3 normal)
   return sx | sy;
 }
 
-SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(const tinygltf::Model& model) const
+template <class VertexType>
+SceneManager::ProcessedMeshes<false, VertexType> SceneManager::processMeshes(
+  const tinygltf::Model& model) const
 {
   // NOTE: glTF assets can have pretty wonky data layouts which are not appropriate
   // for real-time rendering, so we have to press the data first. In serious engines
   // this is mitigated by storing assets on the disc in an engine-specific format that
   // is appropriate for GPU upload right after reading from disc.
 
-  ProcessedMeshes<false> result;
+  ProcessedMeshes<false, VertexType> result;
 
   // Pre-allocate enough memory so as not to hit the
   // allocator on the memcpy hotpath
@@ -174,7 +177,7 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(const tinygltf:
         break;
       }
     }
-    result.vertices.reserve(vertexBytes / sizeof(Vertex));
+    result.vertices.reserve(vertexBytes / sizeof(VertexType));
     result.indices.reserve(indexBytes / sizeof(std::uint32_t));
   }
 
@@ -351,9 +354,11 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(const tinygltf:
   return result;
 }
 
-SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(const tinygltf::Model& model) const
+template <class VertexType>
+SceneManager::ProcessedMeshes<true, VertexType> SceneManager::processBakedMeshes(
+  const tinygltf::Model& model) const
 {
-  ProcessedMeshes<true> result;
+  ProcessedMeshes<true, VertexType> result;
 
   {
     std::size_t totalPrimitives = 0;
@@ -385,7 +390,7 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(const tinyg
       const tinygltf::Accessor &posAccessor = model.accessors[prim.attributes.at("POSITION")];
 
       result.relems.push_back(RenderElement{
-        .vertexOffset = static_cast<std::uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
+        .vertexOffset = static_cast<std::uint32_t>(posAccessor.byteOffset / sizeof(VertexType)),
         .indexOffset = static_cast<std::uint32_t>(indAccessor.byteOffset / sizeof(std::uint32_t)),
         .indexCount = static_cast<std::uint32_t>(indAccessor.count),
       });
@@ -393,7 +398,7 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(const tinyg
   }
 
   result.vertices = {
-    (Vertex*)model.buffers[0].data.data(), model.bufferViews[1].byteLength / sizeof(Vertex)};
+    (VertexType*)model.buffers[0].data.data(), model.bufferViews[1].byteLength / sizeof(VertexType)};
   result.indices = {
     (std::uint32_t*)(result.vertices.data() + result.vertices.size()),
     model.bufferViews[0].byteLength / sizeof(std::uint32_t)};
@@ -401,8 +406,9 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(const tinyg
   return result;
 }
 
+template <class VertexType>
 void SceneManager::uploadData(
-  std::span<const Vertex> vertices, std::span<const std::uint32_t> indices)
+  std::span<const VertexType> vertices, std::span<const std::uint32_t> indices)
 {
   unifiedVbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
     .size = vertices.size_bytes(),
@@ -418,7 +424,7 @@ void SceneManager::uploadData(
     .name = "unifiedIbuf",
   });
 
-  transferHelper.uploadBuffer<Vertex>(*oneShotCommands, unifiedVbuf, 0, vertices);
+  transferHelper.uploadBuffer<VertexType>(*oneShotCommands, unifiedVbuf, 0, vertices);
   transferHelper.uploadBuffer<std::uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
 }
 
@@ -429,25 +435,37 @@ void SceneManager::selectScene(std::filesystem::path path)
   if (!maybeModel.has_value())
     return;
 
+  ETNA_ASSERT(selectedSceneType == SceneAssetType::NOT_LOADED || selectedSceneType == SceneType);
+
+  selectedSceneType = SceneType;
+
   auto model = std::move(*maybeModel);
 
   auto [instMats, instMeshes] = processInstances(model);
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
 
+  // Sorreh))
   if constexpr (SceneType == SceneAssetType::GENERIC)
   {
-    auto [verts, inds, relems, meshs] = processMeshes(model);
+    auto [verts, inds, relems, meshs] = processMeshes<Vertex>(model);
     renderElements = std::move(relems);
     meshes = std::move(meshs);
-    uploadData(verts, inds);
+    uploadData<Vertex>(verts, inds);
   }
   else if constexpr (SceneType == SceneAssetType::BAKED)
   {
-    auto [verts, inds, relems, meshs] = processBakedMeshes(model);
+    auto [verts, inds, relems, meshs] = processBakedMeshes<Vertex>(model);
     renderElements = std::move(relems);
     meshes = std::move(meshs);
-    uploadData(verts, inds);
+    uploadData<Vertex>(verts, inds);
+  }
+  else if constexpr (SceneType == SceneAssetType::BAKED_QUANTIZED)
+  {
+    auto [verts, inds, relems, meshs] = processBakedMeshes<QuantizedVertex>(model);
+    renderElements = std::move(relems);
+    meshes = std::move(meshs);
+    uploadData<QuantizedVertex>(verts, inds);
   }
   else
   {
@@ -457,19 +475,27 @@ void SceneManager::selectScene(std::filesystem::path path)
 
 template void SceneManager::selectScene<SceneManager::SceneAssetType::GENERIC>(std::filesystem::path);
 template void SceneManager::selectScene<SceneManager::SceneAssetType::BAKED>(std::filesystem::path);
+template void SceneManager::selectScene<SceneManager::SceneAssetType::BAKED_QUANTIZED>(std::filesystem::path);
 
 etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription()
 {
-  return etna::VertexByteStreamFormatDescription{
-    .stride = sizeof(Vertex),
+  etna::VertexByteStreamFormatDescription desc{
+    .stride = selectedSceneVertexSize(),
     .attributes = {
       etna::VertexByteStreamFormatDescription::Attribute{
         .format = vk::Format::eR32G32B32A32Sfloat,
         .offset = 0,
-      },
-      etna::VertexByteStreamFormatDescription::Attribute{
-        .format = vk::Format::eR32G32B32A32Sfloat,
-        .offset = sizeof(glm::vec4),
-      },
+      }
     }};
+
+  // hacky, well, it was so before too
+  if (selectedSceneType != SceneAssetType::BAKED_QUANTIZED)
+  {
+    desc.attributes.push_back(etna::VertexByteStreamFormatDescription::Attribute{
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .offset = sizeof(glm::vec4),
+    });
+  }
+
+  return desc;
 }
