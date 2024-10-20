@@ -1,6 +1,8 @@
+#include <glm/fwd.hpp>
 #include <tiny_gltf.h>
 #include <glm/glm.hpp>
 #include <octahedral.h>
+#include <quantization.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -35,14 +37,14 @@ int main(int argc, char** argv)
 
   std::filesystem::path path{argv[1]};
 
+  bool quantize = false;
   bool dropImages = false;
 
   for (int i = 2; i < argc; ++i)
   {
     if (ARG_EQ(argv[i], "-quantize"))
     {
-      // @TODO
-      LOGWARN("Implement quantization!");
+      quantize = true;
     }
     else if (ARG_EQ(argv[i], "-drop-images"))
     {
@@ -92,17 +94,26 @@ int main(int argc, char** argv)
   struct Vertex
   {
     glm::vec3 pos{};
-    uint32_t normOct = 0;
+    int32_t normOct = 0;
     glm::vec2 texcoord{};
-    uint32_t tangOct = 0;
-    uint32_t pad_ = 0;
+    int32_t tangOct = 0;
+    int32_t pad_ = 0;
+  };
+  struct QuantizedVertex
+  {
+    int64_t posTcPacked = 0;
+    int32_t normOct = 0;
+    int32_t tangOct = 0;
   };
   using Index = uint32_t;
 
   static_assert(sizeof(Vertex) == 32);
+  static_assert(sizeof(QuantizedVertex) == 16);
   static_assert(sizeof(Index) == 4);
 
+  // Either vertices or quantizedVertices is used based on quantize flag
   std::vector<Vertex> vertices{};
+  std::vector<QuantizedVertex> quantizedVertices{};
   std::vector<Index> indices{};
 
   {
@@ -123,7 +134,11 @@ int main(int argc, char** argv)
       }
     }
 
-    vertices.reserve(vertexBytes / sizeof(Vertex));
+    if (quantize)
+      quantizedVertices.reserve(vertexBytes / sizeof(QuantizedVertex));
+    else
+      vertices.reserve(vertexBytes / sizeof(Vertex));
+
     indices.reserve(indexBytes / sizeof(Index));
   }
 
@@ -179,7 +194,7 @@ int main(int argc, char** argv)
       };
 
       const size_t vertexCount = accessors[1]->count;
-      const size_t vertsOffset = byteSize(vertices);
+      const size_t vertsOffset = quantize ? byteSize(quantizedVertices) : byteSize(vertices);
 
       std::array ptrs{
         reinterpret_cast<const uint8_t*>(model.buffers[bufViews[0]->buffer].data.data()) +
@@ -225,21 +240,38 @@ int main(int argc, char** argv)
 
       for (size_t i = 0; i < vertexCount; ++i)
       {
-        auto& vtx = vertices.emplace_back();
+        glm::vec3 pos{0};
         glm::vec3 normal{0};
+        glm::vec2 tc{0};
         glm::vec3 tangent{0};
 
-        memcpy(&vtx.pos, ptrs[1], sizeof(vtx.pos));
+        memcpy(&pos, ptrs[1], sizeof(pos));
 
         if (hasNormals)
           memcpy(&normal, ptrs[2], sizeof(normal));
         if (hasTangents)
           memcpy(&tangent, ptrs[3], sizeof(tangent));
         if (hasTexcoord)
-          memcpy(&vtx.texcoord, ptrs[4], sizeof(vtx.texcoord));
+          memcpy(&tc, ptrs[4], sizeof(tc));
 
-        vtx.normOct = oct_encode(normal);
-        vtx.tangOct = oct_encode(tangent);
+        uint32_t normOct = oct_encode(normal);
+        uint32_t tangOct = oct_encode(tangent);
+        
+        if (quantize)
+        {
+          auto &vtx = quantizedVertices.emplace_back();
+          vtx.posTcPacked = quantize3f6b2f2b(pos, tc);
+          vtx.normOct = normOct;
+          vtx.tangOct = tangOct;
+        }
+        else
+        {
+          auto &vtx = vertices.emplace_back();
+          vtx.pos = pos;
+          vtx.texcoord = tc;
+          vtx.normOct = normOct;
+          vtx.tangOct = tangOct;
+        }
 
         ptrs[1] += strides[1];
         if (hasNormals)
@@ -271,6 +303,10 @@ int main(int argc, char** argv)
         memcpy(indices.data() + lastTotalIndices, ptrs[0], sizeof(indices[0]) * indexCount);
       }
 
+      // @HUH: do norm/tang componentTypes need to be short? I oct encode and then quantize, which
+      // would be the other way around. Anyways, this will not be ok for third party tools, as we
+      // decode on the gpu, not in streaming.
+
       tinygltf::Accessor indAccessor{};
       indAccessor.bufferView = 0;
       indAccessor.byteOffset = indOffset;
@@ -281,7 +317,7 @@ int main(int argc, char** argv)
       tinygltf::Accessor posAccessor{};
       posAccessor.bufferView = 1;
       posAccessor.byteOffset = vertsOffset;
-      posAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+      posAccessor.componentType = quantize ? TINYGLTF_COMPONENT_TYPE_SHORT : TINYGLTF_COMPONENT_TYPE_FLOAT;
       posAccessor.count = vertexCount;
       posAccessor.type = TINYGLTF_TYPE_VEC3;
 
@@ -295,7 +331,7 @@ int main(int argc, char** argv)
       tinygltf::Accessor tcAccessor{};
       tcAccessor.bufferView = 3;
       tcAccessor.byteOffset = vertsOffset;
-      tcAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+      tcAccessor.componentType = quantize ? TINYGLTF_COMPONENT_TYPE_BYTE : TINYGLTF_COMPONENT_TYPE_FLOAT;
       tcAccessor.count = vertexCount;
       tcAccessor.type = TINYGLTF_TYPE_VEC2;
 
@@ -327,12 +363,16 @@ int main(int argc, char** argv)
   // We preserve the nodes/transforms, changing the buffers, bufferViews,
   // accessors and accessor indices in mesh primitives
 
-  const size_t vertsBytes = byteSize(vertices);
+  const size_t vertsBytes = quantize ? byteSize(quantizedVertices) : byteSize(vertices);
+  const size_t vertSize = quantize ? sizeof(QuantizedVertex) : sizeof(Vertex);
   const size_t indBytes = byteSize(indices);
 
   tinygltf::Buffer combinedBuffer{};
   combinedBuffer.data.resize(vertsBytes + indBytes);
-  memcpy(combinedBuffer.data.data(), vertices.data(), vertsBytes);
+  memcpy(
+    combinedBuffer.data.data(),
+    quantize ? (const uint8_t*)quantizedVertices.data() : (const uint8_t*)vertices.data(),
+    vertsBytes);
   memcpy(combinedBuffer.data.data() + vertsBytes, indices.data(), indBytes);
 
   tinygltf::BufferView indView{};
@@ -348,15 +388,15 @@ int main(int argc, char** argv)
   posView.buffer = 0;
   posView.byteOffset = 0;
   posView.byteLength = vertsBytes;
-  posView.byteStride = sizeof(Vertex);
+  posView.byteStride = vertSize;
   posView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
 
   tinygltf::BufferView tcView{};
   tcView.name = "tcView";
   tcView.buffer = 0;
-  tcView.byteOffset = 16;
+  tcView.byteOffset = vertSize / 2;
   tcView.byteLength = vertsBytes;
-  tcView.byteStride = sizeof(Vertex);
+  posView.byteStride = vertSize;
   tcView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
 
   auto makeOctExtensionJson = [](int buf_id, const tinygltf::BufferView& bv) {
@@ -374,18 +414,18 @@ int main(int argc, char** argv)
   tinygltf::BufferView normOctView{};
   normOctView.name = "normOctView";
   normOctView.buffer = 1; // Fake placeholder, not by the spec, but tinygltf can't do no-uri buffers
-  normOctView.byteOffset = 12;
+  normOctView.byteOffset = quantize ? 4 : 12;
   normOctView.byteLength = vertsBytes;
-  normOctView.byteStride = 32;
+  normOctView.byteStride = vertSize;
   normOctView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
   normOctView.extensions["EXT_meshopt_compression"] = makeOctExtensionJson(0, normOctView);
 
   tinygltf::BufferView tangOctView{};
   tangOctView.name = "tangOctView";
   tangOctView.buffer = 1; // Same, fake placeholder
-  tangOctView.byteOffset = 24;
+  normOctView.byteOffset = quantize ? 12 : 24;
   tangOctView.byteLength = vertsBytes;
-  tangOctView.byteStride = 32;
+  tangOctView.byteStride = vertSize;
   tangOctView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
   tangOctView.extensions["EXT_meshopt_compression"] = makeOctExtensionJson(0, tangOctView);
 
@@ -394,8 +434,14 @@ int main(int argc, char** argv)
   model.accessors = std::move(combinedAccessors);
 
   model.extensionsRequired.emplace_back("EXT_meshopt_compression");
+  if (quantize)
+    model.extensionsRequired.emplace_back("KHR_mesh_quantization");
 
-  path.replace_filename("baked_scene.glb");
+  if (quantize)
+    path.replace_filename("baked_scene-q.glb");
+  else
+    path.replace_filename("baked_scene.glb");
+
   bool res = api.WriteGltfSceneToFile(&model, path.string(), true, true, true, true);
   VERIFY(res, "Failed to write baked scene to %s", path.string().c_str());
 
