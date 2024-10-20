@@ -82,7 +82,7 @@ App::App()
   commandManager = etna::get_context().createPerFrameCmdMgr();
 
   // Shaders
-  etna::create_program("toy", {LOCAL_SHADERTOY_SHADERS_ROOT "toy.comp.spv"});
+  etna::create_program("toy", {LOCAL_SHADERTOY1_SHADERS_ROOT "toy.comp.spv"});
 
   // Resources
   auto& ctx = etna::get_context();
