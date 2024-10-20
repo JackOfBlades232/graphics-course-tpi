@@ -12,4 +12,5 @@ target_link_libraries(model_bakery_renderer
 target_add_shaders(model_bakery_renderer
   shaders/static_mesh.frag
   shaders/static_mesh.vert
+  shaders/static_mesh_quantized.vert
 )

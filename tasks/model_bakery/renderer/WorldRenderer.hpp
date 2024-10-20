@@ -18,6 +18,7 @@ public:
   WorldRenderer();
 
   void loadScene(std::filesystem::path path);
+  void initSceneInfo();
 
   void loadShaders();
   void allocateResources(glm::uvec2 swapchain_resolution);
