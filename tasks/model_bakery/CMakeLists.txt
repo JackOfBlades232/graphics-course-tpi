@@ -1,3 +1,6 @@
+# includes
+add_subdirectory(common)
+
 # Simple app to render models
 add_subdirectory(renderer)
 
