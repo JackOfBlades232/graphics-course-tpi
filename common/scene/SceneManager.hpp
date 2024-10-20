@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 
 #include <glm/glm.hpp>
@@ -34,11 +35,15 @@ class SceneManager
 public:
   enum class SceneAssetType
   {
+    NOT_LOADED,
     GENERIC,
-    BAKED
+    BAKED,
+    BAKED_QUANTIZED,
   };
 
   SceneManager();
+
+  void preSetSceneType(SceneAssetType scene_type) { selectedSceneType = scene_type; }
 
   template <SceneAssetType SceneType = SceneAssetType::GENERIC>
   void selectScene(std::filesystem::path path);
@@ -78,12 +83,16 @@ private:
     glm::vec4 texCoordAndTangentAndPadding;
   };
 
-  static_assert(sizeof(Vertex) == sizeof(float) * 8);
+  using QuantizedVertex = glm::vec4;
 
-  template <bool Baked>
+  static_assert(sizeof(Vertex) == sizeof(float) * 8);
+  static_assert(sizeof(QuantizedVertex) == sizeof(float) * 4);
+
+  template <bool Baked, class VertexType>
   struct ProcessedMeshes
   {
-    using VertexDataCont = std::conditional_t<Baked, std::span<Vertex>, std::vector<Vertex>>;
+    using VertexDataCont =
+      std::conditional_t<Baked, std::span<VertexType>, std::vector<VertexType>>;
     using IndexDataCont =
       std::conditional_t<Baked, std::span<std::uint32_t>, std::vector<std::uint32_t>>;
 
@@ -93,15 +102,27 @@ private:
     std::vector<Mesh> meshes;
   };
 
-  ProcessedMeshes<false> processMeshes(const tinygltf::Model& model) const;
-  ProcessedMeshes<true> processBakedMeshes(const tinygltf::Model& model) const;
+  template <class VertexType>
+  ProcessedMeshes<false, VertexType> processMeshes(const tinygltf::Model& model) const;
+  template <class VertexType>
+  ProcessedMeshes<true, VertexType> processBakedMeshes(const tinygltf::Model& model) const;
 
-  void uploadData(std::span<const Vertex> vertices, std::span<const std::uint32_t>);
+  template <class VertexType>
+  void uploadData(std::span<const VertexType> vertices, std::span<const std::uint32_t>);
+
+  uint32_t selectedSceneVertexSize() const
+  {
+    return selectedSceneType == SceneManager::SceneAssetType::BAKED_QUANTIZED
+      ? sizeof(QuantizedVertex)
+      : sizeof(Vertex);
+  }
 
 private:
   tinygltf::TinyGLTF loader;
   std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
   etna::BlockingTransferHelper transferHelper;
+
+  SceneAssetType selectedSceneType = SceneManager::SceneAssetType::NOT_LOADED;
 
   std::vector<RenderElement> renderElements;
   std::vector<Mesh> meshes;
