@@ -147,8 +147,7 @@ static std::uint32_t encode_normal(glm::vec3 normal)
   return sx | sy;
 }
 
-template <class VertexType>
-SceneManager::ProcessedMeshes<false, VertexType> SceneManager::processMeshes(
+SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
   const tinygltf::Model& model) const
 {
   // NOTE: glTF assets can have pretty wonky data layouts which are not appropriate
@@ -156,7 +155,7 @@ SceneManager::ProcessedMeshes<false, VertexType> SceneManager::processMeshes(
   // this is mitigated by storing assets on the disc in an engine-specific format that
   // is appropriate for GPU upload right after reading from disc.
 
-  ProcessedMeshes<false, VertexType> result;
+  ProcessedMeshes<false> result;
 
   // Pre-allocate enough memory so as not to hit the
   // allocator on the memcpy hotpath
@@ -177,7 +176,7 @@ SceneManager::ProcessedMeshes<false, VertexType> SceneManager::processMeshes(
         break;
       }
     }
-    result.vertices.reserve(vertexBytes / sizeof(VertexType));
+    result.vertices.reserve(vertexBytes / sizeof(Vertex));
     result.indices.reserve(indexBytes / sizeof(std::uint32_t));
   }
 
@@ -354,11 +353,10 @@ SceneManager::ProcessedMeshes<false, VertexType> SceneManager::processMeshes(
   return result;
 }
 
-template <class VertexType>
-SceneManager::ProcessedMeshes<true, VertexType> SceneManager::processBakedMeshes(
+SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(
   const tinygltf::Model& model) const
 {
-  ProcessedMeshes<true, VertexType> result;
+  ProcessedMeshes<true> result;
 
   {
     std::size_t totalPrimitives = 0;
@@ -390,7 +388,7 @@ SceneManager::ProcessedMeshes<true, VertexType> SceneManager::processBakedMeshes
       const tinygltf::Accessor &posAccessor = model.accessors[prim.attributes.at("POSITION")];
 
       result.relems.push_back(RenderElement{
-        .vertexOffset = static_cast<std::uint32_t>(posAccessor.byteOffset / sizeof(VertexType)),
+        .vertexOffset = static_cast<std::uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
         .indexOffset = static_cast<std::uint32_t>(indAccessor.byteOffset / sizeof(std::uint32_t)),
         .indexCount = static_cast<std::uint32_t>(indAccessor.count),
       });
@@ -398,7 +396,7 @@ SceneManager::ProcessedMeshes<true, VertexType> SceneManager::processBakedMeshes
   }
 
   result.vertices = {
-    (VertexType*)model.buffers[0].data.data(), model.bufferViews[1].byteLength / sizeof(VertexType)};
+    (Vertex*)model.buffers[0].data.data(), model.bufferViews[1].byteLength / sizeof(Vertex)};
   result.indices = {
     (std::uint32_t*)(result.vertices.data() + result.vertices.size()),
     model.bufferViews[0].byteLength / sizeof(std::uint32_t)};
@@ -428,16 +426,15 @@ void SceneManager::uploadData(
   transferHelper.uploadBuffer<std::uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
 }
 
-template <SceneManager::SceneAssetType SceneType>
-void SceneManager::selectScene(std::filesystem::path path)
+void SceneManager::selectScene(std::filesystem::path path, SceneAssetType scene_type)
 {
   auto maybeModel = loadModel(path);
   if (!maybeModel.has_value())
     return;
 
-  ETNA_ASSERT(selectedSceneType == SceneAssetType::NOT_LOADED || selectedSceneType == SceneType);
-
-  selectedSceneType = SceneType;
+  ETNA_ASSERT(scene_type != SceneAssetType::NOT_LOADED);
+  ETNA_ASSERT(selectedSceneType == SceneAssetType::NOT_LOADED || selectedSceneType == scene_type);
+  selectedSceneType = scene_type;
 
   auto model = std::move(*maybeModel);
 
@@ -445,57 +442,38 @@ void SceneManager::selectScene(std::filesystem::path path)
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
 
-  // Sorreh))
-  if constexpr (SceneType == SceneAssetType::GENERIC)
+  switch (scene_type)
   {
-    auto [verts, inds, relems, meshs] = processMeshes<Vertex>(model);
+  case SceneAssetType::GENERIC: {
+    auto [verts, inds, relems, meshs] = processMeshes(model);
     renderElements = std::move(relems);
     meshes = std::move(meshs);
     uploadData<Vertex>(verts, inds);
   }
-  else if constexpr (SceneType == SceneAssetType::BAKED)
-  {
-    auto [verts, inds, relems, meshs] = processBakedMeshes<Vertex>(model);
+  break;
+  case SceneAssetType::BAKED: {
+    auto [verts, inds, relems, meshs] = processBakedMeshes(model);
     renderElements = std::move(relems);
     meshes = std::move(meshs);
     uploadData<Vertex>(verts, inds);
   }
-  else if constexpr (SceneType == SceneAssetType::BAKED_QUANTIZED)
-  {
-    auto [verts, inds, relems, meshs] = processBakedMeshes<QuantizedVertex>(model);
-    renderElements = std::move(relems);
-    meshes = std::move(meshs);
-    uploadData<QuantizedVertex>(verts, inds);
-  }
-  else
-  {
-    static_assert(0, "Unprocessed SceneType");
+  break;
+  default:
+    ETNA_PANIC("we have gone insane");
   }
 }
 
-template void SceneManager::selectScene<SceneManager::SceneAssetType::GENERIC>(std::filesystem::path);
-template void SceneManager::selectScene<SceneManager::SceneAssetType::BAKED>(std::filesystem::path);
-template void SceneManager::selectScene<SceneManager::SceneAssetType::BAKED_QUANTIZED>(std::filesystem::path);
-
 etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription()
 {
-  etna::VertexByteStreamFormatDescription desc{
-    .stride = selectedSceneVertexSize(),
+  return etna::VertexByteStreamFormatDescription{
+    .stride = sizeof(Vertex),
     .attributes = {
       etna::VertexByteStreamFormatDescription::Attribute{
         .format = vk::Format::eR32G32B32A32Sfloat,
         .offset = 0,
-      }
-    }};
-
-  // hacky, well, it was so before too
-  if (selectedSceneType != SceneAssetType::BAKED_QUANTIZED)
-  {
-    desc.attributes.push_back(etna::VertexByteStreamFormatDescription::Attribute{
-      .format = vk::Format::eR32G32B32A32Sfloat,
-      .offset = sizeof(glm::vec4),
-    });
-  }
-
-  return desc;
+      },
+      etna::VertexByteStreamFormatDescription::Attribute{
+        .format = vk::Format::eR32G32B32A32Sfloat,
+        .offset = sizeof(glm::vec4),
+      }}};
 }

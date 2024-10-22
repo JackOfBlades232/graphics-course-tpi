@@ -1,9 +1,6 @@
 #include "App.hpp"
-#include "GlobalSettings.hpp"
 
 #include <tracy/Tracy.hpp>
-
-extern GlobalSettings gSettings;
 
 App::App()
 {
@@ -23,10 +20,7 @@ App::App()
 
   mainCam.lookAt({0, 10, 10}, {0, 0, 0}, {0, 1, 0});
 
-  if (gSettings.useQuantizedScene)
-    renderer->loadScene(GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/low_poly_dark_town/baked_scene-q.glb");
-  else
-    renderer->loadScene(GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/low_poly_dark_town/baked_scene.glb");
+  renderer->loadScene(GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/low_poly_dark_town/baked/scene.gltf");
 }
 
 void App::run()

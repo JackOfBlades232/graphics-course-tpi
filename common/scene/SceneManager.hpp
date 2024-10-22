@@ -38,15 +38,12 @@ public:
     NOT_LOADED,
     GENERIC,
     BAKED,
-    BAKED_QUANTIZED,
   };
 
   SceneManager();
 
-  void preSetSceneType(SceneAssetType scene_type) { selectedSceneType = scene_type; }
-
-  template <SceneAssetType SceneType = SceneAssetType::GENERIC>
-  void selectScene(std::filesystem::path path);
+  void selectScene(
+    std::filesystem::path path, SceneAssetType scene_type = SceneManager::SceneAssetType::GENERIC);
 
   // Every instance is a mesh drawn with a certain transform
   // NOTE: maybe you can pass some additional data through unused matrix entries?
@@ -83,16 +80,13 @@ private:
     glm::vec4 texCoordAndTangentAndPadding;
   };
 
-  using QuantizedVertex = glm::vec4;
-
   static_assert(sizeof(Vertex) == sizeof(float) * 8);
-  static_assert(sizeof(QuantizedVertex) == sizeof(float) * 4);
 
-  template <bool Baked, class VertexType>
+  template <bool Baked>
   struct ProcessedMeshes
   {
     using VertexDataCont =
-      std::conditional_t<Baked, std::span<VertexType>, std::vector<VertexType>>;
+      std::conditional_t<Baked, std::span<Vertex>, std::vector<Vertex>>;
     using IndexDataCont =
       std::conditional_t<Baked, std::span<std::uint32_t>, std::vector<std::uint32_t>>;
 
@@ -102,20 +96,11 @@ private:
     std::vector<Mesh> meshes;
   };
 
-  template <class VertexType>
-  ProcessedMeshes<false, VertexType> processMeshes(const tinygltf::Model& model) const;
-  template <class VertexType>
-  ProcessedMeshes<true, VertexType> processBakedMeshes(const tinygltf::Model& model) const;
+  ProcessedMeshes<false> processMeshes(const tinygltf::Model& model) const;
+  ProcessedMeshes<true> processBakedMeshes(const tinygltf::Model& model) const;
 
   template <class VertexType>
   void uploadData(std::span<const VertexType> vertices, std::span<const std::uint32_t>);
-
-  uint32_t selectedSceneVertexSize() const
-  {
-    return selectedSceneType == SceneManager::SceneAssetType::BAKED_QUANTIZED
-      ? sizeof(QuantizedVertex)
-      : sizeof(Vertex);
-  }
 
 private:
   tinygltf::TinyGLTF loader;
