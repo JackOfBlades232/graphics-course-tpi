@@ -5,50 +5,35 @@
 
 #include <glm/glm.hpp>
 
-inline int64_t quantize3f6b2f2b(glm::vec3 in3, glm::vec2 in2)
+inline uint32_t quantize3fnorm(glm::vec3 in)
 {
-  int64_t x2 = (int8_t)(in2.x * 127.0);
-  int64_t y2 = (int8_t)(in2.y * 127.0);
-  int64_t x3 = (int16_t)(in3.x * 32767.0);
-  int64_t y3 = (int16_t)(in3.y * 32767.0);
-  int64_t z3 = (int16_t)(in3.z * 32767.0);
-  return (x2 << 56) | (y2 << 48) | (x3 << 32) | (y3 << 16) | z3;
+  int32_t x = (int32_t)(in.x * 127.0) & 0xFF;
+  int32_t y = (int32_t)(in.y * 127.0) & 0xFF;
+  int32_t z = (int32_t)(in.z * 127.0) & 0xFF;
+  return (z << 16) | (y << 8) | x;
 }
 
 #else
-
-float dequantizef16(uint val)
-{
-  float sgn = 1.0;
-  if ((val & 0x8000) != 0)
-  {
-    val = 0x10000 - val;
-    sgn = -1.0;
-  }
-  return sgn * float(val) / 32767.0;
-}
-
-float dequantizef8(uint val)
-{
-  float sgn = 1.0;
-  if ((val & 0x80) != 0)
-  {
-    val = 0x100 - val;
-    sgn = -1.0;
-  }
-  return sgn * float(val) / 127.0;
-}
  
-void dequantize3f6b2f2b(uint lo, uint hi, out vec3 v3, out vec2 v2)
+vec3 dequantize3fnorm(uint q)
 {
-  uint xq2 = (hi >> 24) & 0xFF;
-  uint yq2 = (hi >> 16) & 0xFF;
-  uint xq3 = hi & 0xFFFF;
-  uint yq3 = (lo >> 16) & 0xFFFF;
-  uint zq3 = lo & 0xFFFF;
+  const uint a_enc_x = (q  & 0x000000FFu);
+  const uint a_enc_y = ((q & 0x0000FF00u) >> 8);
+  const uint a_enc_z = ((q & 0x00FF0000u) >> 16);
 
-  v2 = vec2(dequantizef8(xq2), dequantizef8(yq2)); 
-  v3 = vec3(dequantizef16(xq3), dequantizef16(yq3), dequantizef16(zq3)); 
+  const int usX = int(a_enc_x & 0x000000FFu);
+  const int usY = int(a_enc_y & 0x000000FFu);
+  const int usZ = int(a_enc_z & 0x000000FFu);
+
+  const int sX = (usX <= 127) ? usX : usX - 256;
+  const int sY = (usY <= 127) ? usY : usY - 256;
+  const int sZ = (usZ <= 127) ? usZ : usZ - 256;
+
+  const float x = sX*(1.0f / 127.0f);
+  const float y = sY*(1.0f / 127.0f);
+  const float z = sZ*(1.0f / 127.0f);
+
+  return vec3(x, y, z);
 }
 
 #endif
