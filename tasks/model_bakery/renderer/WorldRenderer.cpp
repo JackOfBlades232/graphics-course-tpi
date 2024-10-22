@@ -1,13 +1,10 @@
 #include "WorldRenderer.hpp"
-#include "GlobalSettings.hpp"
 
 #include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Profiling.hpp>
 #include <glm/ext.hpp>
-
-extern GlobalSettings gSettings;
 
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
@@ -30,40 +27,17 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
 void WorldRenderer::loadScene(std::filesystem::path path)
 {
-  if (gSettings.useQuantizedScene)
-    sceneMgr->selectScene<SceneManager::SceneAssetType::BAKED_QUANTIZED>(path);
-  else
-    sceneMgr->selectScene<SceneManager::SceneAssetType::BAKED>(path);
-}
-
-void WorldRenderer::initSceneInfo()
-{
-  if (gSettings.useQuantizedScene)
-    sceneMgr->preSetSceneType(SceneManager::SceneAssetType::BAKED_QUANTIZED);
-  else
-    sceneMgr->preSetSceneType(SceneManager::SceneAssetType::BAKED);
+  sceneMgr->selectScene(path, SceneManager::SceneAssetType::BAKED);
 }
 
 void WorldRenderer::loadShaders()
 {
-  if (gSettings.useQuantizedScene)
-  {
-    etna::create_program(
-      "static_mesh_material",
-      {MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
-       MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh_quantized.vert.spv"});
-    etna::create_program(
-      "static_mesh", {MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh_quantized.vert.spv"});
-  }
-  else
-  {
-    etna::create_program(
-      "static_mesh_material",
-      {MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
-       MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
-    etna::create_program(
-      "static_mesh", {MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
-  }
+  etna::create_program(
+    "static_mesh_material",
+    {MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
+     MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+  etna::create_program(
+    "static_mesh", {MODEL_BAKERY_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)

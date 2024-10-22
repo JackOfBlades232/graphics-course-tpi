@@ -55,7 +55,6 @@ void Renderer::initFrameDelivery(vk::UniqueSurfaceKHR a_surface, ResolutionProvi
   resolution = {w, h};
 
   worldRenderer = std::make_unique<WorldRenderer>();
-  worldRenderer->initSceneInfo();
 
   worldRenderer->allocateResources(resolution);
   worldRenderer->loadShaders();
