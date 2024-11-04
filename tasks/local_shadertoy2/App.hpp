@@ -39,11 +39,9 @@ private:
   etna::GraphicsPipeline shadertoyPipeline;
   etna::GraphicsPipeline proceduralPipeline;
 
-  etna::Image mainImage;
-  etna::Image proceduralImage;
-  etna::Image sourceTexture;
-  etna::Sampler defaultSampler;
-  etna::Sampler detailSampler;
+  etna::Image mainImage, proceduralImage;
+  etna::Image sourceTexture, skyboxTexture;
+  etna::Sampler defaultSampler, detailSampler;
   etna::Buffer uniformParams;
 
   UniformParams params{};

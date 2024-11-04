@@ -6,10 +6,11 @@
 layout(location = 0) in vec2 texCoord;
 layout(location = 0) out vec4 fragColor;
 
-layout(binding = 0, set = 1) uniform sampler2D iChannel0;
-layout(binding = 1, set = 1) uniform sampler2D iChannel1;
-// layout(binding = 2, set = 1) uniform sampler2D iChannel2;
-// layout(binding = 3, set = 1) uniform sampler2D iChannel3;
+layout(binding = 0, set = 1) uniform sampler2D   iChannel0;
+layout(binding = 1, set = 1) uniform sampler2D   iChannel1;
+layout(binding = 2, set = 1) uniform samplerCube iChannel2;
+// layout(binding = 3, set = 1) uniform samplerXX iChannel3;
+
 
 layout(binding = 7) uniform Params
 {
@@ -265,8 +266,10 @@ void mainImage(out vec4 frag_color, in vec2 frag_coord)
       frag_color = trip_color * texture(iChannel0, (mv*p).zx/6.0 + 0.5);
     else
       frag_color = trip_color;
-  } else
-    frag_color = vec4(0.0, 0.0, 0.0, 1.0);
+  } else {
+    // Cubemap sample
+    frag_color = texture(iChannel2, mv*dir);
+  }
 }
 
 void main()
