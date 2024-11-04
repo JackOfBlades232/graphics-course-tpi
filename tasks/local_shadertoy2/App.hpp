@@ -6,6 +6,7 @@
 #include <etna/PerFrameCmdMgr.hpp>
 #include <etna/GraphicsPipeline.hpp>
 #include <etna/DescriptorSet.hpp>
+#include <etna/BlockingTransferHelper.hpp>
 #include <etna/Image.hpp>
 #include <etna/Buffer.hpp>
 #include <etna/Sampler.hpp>
@@ -32,11 +33,17 @@ private:
 
   std::unique_ptr<etna::Window> vkWindow;
   std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
+  std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
+  std::unique_ptr<etna::BlockingTransferHelper> transferHelper;
 
   etna::GraphicsPipeline shadertoyPipeline;
+  etna::GraphicsPipeline proceduralPipeline;
 
-  etna::Image mainImage, mainDepth;
+  etna::Image mainImage;
+  etna::Image proceduralImage;
+  etna::Image sourceTexture;
   etna::Sampler defaultSampler;
+  etna::Sampler detailSampler;
   etna::Buffer uniformParams;
 
   UniformParams params{};
