@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 #include <algorithm>
 #include <etna/Etna.hpp>
 #include <etna/Assert.hpp>
@@ -67,7 +68,8 @@ App::App()
     {LOCAL_SHADERTOY2_SHADERS_ROOT "toy.frag.spv", LOCAL_SHADERTOY2_SHADERS_ROOT "toy.vert.spv"});
   etna::create_program(
     "proc",
-    {LOCAL_SHADERTOY2_SHADERS_ROOT "toy_buffer.frag.spv", LOCAL_SHADERTOY2_SHADERS_ROOT "toy.vert.spv"});
+    {LOCAL_SHADERTOY2_SHADERS_ROOT "toy_buffer.frag.spv",
+     LOCAL_SHADERTOY2_SHADERS_ROOT "toy.vert.spv"});
 
   auto& ctx = etna::get_context();
 
@@ -81,6 +83,62 @@ App::App()
     .name = "proc_image",
     .format = vkWindow->getCurrentFormat(),
     .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+
+  auto getMipCountForDim = [](uint32_t w, uint32_t h) {
+    return (uint32_t)floor(log2(std::max(w, h))) + 1;
+  };
+  auto generateTexMipLevels =
+    [this](etna::Image& tex, uint32_t w, uint32_t h, uint32_t mip_count, uint32_t layer_count) {
+      auto cmdBuf = oneShotCommands->start();
+
+      ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
+      {
+        // This should be done with separate barriers for mip-levels, but its ok
+        etna::set_state(
+          cmdBuf,
+          tex.get(),
+          vk::PipelineStageFlagBits2::eTransfer,
+          vk::AccessFlagBits2::eTransferRead | vk::AccessFlagBits2::eTransferWrite,
+          vk::ImageLayout::eGeneral,
+          vk::ImageAspectFlagBits::eColor);
+        etna::flush_barriers(cmdBuf);
+
+        for (uint32_t level = 1; level < mip_count; ++level)
+        {
+          vk::ImageBlit blit{
+            .srcSubresource =
+              {.aspectMask = vk::ImageAspectFlagBits::eColor,
+               .mipLevel = level - 1,
+               .baseArrayLayer = 0,
+               .layerCount = layer_count},
+            .dstSubresource = {
+              .aspectMask = vk::ImageAspectFlagBits::eColor,
+              .mipLevel = level,
+              .baseArrayLayer = 0,
+              .layerCount = layer_count}};
+          blit.srcOffsets[0] = blit.dstOffsets[0] = {0, 0, 0};
+          blit.srcOffsets[1] = {(int32_t)w, (int32_t)h, 1};
+          blit.dstOffsets[1] = {(int32_t)std::max(w / 2, 1u), (int32_t)std::max(h / 2, 1u), 1};
+
+          w = blit.dstOffsets[1].x;
+          h = blit.dstOffsets[1].y;
+
+          cmdBuf.blitImage(
+            tex.get(),
+            vk::ImageLayout::eGeneral,
+            tex.get(),
+            vk::ImageLayout::eGeneral,
+            {blit},
+            vk::Filter::eLinear);
+        }
+      }
+      ETNA_CHECK_VK_RESULT(cmdBuf.end());
+
+      oneShotCommands->submitAndWait(std::move(cmdBuf));
+    };
+
+  uint32_t detailMaxLod = 1;
+  uint32_t skyboxMaxLod = 1;
 
   {
     int texW, texH, texChannels;
@@ -99,19 +157,30 @@ App::App()
     }
     stbi_image_free(texData);
 
+    uint32_t mipCnt = getMipCountForDim((uint32_t)texW, (uint32_t)texH);
+
     sourceTexture = ctx.createImage(etna::Image::CreateInfo{
       .extent = vk::Extent3D{(uint32_t)texW, (uint32_t)texH, 1},
       .name = "src_tex",
       .format = vk::Format::eR8G8B8A8Srgb,
-      .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst});
+      .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+        vk::ImageUsageFlagBits::eTransferDst,
+      .mipLevels = mipCnt});
 
     transferHelper->uploadImage(*oneShotCommands, sourceTexture, 0, 0, imageData);
+    generateTexMipLevels(sourceTexture, texW, texH, mipCnt, 1);
+
+    detailMaxLod = std::max(detailMaxLod, mipCnt);
   }
 
   {
     int texW, texH, texChannels;
     unsigned char* texData = stbi_load(
-      GRAPHICS_COURSE_RESOURCES_ROOT "/textures/SomeSkyboxOffTheNet.png", &texW, &texH, &texChannels, 0);
+      GRAPHICS_COURSE_RESOURCES_ROOT "/textures/SomeSkyboxOffTheNet.png",
+      &texW,
+      &texH,
+      &texChannels,
+      0);
     ETNA_VERIFY(texData);
 
     ETNA_VERIFYF(texChannels == 3 || texChannels == 4, "Invalid channels={}", texChannels);
@@ -145,26 +214,38 @@ App::App()
             img[dstId++] = (std::byte)255;
         }
     }
-
     stbi_image_free(texData);
+
+    uint32_t mipCnt = getMipCountForDim(side, side);
 
     skyboxTexture = ctx.createImage(etna::Image::CreateInfo{
       .extent = vk::Extent3D{side, side, 1},
       .name = "skybox_tex",
       .format = vk::Format::eR8G8B8A8Srgb,
-      .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+      .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+        vk::ImageUsageFlagBits::eTransferDst,
       .layers = 6,
+      .mipLevels = mipCnt,
       .flags = vk::ImageCreateFlagBits::eCubeCompatible});
 
     for (size_t i = 0; i < 6; ++i)
       transferHelper->uploadImage(*oneShotCommands, skyboxTexture, 0, (uint32_t)i, imageDatas[i]);
+    generateTexMipLevels(skyboxTexture, side, side, mipCnt, 6);
+
+    skyboxMaxLod = std::max(skyboxMaxLod, mipCnt);
   }
 
   defaultSampler = etna::Sampler{etna::Sampler::CreateInfo{.name = "default_sampler"}};
   detailSampler = etna::Sampler{etna::Sampler::CreateInfo{
     .filter = vk::Filter::eLinear,
     .addressMode = vk::SamplerAddressMode::eRepeat,
-    .name = "default_sampler"}};
+    .name = "detail_sampler",
+    .maxLod = (float)detailMaxLod}};
+  skyboxSampler = etna::Sampler{etna::Sampler::CreateInfo{
+    .filter = vk::Filter::eLinear,
+    .addressMode = vk::SamplerAddressMode::eClampToEdge,
+    .name = "skybox_sampler",
+    .maxLod = (float)skyboxMaxLod}};
 
   uniformParams = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = sizeof(UniformParams),
@@ -267,7 +348,7 @@ void App::drawFrame()
            etna::Binding{
              2,
              skyboxTexture.genBinding(
-               defaultSampler.get(),
+               skyboxSampler.get(),
                vk::ImageLayout::eShaderReadOnlyOptimal,
                {.type = vk::ImageViewType::eCube})}});
 
