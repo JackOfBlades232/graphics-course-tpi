@@ -3,13 +3,13 @@
 
 #include "UniformParams.h"
 
-layout (location = 0) in vec2 texCoord;
-layout (location = 0) out vec4 fragColor;
+layout(location = 0) in vec2 texCoord;
+layout(location = 0) out vec4 fragColor;
 
-// layout(binding = 0) uniform sampler2D iChannel0;
-// layout(binding = 1) uniform sampler2D iChannel1;
-// layout(binding = 2) uniform sampler2D iChannel2;
-// layout(binding = 3) uniform sampler2D iChannel3;
+layout(binding = 0, set = 1) uniform sampler2D iChannel0;
+layout(binding = 1, set = 1) uniform sampler2D iChannel1;
+// layout(binding = 2, set = 1) uniform sampler2D iChannel2;
+// layout(binding = 3, set = 1) uniform sampler2D iChannel3;
 
 layout(binding = 7) uniform Params
 {
@@ -212,6 +212,12 @@ vec3 gen_normal(vec3 p, float d)
   return normalize(vec3(grx, gry, grz));
 }
 
+vec3 get_triplanar_weights(vec3 n)
+{
+  vec3 w = n*n;
+  return w / (w.x + w.y + w.z);
+}
+
 void mainImage(out vec4 frag_color, in vec2 frag_coord)
 {
   vec2 uv = (frag_coord - 0.5*params.iResolution.xy)/params.iResolution.x;
@@ -247,7 +253,18 @@ void mainImage(out vec4 frag_color, in vec2 frag_coord)
     vec3 n = gen_normal(p, 0.001);
     vec3 l = normalize(light - p);
     float nl = max(dot(n, l), 0.0);
-    frag_color = vec4(nl * base_rgb, 1.0);
+    vec4 notex_col = vec4(nl * base_rgb, 1.0);
+
+    vec3 w = get_triplanar_weights(n);
+    vec4 cx = texture(iChannel1, p.yz);
+    vec4 cy = texture(iChannel1, p.zx);
+    vec4 cz = texture(iChannel1, p.xy);
+    vec4 trip_color = notex_col * (w.x*cx + w.y*cy + w.z*cz);
+
+    if ((mv*p).y < 0.2)
+      frag_color = trip_color * texture(iChannel0, (mv*p).zx/6.0 + 0.5);
+    else
+      frag_color = trip_color;
   } else
     frag_color = vec4(0.0, 0.0, 0.0, 1.0);
 }
