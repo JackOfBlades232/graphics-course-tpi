@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <algorithm>
 #include <etna/Etna.hpp>
 #include <etna/Assert.hpp>
 #include <etna/GlobalContext.hpp>
@@ -104,8 +105,59 @@ App::App()
       .format = vk::Format::eR8G8B8A8Srgb,
       .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst});
 
-    transferHelper->uploadImage(
-      *oneShotCommands, sourceTexture, 0, 0, {imageData.cbegin(), imageData.size()});
+    transferHelper->uploadImage(*oneShotCommands, sourceTexture, 0, 0, imageData);
+  }
+
+  {
+    int texW, texH, texChannels;
+    unsigned char* texData = stbi_load(
+      GRAPHICS_COURSE_RESOURCES_ROOT "/textures/SomeSkyboxOffTheNet.png", &texW, &texH, &texChannels, 0);
+    ETNA_VERIFY(texData);
+
+    ETNA_VERIFYF(texChannels == 3 || texChannels == 4, "Invalid channels={}", texChannels);
+    ETNA_VERIFYF(
+      texW % 4 == 0 && texH == (texW / 4) * 3, "Invalid skybox dimensions=({}, {})", texW, texH);
+
+    uint32_t side = texW / 4;
+
+    std::array<std::vector<std::byte>, 6> imageDatas{};
+    std::array<glm::uvec2, 6> bases{
+      glm::uvec2{2 * side, side},
+      glm::uvec2{0, side},
+      glm::uvec2{side, 0},
+      glm::uvec2{side, 2 * side},
+      glm::uvec2{side, side},
+      glm::uvec2{3 * side, side}};
+
+    for (size_t i = 0; i < 6; ++i)
+    {
+      auto& img = imageDatas[i];
+      const auto& base = bases[i];
+
+      img.resize(side * side * 4);
+      size_t dstId = 0;
+      for (uint32_t y = base.y; y < base.y + side; ++y)
+        for (uint32_t x = base.x; x < base.x + side; ++x)
+        {
+          memcpy(img.data() + dstId, texData + (y * texW + x) * texChannels, texChannels);
+          dstId += texChannels;
+          if (texChannels == 3 && dstId % 4 == 3)
+            img[dstId++] = (std::byte)255;
+        }
+    }
+
+    stbi_image_free(texData);
+
+    skyboxTexture = ctx.createImage(etna::Image::CreateInfo{
+      .extent = vk::Extent3D{side, side, 1},
+      .name = "skybox_tex",
+      .format = vk::Format::eR8G8B8A8Srgb,
+      .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+      .layers = 6,
+      .flags = vk::ImageCreateFlagBits::eCubeCompatible});
+
+    for (size_t i = 0; i < 6; ++i)
+      transferHelper->uploadImage(*oneShotCommands, skyboxTexture, 0, (uint32_t)i, imageDatas[i]);
   }
 
   defaultSampler = etna::Sampler{etna::Sampler::CreateInfo{.name = "default_sampler"}};
@@ -204,16 +256,20 @@ void App::drawFrame()
         auto imgSet = etna::create_descriptor_set(
           toyProgInfo.getDescriptorLayoutId(1),
           currentCmdBuf,
-          {
-            etna::Binding{
-              0,
-              proceduralImage.genBinding(
-                defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-            etna::Binding{
-              1,
-              sourceTexture.genBinding(
-                detailSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-          });
+          {etna::Binding{
+             0,
+             proceduralImage.genBinding(
+               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{
+             1,
+             sourceTexture.genBinding(
+               detailSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{
+             2,
+             skyboxTexture.genBinding(
+               defaultSampler.get(),
+               vk::ImageLayout::eShaderReadOnlyOptimal,
+               {.type = vk::ImageViewType::eCube})}});
 
         etna::RenderTargetState target{
           currentCmdBuf,
