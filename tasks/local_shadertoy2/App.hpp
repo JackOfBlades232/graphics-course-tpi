@@ -41,7 +41,7 @@ private:
 
   etna::Image mainImage, proceduralImage;
   etna::Image sourceTexture, skyboxTexture;
-  etna::Sampler defaultSampler, detailSampler;
+  etna::Sampler defaultSampler, detailSampler, skyboxSampler;
   etna::Buffer uniformParams;
 
   UniformParams params{};
