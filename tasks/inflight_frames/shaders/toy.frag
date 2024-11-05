@@ -20,8 +20,8 @@ layout(binding = 7) uniform Params
 #define EPS 1e-5
 #define PI 3.14159265359
 
-#define SDF_DIST_COEFF 0.8
-#define SDF_ITER 100
+#define SDF_DIST_COEFF 0.4
+#define SDF_ITER 1500
 
 mat3 mv = mat3(1.0);
 

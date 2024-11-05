@@ -1,5 +1,7 @@
 #pragma once
 
+#include "etna/GpuSharedResource.hpp"
+#include "etna/GpuWorkCount.hpp"
 #include "shaders/UniformParams.h"
 
 #include <etna/Window.hpp>
@@ -42,7 +44,9 @@ private:
   etna::Image mainImage, proceduralImage;
   etna::Image sourceTexture, skyboxTexture;
   etna::Sampler defaultSampler, detailSampler, skyboxSampler;
-  etna::Buffer uniformParams;
+
+  etna::GpuWorkCount gpuWorkCnt;
+  std::optional<etna::GpuSharedResource<etna::Buffer>> uniformParams;
 
   UniformParams params{};
 };
