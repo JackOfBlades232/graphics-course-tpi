@@ -150,19 +150,8 @@ App::App()
   {
     int texW, texH, texChannels;
     unsigned char* texData = stbi_load(
-      GRAPHICS_COURSE_RESOURCES_ROOT "/textures/test_tex_1.png", &texW, &texH, &texChannels, 0);
+      GRAPHICS_COURSE_RESOURCES_ROOT "/textures/test_tex_1.png", &texW, &texH, &texChannels, 4);
     ETNA_VERIFY(texData);
-
-    ETNA_VERIFYF(texChannels == 3 || texChannels == 4, "Invalid channels={}", texChannels);
-    std::vector<std::byte> imageData{(size_t)(texH * texW * 4)};
-    size_t dstId = 0;
-    for (auto* src = texData; src != texData + texW * texH * texChannels; ++src)
-    {
-      imageData[dstId++] = (std::byte)(*src);
-      if (texChannels == 3 && dstId % 4 == 3)
-        imageData[dstId++] = (std::byte)255;
-    }
-    stbi_image_free(texData);
 
     uint32_t mipCnt = getMipCountForDim((uint32_t)texW, (uint32_t)texH);
 
@@ -174,9 +163,15 @@ App::App()
         vk::ImageUsageFlagBits::eTransferDst,
       .mipLevels = mipCnt});
 
-    transferHelper->uploadImage(*oneShotCommands, sourceTexture, 0, 0, imageData);
-    generateTexMipLevels(sourceTexture, texW, texH, mipCnt, 1);
+    transferHelper->uploadImage(
+      *oneShotCommands,
+      sourceTexture,
+      0,
+      0,
+      std::span<const std::byte>{(const std::byte*)texData, (size_t)(texW * texH * 4)});
+    stbi_image_free(texData);
 
+    generateTexMipLevels(sourceTexture, texW, texH, mipCnt, 1);
     detailMaxLod = std::max(detailMaxLod, mipCnt);
   }
 
@@ -187,12 +182,8 @@ App::App()
       &texW,
       &texH,
       &texChannels,
-      0);
+      4);
     ETNA_VERIFY(texData);
-
-    ETNA_VERIFYF(texChannels == 3 || texChannels == 4, "Invalid channels={}", texChannels);
-    ETNA_VERIFYF(
-      texW % 4 == 0 && texH == (texW / 4) * 3, "Invalid skybox dimensions=({}, {})", texW, texH);
 
     uint32_t side = texW / 4;
 
@@ -215,10 +206,8 @@ App::App()
       for (uint32_t y = base.y; y < base.y + side; ++y)
         for (uint32_t x = base.x; x < base.x + side; ++x)
         {
-          memcpy(img.data() + dstId, texData + (y * texW + x) * texChannels, texChannels);
-          dstId += texChannels;
-          if (texChannels == 3 && dstId % 4 == 3)
-            img[dstId++] = (std::byte)255;
+          memcpy(img.data() + dstId, texData + (y * texW + x) * 4, 4);
+          dstId += 4;
         }
     }
     stbi_image_free(texData);
