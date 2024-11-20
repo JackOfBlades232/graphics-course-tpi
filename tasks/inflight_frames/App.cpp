@@ -100,18 +100,38 @@ App::App()
 
       ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
       {
-        // This should be done with separate barriers for mip-levels, but its ok
+        // Initial barrier
         etna::set_state(
           cmdBuf,
           tex.get(),
           vk::PipelineStageFlagBits2::eTransfer,
-          vk::AccessFlagBits2::eTransferRead | vk::AccessFlagBits2::eTransferWrite,
-          vk::ImageLayout::eGeneral,
+          vk::AccessFlagBits2::eTransferWrite,
+          vk::ImageLayout::eTransferDstOptimal,
           vk::ImageAspectFlagBits::eColor);
         etna::flush_barriers(cmdBuf);
 
         for (uint32_t level = 1; level < mip_count; ++level)
         {
+          {
+            vk::ImageMemoryBarrier2 srcBarrier{
+              .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+              .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+              .dstStageMask = vk::PipelineStageFlagBits2::eTransfer,
+              .dstAccessMask = vk::AccessFlagBits2::eTransferRead,
+              .oldLayout = vk::ImageLayout::eTransferDstOptimal,
+              .newLayout = vk::ImageLayout::eTransferSrcOptimal,
+              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+              .image = tex.get(),
+              .subresourceRange = {vk::ImageAspectFlagBits::eColor, level - 1, 1, 0, layer_count}};
+            vk::DependencyInfo depInfo{
+              .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+              .imageMemoryBarrierCount = 1,
+              .pImageMemoryBarriers = &srcBarrier};
+
+            cmdBuf.pipelineBarrier2(depInfo);
+          }
+
           vk::ImageBlit blit{
             .srcSubresource =
               {.aspectMask = vk::ImageAspectFlagBits::eColor,
@@ -132,12 +152,42 @@ App::App()
 
           cmdBuf.blitImage(
             tex.get(),
-            vk::ImageLayout::eGeneral,
+            vk::ImageLayout::eTransferSrcOptimal,
             tex.get(),
-            vk::ImageLayout::eGeneral,
+            vk::ImageLayout::eTransferDstOptimal,
             {blit},
             vk::Filter::eLinear);
+
+          // Now restore etna-tracked state
+          {
+            vk::ImageMemoryBarrier2 srcBarrier{
+              .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+              .srcAccessMask = vk::AccessFlagBits2::eTransferRead,
+              .dstStageMask = vk::PipelineStageFlagBits2::eTransfer,
+              .dstAccessMask = vk::AccessFlagBits2::eTransferWrite,
+              .oldLayout = vk::ImageLayout::eTransferSrcOptimal,
+              .newLayout = vk::ImageLayout::eTransferDstOptimal,
+              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+              .image = tex.get(),
+              .subresourceRange = {vk::ImageAspectFlagBits::eColor, level - 1, 1, 0, layer_count}};
+            vk::DependencyInfo depInfo{
+              .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+              .imageMemoryBarrierCount = 1,
+              .pImageMemoryBarriers = &srcBarrier};
+
+            cmdBuf.pipelineBarrier2(depInfo);
+          }
         }
+
+        etna::set_state(
+          cmdBuf,
+          tex.get(),
+          vk::PipelineStageFlagBits2::eAllGraphics,
+          vk::AccessFlagBits2::eShaderSampledRead,
+          vk::ImageLayout::eShaderReadOnlyOptimal,
+          vk::ImageAspectFlagBits::eColor);
+        etna::flush_barriers(cmdBuf);
       }
       ETNA_CHECK_VK_RESULT(cmdBuf.end());
 
@@ -243,12 +293,12 @@ App::App()
     .name = "skybox_sampler",
     .maxLod = (float)skyboxMaxLod}};
 
-  uniformParams.emplace(gpuWorkCnt, [&](size_t) {
+  uniformParams.emplace(gpuWorkCnt, [&](size_t i) {
     return ctx.createBuffer(etna::Buffer::CreateInfo{
       .size = sizeof(UniformParams),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "uniform_params",
+      .name = "uniform_params" + std::string({(char)('0' + i)}),
     });
   });
   uniformParams->iterate([](etna::Buffer& buf) { buf.map(); });
@@ -288,6 +338,7 @@ void App::run()
     }
 
     drawFrame();
+    gpuWorkCnt.submit();
 
     FrameMark;
   }
@@ -339,6 +390,15 @@ void App::drawFrame()
 
         currentCmdBuf.draw(3, 1, 0, 0);
       }
+
+      // This should not be necessary, but smth is not set properly in descriptor creation
+      etna::set_state(
+        currentCmdBuf,
+        proceduralImage.get(),
+        vk::PipelineStageFlagBits2::eFragmentShader,
+        vk::AccessFlagBits2::eShaderSampledRead,
+        vk::ImageLayout::eShaderReadOnlyOptimal,
+        vk::ImageAspectFlagBits::eColor);
 
       {
         ETNA_PROFILE_GPU(currentCmdBuf, mainImage);
@@ -438,8 +498,6 @@ void App::drawFrame()
       ETNA_READ_BACK_GPU_PROFILING(currentCmdBuf);
     }
     ETNA_CHECK_VK_RESULT(currentCmdBuf.end());
-
-    gpuWorkCnt.submit();
 
     auto renderingDone =
       commandManager->submit(std::move(currentCmdBuf), std::move(backbufferAvailableSem));
