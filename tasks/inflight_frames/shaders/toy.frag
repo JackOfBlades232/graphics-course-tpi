@@ -21,7 +21,7 @@ layout(binding = 7) uniform Params
 #define PI 3.14159265359
 
 #define SDF_DIST_COEFF 0.4
-#define SDF_ITER 1500
+#define SDF_ITER 2250
 
 mat3 mv = mat3(1.0);
 

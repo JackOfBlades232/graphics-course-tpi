@@ -326,12 +326,7 @@ void App::run()
     windowing.poll();
 
     {
-      ZoneScopedN("Input");
-
-      params.iTime = static_cast<float>(windowing.getTime());
-      params.iResolution = resolution;
-      params.iMouse += osWindow->mouse.capturedPosDelta;
-      memcpy(uniformParams->get().data(), &params, sizeof(params));
+      ZoneScopedN("Logic");
 
       // Fake work
       std::this_thread::sleep_for(7ms);
@@ -358,6 +353,13 @@ void App::drawFrame()
 
   if (nextSwapchainImage)
   {
+    {
+      params.iTime = static_cast<float>(windowing.getTime());
+      params.iResolution = resolution;
+      params.iMouse += osWindow->mouse.capturedPosDelta;
+      memcpy(uniformParams->get().data(), &params, sizeof(params));
+    }
+
     auto [backbuffer, backbufferView, backbufferAvailableSem] = *nextSwapchainImage;
 
     ETNA_CHECK_VK_RESULT(currentCmdBuf.begin(vk::CommandBufferBeginInfo{}));
