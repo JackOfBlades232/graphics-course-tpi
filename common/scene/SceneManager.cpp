@@ -396,10 +396,10 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(
   }
 
   result.vertices = {
-    (Vertex*)model.buffers[0].data.data(), model.bufferViews[1].byteLength / sizeof(Vertex)};
+    (Vertex*)model.buffers[0].data.data(), model.bufferViews[0].byteLength / sizeof(Vertex)};
   result.indices = {
     (std::uint32_t*)(result.vertices.data() + result.vertices.size()),
-    model.bufferViews[0].byteLength / sizeof(std::uint32_t)};
+    model.bufferViews[1].byteLength / sizeof(std::uint32_t)};
 
   return result;
 }
