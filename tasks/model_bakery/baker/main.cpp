@@ -1,24 +1,24 @@
-#include <cstddef>
-#include <glm/fwd.hpp>
+#include <cfloat>
+#include <climits>
 #include <tiny_gltf.h>
+#include <glm/fwd.hpp>
 #include <glm/glm.hpp>
+#include <spdlog/spdlog.h>
 #include <quantization.h>
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstddef>
 
 #include <vector>
 #include <string>
 #include <filesystem>
 
-#define LOGERR(fmt_, ...) fprintf(stderr, "[ERROR] " fmt_ "\n", ##__VA_ARGS__)
-#define LOGWARN(fmt_, ...) fprintf(stderr, "[WARNING] " fmt_ "\n", ##__VA_ARGS__)
-
 #define FAIL(fmt_, ...)                                                                            \
   do                                                                                               \
   {                                                                                                \
-    LOGERR(fmt_, ##__VA_ARGS__);                                                                   \
+    spdlog::error(fmt_, ##__VA_ARGS__);                                                            \
     exit(1);                                                                                       \
   } while (0)
 
@@ -53,18 +53,12 @@ int main(int argc, char** argv)
   if (!success)
   {
     if (!error.empty())
-      LOGERR("glTF: %s", error.c_str());
+      spdlog::error("glTF: {}", error.c_str());
     FAIL("glTF: Failed to load model!");
   }
 
   if (!warning.empty())
-    LOGWARN("glTF: %s", warning.c_str());
-
-  if (
-    !model.extensions.empty() || !model.extensionsRequired.empty() || !model.extensionsUsed.empty())
-  {
-    LOGWARN("glTF: No glTF extensions are currently implemented!");
-  }
+    spdlog::warn("glTF: {}", warning.c_str());
 
   // Now, scrape vertices and form the unified vbuf
 
@@ -122,7 +116,7 @@ int main(int argc, char** argv)
     {
       if (prim.mode != TINYGLTF_MODE_TRIANGLES)
       {
-        LOGWARN(
+        spdlog::warn(
           "Encountered a non-triangles primitive, these are not supported for now, skipping it!");
         continue;
       }
@@ -166,15 +160,18 @@ int main(int argc, char** argv)
           bufViews[0]->byteOffset + accessors[0]->byteOffset,
         reinterpret_cast<const uint8_t*>(model.buffers[bufViews[1]->buffer].data.data()) +
           bufViews[1]->byteOffset + accessors[1]->byteOffset,
-        hasNormals ? reinterpret_cast<const uint8_t*>(model.buffers[bufViews[2]->buffer].data.data()) +
+        hasNormals
+          ? reinterpret_cast<const uint8_t*>(model.buffers[bufViews[2]->buffer].data.data()) +
             bufViews[2]->byteOffset + accessors[2]->byteOffset
-                   : nullptr,
-        hasTangents ? reinterpret_cast<const uint8_t*>(model.buffers[bufViews[3]->buffer].data.data()) +
+          : nullptr,
+        hasTangents
+          ? reinterpret_cast<const uint8_t*>(model.buffers[bufViews[3]->buffer].data.data()) +
             bufViews[3]->byteOffset + accessors[3]->byteOffset
-                    : nullptr,
-        hasTexcoord ? reinterpret_cast<const uint8_t*>(model.buffers[bufViews[4]->buffer].data.data()) +
+          : nullptr,
+        hasTexcoord
+          ? reinterpret_cast<const uint8_t*>(model.buffers[bufViews[4]->buffer].data.data()) +
             bufViews[4]->byteOffset + accessors[4]->byteOffset
-                    : nullptr,
+          : nullptr,
       };
 
       std::array strides{
@@ -205,9 +202,9 @@ int main(int argc, char** argv)
 
       for (size_t i = 0; i < vertexCount; ++i)
       {
-        auto &vtx = vertices.emplace_back();
+        auto& vtx = vertices.emplace_back();
         glm::vec3 normal{0};
-        glm::vec3 tangent{0};
+        glm::vec4 tangent{0};
 
         memcpy(&vtx.pos, ptrs[1], sizeof(vtx.pos));
 
@@ -218,8 +215,8 @@ int main(int argc, char** argv)
         if (hasTexcoord)
           memcpy(&vtx.texcoord, ptrs[4], sizeof(vtx.texcoord));
 
-        vtx.norm = quantize3fnorm(normal);
-        vtx.tang = quantize3fnorm(tangent);
+        vtx.norm = quantize4fnorm(glm::vec4{normal, 0.f});
+        vtx.tang = quantize4fnorm(tangent);
 
         ptrs[1] += strides[1];
         if (hasNormals)
@@ -251,12 +248,8 @@ int main(int argc, char** argv)
         memcpy(indices.data() + lastTotalIndices, ptrs[0], sizeof(indices[0]) * indexCount);
       }
 
-      // @HUH: do norm/tang componentTypes need to be short? I oct encode and then quantize, which
-      // would be the other way around. Anyways, this will not be ok for third party tools, as we
-      // decode on the gpu, not in streaming.
-
       tinygltf::Accessor indAccessor{};
-      indAccessor.bufferView = 0;
+      indAccessor.bufferView = 1;
       indAccessor.byteOffset = indOffset;
       indAccessor.componentType = TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT;
       indAccessor.count = indexCount;
@@ -265,7 +258,7 @@ int main(int argc, char** argv)
       indAccessor.maxValues = accessors[0]->maxValues;
 
       tinygltf::Accessor posAccessor{};
-      posAccessor.bufferView = 1;
+      posAccessor.bufferView = 0;
       posAccessor.byteOffset = vertsOffset;
       posAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
       posAccessor.count = vertexCount;
@@ -274,43 +267,49 @@ int main(int argc, char** argv)
       posAccessor.maxValues = accessors[1]->maxValues;
 
       tinygltf::Accessor normAccessor{};
-      normAccessor.bufferView = 2;
-      normAccessor.byteOffset = vertsOffset;
+      normAccessor.bufferView = 0;
+      normAccessor.byteOffset = vertsOffset + 12;
       normAccessor.componentType = TINYGLTF_COMPONENT_TYPE_BYTE; // quantized
       normAccessor.count = vertexCount;
       normAccessor.type = TINYGLTF_TYPE_VEC3;
       normAccessor.normalized = true;
 
       tinygltf::Accessor tcAccessor{};
-      tcAccessor.bufferView = 3;
-      tcAccessor.byteOffset = vertsOffset;
+      tcAccessor.bufferView = 0;
+      tcAccessor.byteOffset = vertsOffset + 16;
       tcAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
       tcAccessor.count = vertexCount;
       tcAccessor.type = TINYGLTF_TYPE_VEC2;
 
       tinygltf::Accessor tangAccessor{};
-      tangAccessor.bufferView = 4;
-      tangAccessor.byteOffset = vertsOffset;
+      tangAccessor.bufferView = 0;
+      tangAccessor.byteOffset = vertsOffset + 24;
       tangAccessor.componentType = TINYGLTF_COMPONENT_TYPE_BYTE; // quantized
       tangAccessor.count = vertexCount;
-      tangAccessor.type = TINYGLTF_TYPE_VEC3;
+      tangAccessor.type = TINYGLTF_TYPE_VEC4;
       tangAccessor.normalized = true;
 
       const size_t accessorBase = combinedAccessors.size();
 
       combinedAccessors.push_back(indAccessor);
       combinedAccessors.push_back(posAccessor);
-      combinedAccessors.push_back(normAccessor);
-      combinedAccessors.push_back(tcAccessor);
-      combinedAccessors.push_back(tangAccessor);
+      if (hasNormals)
+        combinedAccessors.push_back(normAccessor);
+      if (hasTexcoord)
+        combinedAccessors.push_back(tcAccessor);
+      if (hasTangents)
+        combinedAccessors.push_back(tangAccessor);
 
       prim.attributes.clear();
 
       prim.indices = (int)accessorBase;
       prim.attributes["POSITION"] = (int)accessorBase + 1;
-      prim.attributes["NORMAL"] = (int)accessorBase + 2;
-      prim.attributes["TEXCOORD_0"] = (int)accessorBase + 3;
-      prim.attributes["TANGENT"] = (int)accessorBase + 4;
+      if (hasNormals)
+        prim.attributes["NORMAL"] = (int)accessorBase + 2;
+      if (hasTexcoord)
+        prim.attributes["TEXCOORD_0"] = (int)accessorBase + 3;
+      if (hasTangents)
+        prim.attributes["TANGENT"] = (int)accessorBase + 4;
     }
   }
 
@@ -326,6 +325,14 @@ int main(int argc, char** argv)
   memcpy(combinedBuffer.data.data(), vertices.data(), vertsBytes);
   memcpy(combinedBuffer.data.data() + vertsBytes, indices.data(), indBytes);
 
+  tinygltf::BufferView vertView{};
+  vertView.name = "vertView";
+  vertView.buffer = 0;
+  vertView.byteOffset = 0;
+  vertView.byteLength = vertsBytes;
+  vertView.byteStride = vertSize;
+  vertView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+
   tinygltf::BufferView indView{};
   indView.name = "indView";
   indView.buffer = 0;
@@ -333,40 +340,8 @@ int main(int argc, char** argv)
   indView.byteLength = indBytes;
   indView.target = TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER;
 
-  tinygltf::BufferView posView{};
-  posView.name = "posView";
-  posView.buffer = 0;
-  posView.byteOffset = 0;
-  posView.byteLength = vertsBytes;
-  posView.byteStride = vertSize;
-  posView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-
-  tinygltf::BufferView tcView{};
-  tcView.name = "tcView";
-  tcView.buffer = 0;
-  tcView.byteOffset = 16;
-  tcView.byteLength = vertsBytes;
-  tcView.byteStride = vertSize;
-  tcView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-
-  tinygltf::BufferView normView{};
-  normView.name = "normView";
-  normView.buffer = 0;
-  normView.byteOffset = 12;
-  normView.byteLength = vertsBytes;
-  normView.byteStride = vertSize;
-  normView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-
-  tinygltf::BufferView tangView{};
-  tangView.name = "tangView";
-  tangView.buffer = 0;
-  tangView.byteOffset = 24;
-  tangView.byteLength = vertsBytes;
-  tangView.byteStride = vertSize;
-  tangView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
-
   model.buffers = {std::move(combinedBuffer)};
-  model.bufferViews = {indView, posView, normView, tcView, tangView};
+  model.bufferViews = {vertView, indView};
   model.accessors = std::move(combinedAccessors);
 
   model.extensionsRequired.emplace_back("KHR_mesh_quantization");
@@ -380,7 +355,7 @@ int main(int argc, char** argv)
     std::filesystem::create_directory(path.parent_path());
 
   bool res = api.WriteGltfSceneToFile(&model, path.string(), false, false, true, false);
-  VERIFY(res, "Failed to write baked scene to %s", path.string().c_str());
+  VERIFY(res, "Failed to write baked scene to {}", path.string().c_str());
 
   return 0;
 }
