@@ -1,8 +1,10 @@
-#include <cfloat>
-#include <climits>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <algorithm>
 #include <tiny_gltf.h>
 #include <glm/fwd.hpp>
 #include <glm/glm.hpp>
+#include <glm/geometric.hpp>
+#include <glm/gtx/vector_angle.hpp>
 #include <spdlog/spdlog.h>
 #include <quantization.h>
 
@@ -14,6 +16,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <execution>
 
 #define FAIL(fmt_, ...)                                                                            \
   do                                                                                               \
@@ -29,10 +32,45 @@
       FAIL(fmt_, ##__VA_ARGS__);                                                                   \
   } while (0)
 
+uint32_t best_fit_quantize_normal(glm::vec3 normal)
+{
+  // @TODO: tune parameters once there is lighted data
+  constexpr float LENGTH_STEP = 0.1f;
+  constexpr float LENGTH_BASE = 0.1f;
+  constexpr size_t STEPS_COUNT = 64; 
+
+  std::array<float, STEPS_COUNT> errors{};
+  std::fill(errors.begin(), errors.end(), 0.f);
+
+  auto quantizeScaled = [&](size_t step_id) {
+    float coeff = LENGTH_BASE + step_id * LENGTH_STEP;
+    return quantize4fnorm(glm::vec4{normal * coeff, 0.f});
+  };
+
+  std::for_each(std::execution::par, errors.begin(), errors.end(), [&](float& out) {
+    auto id = &out - errors.data();
+    glm::vec3 dequantizedNorm = dequantize3fnorm(quantizeScaled(id));
+    errors[id] = glm::angle(glm::normalize(normal), glm::normalize(dequantizedNorm));
+  });
+
+  auto it = std::min_element(errors.begin(), errors.end());
+  return quantizeScaled(std::distance(errors.begin(), it));
+}
+
 int main(int argc, char** argv)
 {
   VERIFY(argc >= 2, "Invalid number of args: specify a gltf asset to bake");
   std::filesystem::path path{argv[1]};
+
+  bool bestFitNormal = false;
+
+  for (int i = 2; i < argc; ++i)
+  {
+    if (strcmp(argv[i], "-bfn") == 0)
+      bestFitNormal = true;
+    else
+      FAIL("Invalid arg: {}", argv[i]);
+  }
 
   // Load the model
 
@@ -75,7 +113,6 @@ int main(int argc, char** argv)
   static_assert(sizeof(Vertex) == 32);
   static_assert(sizeof(Index) == 4);
 
-  // Either vertices or quantizedVertices is used based on quantize flag
   std::vector<Vertex> vertices{};
   std::vector<Index> indices{};
 
@@ -215,7 +252,11 @@ int main(int argc, char** argv)
         if (hasTexcoord)
           memcpy(&vtx.texcoord, ptrs[4], sizeof(vtx.texcoord));
 
-        vtx.norm = quantize4fnorm(glm::vec4{normal, 0.f});
+        if (bestFitNormal)
+          vtx.norm = best_fit_quantize_normal(normal);
+        else
+          vtx.norm = quantize4fnorm(glm::vec4{normal, 0.f});
+
         vtx.tang = quantize4fnorm(tangent);
 
         ptrs[1] += strides[1];
