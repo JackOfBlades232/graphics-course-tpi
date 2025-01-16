@@ -246,7 +246,10 @@ void WorldRenderer::renderWorld(
   }
 
   if (drawDebugFSQuad)
-    quadRenderer->render(cmd_buf, target_image, target_image_view, shadowMap, defaultSampler);
+  {
+    quadRenderer->render(
+      cmd_buf, target_image, target_image_view, shadowMap, defaultSampler);
+  }
 }
 
 void WorldRenderer::drawGui()
