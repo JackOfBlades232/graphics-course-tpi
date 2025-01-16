@@ -19,7 +19,6 @@ public:
   };
 
   explicit QuadRenderer(CreateInfo info);
-  ~QuadRenderer() {}
 
   void render(
     vk::CommandBuffer cmd_buff,
