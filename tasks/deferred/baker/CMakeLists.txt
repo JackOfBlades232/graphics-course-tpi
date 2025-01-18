@@ -6,5 +6,5 @@ add_executable(deferred_baker
 target_link_libraries(deferred_baker
   PRIVATE tinygltf
   PRIVATE glm::glm
-  PRIVATE deferred_common_code
+  PRIVATE render_utils
   PRIVATE spdlog)

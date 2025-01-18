@@ -1,3 +1,5 @@
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include "SceneManager.hpp"
 #include "etna/Assert.hpp"
 
@@ -7,6 +9,7 @@
 #include <spdlog/spdlog.h>
 #include <fmt/std.h>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <etna/GlobalContext.hpp>
 #include <etna/OneShotCmdMgr.hpp>
@@ -59,7 +62,7 @@ SceneManager::ProcessedInstances SceneManager::processInstances(const tinygltf::
 {
   std::vector nodeTransforms(model.nodes.size(), glm::identity<glm::mat4x4>());
 
-  for (std::size_t nodeIdx = 0; nodeIdx < model.nodes.size(); ++nodeIdx)
+  for (size_t nodeIdx = 0; nodeIdx < model.nodes.size(); ++nodeIdx)
   {
     const auto& node = model.nodes[nodeIdx];
     auto& transform = nodeTransforms[nodeIdx];
@@ -97,7 +100,7 @@ SceneManager::ProcessedInstances SceneManager::processInstances(const tinygltf::
     }
   }
 
-  std::stack<std::size_t> vertices;
+  std::stack<size_t> vertices;
   for (auto vert : model.scenes[model.defaultScene].nodes)
     vertices.push(vert);
 
@@ -117,38 +120,43 @@ SceneManager::ProcessedInstances SceneManager::processInstances(const tinygltf::
 
   // Don't overallocate matrices, they are pretty chonky.
   {
-    std::size_t totalNodesWithMeshes = 0;
-    for (std::size_t i = 0; i < model.nodes.size(); ++i)
-      if (model.nodes[i].mesh >= 0)
-        ++totalNodesWithMeshes;
-    result.matrices.reserve(totalNodesWithMeshes);
-    result.meshes.reserve(totalNodesWithMeshes);
+    size_t totalRelevantNodes = 0;
+    for (size_t i = 0; i < model.nodes.size(); ++i)
+    {
+      if (model.nodes[i].mesh >= 0 || model.nodes[i].light >= 0)
+        ++totalRelevantNodes;
+    }
+    result.matrices.reserve(totalRelevantNodes);
+    result.meshes.reserve(totalRelevantNodes);
+    result.lights.reserve(totalRelevantNodes);
   }
 
-  for (std::size_t i = 0; i < model.nodes.size(); ++i)
-    if (model.nodes[i].mesh >= 0)
+  for (size_t i = 0; i < model.nodes.size(); ++i)
+  {
+    if (model.nodes[i].mesh >= 0 || model.nodes[i].light >= 0)
     {
       result.matrices.push_back(nodeTransforms[i]);
       result.meshes.push_back(model.nodes[i].mesh);
+      result.lights.push_back(model.nodes[i].light);
     }
+  }
 
   return result;
 }
 
-static std::uint32_t encode_normal(glm::vec3 normal)
+static uint32_t encode_normal(glm::vec3 normal)
 {
-  const std::int32_t x = static_cast<std::int32_t>(normal.x * 32767.0f);
-  const std::int32_t y = static_cast<std::int32_t>(normal.y * 32767.0f);
+  const int32_t x = static_cast<int32_t>(normal.x * 32767.0f);
+  const int32_t y = static_cast<int32_t>(normal.y * 32767.0f);
 
-  const std::uint32_t sign = normal.z >= 0 ? 0 : 1;
-  const std::uint32_t sx = static_cast<std::uint32_t>(x & 0xfffe) | sign;
-  const std::uint32_t sy = static_cast<std::uint32_t>(y & 0xffff) << 16;
+  const uint32_t sign = normal.z >= 0 ? 0 : 1;
+  const uint32_t sx = static_cast<uint32_t>(x & 0xfffe) | sign;
+  const uint32_t sy = static_cast<uint32_t>(y & 0xffff) << 16;
 
   return sx | sy;
 }
 
-SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
-  const tinygltf::Model& model) const
+SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(const tinygltf::Model& model) const
 {
   // NOTE: glTF assets can have pretty wonky data layouts which are not appropriate
   // for real-time rendering, so we have to press the data first. In serious engines
@@ -160,8 +168,8 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
   // Pre-allocate enough memory so as not to hit the
   // allocator on the memcpy hotpath
   {
-    std::size_t vertexBytes = 0;
-    std::size_t indexBytes = 0;
+    size_t vertexBytes = 0;
+    size_t indexBytes = 0;
     for (const auto& bufView : model.bufferViews)
     {
       switch (bufView.target)
@@ -177,11 +185,11 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
       }
     }
     result.vertices.reserve(vertexBytes / sizeof(Vertex));
-    result.indices.reserve(indexBytes / sizeof(std::uint32_t));
+    result.indices.reserve(indexBytes / sizeof(uint32_t));
   }
 
   {
-    std::size_t totalPrimitives = 0;
+    size_t totalPrimitives = 0;
     for (const auto& mesh : model.meshes)
       totalPrimitives += mesh.primitives.size();
     result.relems.reserve(totalPrimitives);
@@ -192,8 +200,8 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
   for (const auto& mesh : model.meshes)
   {
     result.meshes.push_back(Mesh{
-      .firstRelem = static_cast<std::uint32_t>(result.relems.size()),
-      .relemCount = static_cast<std::uint32_t>(mesh.primitives.size()),
+      .firstRelem = static_cast<uint32_t>(result.relems.size()),
+      .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
     });
 
     for (const auto& prim : mesh.primitives)
@@ -238,12 +246,12 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
       };
 
       result.relems.push_back(RenderElement{
-        .vertexOffset = static_cast<std::uint32_t>(result.vertices.size()),
-        .indexOffset = static_cast<std::uint32_t>(result.indices.size()),
-        .indexCount = static_cast<std::uint32_t>(accessors[0]->count),
+        .vertexOffset = static_cast<uint32_t>(result.vertices.size()),
+        .indexOffset = static_cast<uint32_t>(result.indices.size()),
+        .indexCount = static_cast<uint32_t>(accessors[0]->count),
       });
 
-      const std::size_t vertexCount = accessors[1]->count;
+      const size_t vertexCount = accessors[1]->count;
 
       std::array ptrs{
         reinterpret_cast<const std::byte*>(model.buffers[bufViews[0]->buffer].data.data()) +
@@ -290,7 +298,7 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
                     : 0,
       };
 
-      for (std::size_t i = 0; i < vertexCount; ++i)
+      for (size_t i = 0; i < vertexCount; ++i)
       {
         auto& vtx = result.vertices.emplace_back();
         glm::vec3 pos;
@@ -300,16 +308,16 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
         glm::vec3 normal{0};
         glm::vec3 tangent{0};
         glm::vec2 texcoord{0};
-        std::memcpy(&pos, ptrs[1], sizeof(pos));
+        memcpy(&pos, ptrs[1], sizeof(pos));
 
         // NOTE: it's faster to do a template here with specializations for all combinations than to
         // do ifs at runtime. Also, SIMD should be used. Try implementing this!
         if (hasNormals)
-          std::memcpy(&normal, ptrs[2], sizeof(normal));
+          memcpy(&normal, ptrs[2], sizeof(normal));
         if (hasTangents)
-          std::memcpy(&tangent, ptrs[3], sizeof(tangent));
+          memcpy(&tangent, ptrs[3], sizeof(tangent));
         if (hasTexcoord)
-          std::memcpy(&texcoord, ptrs[4], sizeof(texcoord));
+          memcpy(&texcoord, ptrs[4], sizeof(texcoord));
 
 
         vtx.positionAndNormal = glm::vec4(pos, std::bit_cast<float>(encode_normal(normal)));
@@ -327,22 +335,22 @@ SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(
 
       // Indices are guaranteed to have no stride
       ETNA_VERIFY(bufViews[0]->byteStride == 0);
-      const std::size_t indexCount = accessors[0]->count;
+      const size_t indexCount = accessors[0]->count;
       if (accessors[0]->componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
       {
-        for (std::size_t i = 0; i < indexCount; ++i)
+        for (size_t i = 0; i < indexCount; ++i)
         {
-          std::uint16_t index;
-          std::memcpy(&index, ptrs[0], sizeof(index));
+          uint16_t index;
+          memcpy(&index, ptrs[0], sizeof(index));
           result.indices.push_back(index);
           ptrs[0] += 2;
         }
       }
       else if (accessors[0]->componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
       {
-        const std::size_t lastTotalIndices = result.indices.size();
+        const size_t lastTotalIndices = result.indices.size();
         result.indices.resize(lastTotalIndices + indexCount);
-        std::memcpy(
+        memcpy(
           result.indices.data() + lastTotalIndices,
           ptrs[0],
           sizeof(result.indices[0]) * indexCount);
@@ -359,7 +367,7 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(
   ProcessedMeshes<true> result;
 
   {
-    std::size_t totalPrimitives = 0;
+    size_t totalPrimitives = 0;
     for (const auto& mesh : model.meshes)
       totalPrimitives += mesh.primitives.size();
     result.relems.reserve(totalPrimitives);
@@ -370,8 +378,8 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(
   for (const auto& mesh : model.meshes)
   {
     result.meshes.push_back(Mesh{
-      .firstRelem = static_cast<std::uint32_t>(result.relems.size()),
-      .relemCount = static_cast<std::uint32_t>(mesh.primitives.size()),
+      .firstRelem = static_cast<uint32_t>(result.relems.size()),
+      .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
     });
 
     for (const auto& prim : mesh.primitives)
@@ -384,13 +392,13 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(
         continue;
       }
 
-      const tinygltf::Accessor &indAccessor = model.accessors[prim.indices];
-      const tinygltf::Accessor &posAccessor = model.accessors[prim.attributes.at("POSITION")];
+      const tinygltf::Accessor& indAccessor = model.accessors[prim.indices];
+      const tinygltf::Accessor& posAccessor = model.accessors[prim.attributes.at("POSITION")];
 
       result.relems.push_back(RenderElement{
-        .vertexOffset = static_cast<std::uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
-        .indexOffset = static_cast<std::uint32_t>(indAccessor.byteOffset / sizeof(std::uint32_t)),
-        .indexCount = static_cast<std::uint32_t>(indAccessor.count),
+        .vertexOffset = static_cast<uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
+        .indexOffset = static_cast<uint32_t>(indAccessor.byteOffset / sizeof(uint32_t)),
+        .indexCount = static_cast<uint32_t>(indAccessor.count),
       });
     }
   }
@@ -398,15 +406,165 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(
   result.vertices = {
     (Vertex*)model.buffers[0].data.data(), model.bufferViews[0].byteLength / sizeof(Vertex)};
   result.indices = {
-    (std::uint32_t*)(result.vertices.data() + result.vertices.size()),
-    model.bufferViews[1].byteLength / sizeof(std::uint32_t)};
+    (uint32_t*)(result.vertices.data() + result.vertices.size()),
+    model.bufferViews[1].byteLength / sizeof(uint32_t)};
 
   return result;
 }
 
-template <class VertexType>
+// @TODO: do lights differently once we have instancing : matrices are already
+// stored in a global array. Instead of extracting it from the array on load,
+// store an index to a matrix for the light in the light itself. However,
+// this requires instancing so that these matrices are even on the gpu in bulk.
+SceneManager::ProcessedLights SceneManager::processLights(
+  const tinygltf::Model& model,
+  std::span<glm::mat4x4> instances,
+  std::span<uint32_t> instance_mapping) const
+{
+  ProcessedLights lights = std::make_unique<UniformLights>();
+  memset(lights.get(), 0, sizeof(lights));
+
+  // @TODO: more optimal, no allocations/copies
+  std::vector<PointLight> pointLights{};
+  std::vector<SpotLight> spotLights{};
+  std::vector<DirectionalLight> directionalLights{};
+
+  pointLights.reserve(POINT_LIGHT_BUF_SIZE);
+  spotLights.reserve(SPOT_LIGHT_BUF_SIZE);
+  directionalLights.reserve(DIRECTIONAL_LIGHT_BUF_SIZE);
+
+  bool pointOverflowed = false;
+  bool spotOverflowed = false;
+  bool directionalOverflowed = false;
+
+  for (size_t instId = 0; instId < instance_mapping.size(); ++instId)
+  {
+    const uint32_t lightId = instance_mapping[instId];
+
+    if (lightId == (uint32_t)(-1))
+      continue;
+
+    const glm::mat4x4& inst = instances[instId];
+
+    const auto& l = model.lights[lightId];
+    const glm::vec3 color = {(float)l.color[0], (float)l.color[1], (float)l.color[2]};
+
+    // @TODO: more efficient if need be, direction calc too
+    glm::vec3 translation;
+    glm::vec3 direction;
+    {
+      glm::vec3 scale;
+      glm::quat rotation;
+      glm::vec3 skew;
+      glm::vec4 perspective;
+      glm::decompose(inst, scale, rotation, translation, skew, perspective);
+
+      const glm::vec4 directionOffsetHom = inst * glm::vec4(0.f, 0.f, -1.f, 1.f);
+      const glm::vec3 directionOffset = {
+        directionOffsetHom.x / directionOffsetHom.w,
+        directionOffsetHom.y / directionOffsetHom.w,
+        directionOffsetHom.z / directionOffsetHom.w};
+
+      direction = glm::normalize(directionOffset - translation);
+    }
+
+    if (l.type == "point")
+    {
+      if (pointLights.size() >= POINT_LIGHT_BUF_SIZE)
+      {
+        pointOverflowed = true;
+        continue;
+      }
+
+      auto& dest = pointLights.emplace_back();
+      dest.color = color;
+      dest.intensity = (float)l.intensity;
+      dest.range = (float)l.range;
+      dest.position = translation;
+    }
+    else if (l.type == "spot")
+    {
+      if (spotLights.size() >= SPOT_LIGHT_BUF_SIZE)
+      {
+        spotOverflowed = true;
+        continue;
+      }
+
+      auto& dest = spotLights.emplace_back();
+      dest.color = color;
+      dest.intensity = (float)l.intensity;
+      dest.range = (float)l.range;
+      dest.position = translation;
+      dest.direction = direction;
+
+      const float innerConeAngle = (float)l.spot.innerConeAngle;
+      const float outerConeAngle = (float)l.spot.outerConeAngle;
+
+      // @TODO: pull out (?)
+      dest.lightAngleScale =
+        1.f / std::max(0.001f, cosf(innerConeAngle) - cosf(outerConeAngle));
+      dest.lightAngleOffset = -cosf(outerConeAngle) * dest.lightAngleScale;
+    }
+    else if (l.type == "directional")
+    {
+      if (directionalLights.size() >= DIRECTIONAL_LIGHT_BUF_SIZE)
+      {
+        directionalOverflowed = true;
+        continue;
+      }
+
+      auto& dest = directionalLights.emplace_back();
+      dest.color = color;
+      dest.intensity = (float)l.intensity;
+      dest.direction = direction;
+    }
+    else
+    {
+      spdlog::warn(
+        "Encountered invalid light format {}, skipping, the gltf asset may be invalid", l.type);
+    }
+  }
+
+  if (pointOverflowed)
+  {
+    spdlog::warn(
+      "The model contained more point lights than supported (max={}), truncated to max count",
+      POINT_LIGHT_BUF_SIZE);
+  }
+  if (spotOverflowed)
+  {
+    spdlog::warn(
+      "The model contained more spot lights than supported (max={}), truncated to max count",
+      SPOT_LIGHT_BUF_SIZE);
+  }
+  if (directionalOverflowed)
+  {
+    spdlog::warn(
+      "The model contained more directional lights than supported (max={}), truncated to max count",
+      DIRECTIONAL_LIGHT_BUF_SIZE);
+  }
+
+  ETNA_ASSERT(pointLights.size() <= POINT_LIGHT_BUF_SIZE);
+  ETNA_ASSERT(spotLights.size() <= SPOT_LIGHT_BUF_SIZE);
+  ETNA_ASSERT(directionalLights.size() <= DIRECTIONAL_LIGHT_BUF_SIZE);
+
+  lights->pointLightsCount = (shader_uint)pointLights.size();
+  memcpy(lights->pointLights, pointLights.data(), pointLights.size() * sizeof(pointLights[0]));
+
+  lights->spotLightsCount = (shader_uint)spotLights.size();
+  memcpy(lights->spotLights, spotLights.data(), spotLights.size() * sizeof(spotLights[0]));
+
+  lights->directionalLightsCount = (shader_uint)directionalLights.size();
+  memcpy(
+    lights->directionalLights,
+    directionalLights.data(),
+    directionalLights.size() * sizeof(directionalLights[0]));
+
+  return lights;
+}
+
 void SceneManager::uploadData(
-  std::span<const VertexType> vertices, std::span<const std::uint32_t> indices)
+  std::span<const Vertex> vertices, std::span<const uint32_t> indices, const UniformLights& lights)
 {
   unifiedVbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
     .size = vertices.size_bytes(),
@@ -422,8 +580,18 @@ void SceneManager::uploadData(
     .name = "unifiedIbuf",
   });
 
-  transferHelper.uploadBuffer<VertexType>(*oneShotCommands, unifiedVbuf, 0, vertices);
-  transferHelper.uploadBuffer<std::uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
+  // @TODO: make dynamic (and movable with imgui? Then should be moved out of scene?)
+  lightsUbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(UniformLights),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "lightsUbuf",
+  });
+
+  transferHelper.uploadBuffer<Vertex>(*oneShotCommands, unifiedVbuf, 0, vertices);
+  transferHelper.uploadBuffer<uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
+
+  transferHelper.uploadBuffer<UniformLights>(*oneShotCommands, lightsUbuf, 0, {&lights, 1});
 }
 
 void SceneManager::selectScene(std::filesystem::path path, SceneAssetType scene_type)
@@ -438,9 +606,11 @@ void SceneManager::selectScene(std::filesystem::path path, SceneAssetType scene_
 
   auto model = std::move(*maybeModel);
 
-  auto [instMats, instMeshes] = processInstances(model);
+  auto [instMats, instMeshes, instLights] = processInstances(model);
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
+
+  lightsData = processLights(model, instanceMatrices, instLights);
 
   switch (scene_type)
   {
@@ -448,14 +618,14 @@ void SceneManager::selectScene(std::filesystem::path path, SceneAssetType scene_
     auto [verts, inds, relems, meshs] = processMeshes(model);
     renderElements = std::move(relems);
     meshes = std::move(meshs);
-    uploadData<Vertex>(verts, inds);
+    uploadData(verts, inds, *lightsData);
   }
   break;
   case SceneAssetType::BAKED: {
     auto [verts, inds, relems, meshs] = processBakedMeshes(model);
     renderElements = std::move(relems);
     meshes = std::move(meshs);
-    uploadData<Vertex>(verts, inds);
+    uploadData(verts, inds, *lightsData);
   }
   break;
   default:

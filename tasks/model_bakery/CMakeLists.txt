@@ -1,5 +1,3 @@
-# includes
-add_subdirectory(common)
 
 # 3D asset baker
 add_subdirectory(baker)

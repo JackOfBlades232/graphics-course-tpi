@@ -6,7 +6,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtx/vector_angle.hpp>
 #include <spdlog/spdlog.h>
-#include <quantization.h>
+#include <render_utils/shaders/quantization.h>
 
 #include <cstdio>
 #include <cstdlib>

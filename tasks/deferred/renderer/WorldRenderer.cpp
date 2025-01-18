@@ -139,7 +139,7 @@ void WorldRenderer::renderScene(
   auto meshes = sceneMgr->getMeshes();
   auto relems = sceneMgr->getRenderElements();
 
-  for (std::size_t instIdx = 0; instIdx < instanceMeshes.size(); ++instIdx)
+  for (size_t instIdx = 0; instIdx < instanceMeshes.size(); ++instIdx)
   {
     pushConst2M.model = instanceMatrices[instIdx];
 
@@ -147,8 +147,10 @@ void WorldRenderer::renderScene(
       pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, {pushConst2M});
 
     const auto meshIdx = instanceMeshes[instIdx];
+    if (meshIdx == (uint32_t)(-1))
+      continue;
 
-    for (std::size_t j = 0; j < meshes[meshIdx].relemCount; ++j)
+    for (size_t j = 0; j < meshes[meshIdx].relemCount; ++j)
     {
       const auto relemIdx = meshes[meshIdx].firstRelem + j;
       const auto& relem = relems[relemIdx];
@@ -210,6 +212,11 @@ void WorldRenderer::renderWorld(
       auto set = etna::create_descriptor_set(
         gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(0),
         cmd_buf,
+        {etna::Binding{1, sceneMgr->getLightsBuffer().genBinding()}});
+
+      auto gbufSet = etna::create_descriptor_set(
+        gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(1),
+        cmd_buf,
         {etna::Binding{
            0, gbufAlbedo.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
@@ -223,7 +230,7 @@ void WorldRenderer::renderWorld(
         vk::PipelineBindPoint::eGraphics,
         gbufferResolver->pipelineLayout(),
         0,
-        {set.getVkSet()},
+        {set.getVkSet(), gbufSet.getVkSet()},
         {});
 
       cmd_buf.pushConstants<glm::mat4x4>(
