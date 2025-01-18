@@ -3375,10 +3375,12 @@
     }
   ],
   "extensionsRequired": [
-    "KHR_materials_pbrSpecularGlossiness"
+    "KHR_materials_pbrSpecularGlossiness",
+    "KHR_lights_punctual"
   ],
   "extensionsUsed": [
-    "KHR_materials_pbrSpecularGlossiness"
+    "KHR_materials_pbrSpecularGlossiness",
+    "KHR_lights_punctual"
   ],
   "images": [
     {
@@ -3819,6 +3821,65 @@
       "name": "Main.002"
     }
   ],
+  "extensions": {
+    "KHR_lights_punctual": {
+      "lights": [
+        {
+          "color": [
+            1.0,
+            0.8,
+            0.9
+          ],
+          "intensity": 0.5,
+          "type": "directional"
+        },
+        {
+          "spot": {
+            "innerConeAngle": 1.185398163397448,
+            "outerConeAngle": 1.97079632679
+          },
+          "color": [
+            0.3,
+            1.0,
+            0.0
+          ],
+          "intensity": 2.5,
+          "range": 20.0,
+          "type": "spot"
+        },
+        {
+          "color": [
+            0.5,
+            1.0,
+            0.9
+          ],
+          "intensity": 1.0,
+          "range": 5.7,
+          "type": "point"
+        },
+        {
+          "color": [
+            0.7,
+            0.4,
+            1.0
+          ],
+          "intensity": 1.0,
+          "range": 7.7,
+          "type": "point"
+        },
+        {
+          "color": [
+            0.5,
+            1.0,
+            1.0
+          ],
+          "intensity": 0.6,
+          "range": 6.7,
+          "type": "point"
+        }
+      ]
+    }
+  },
   "meshes": [
     {
       "name": "Cube_0",
@@ -4878,22 +4939,47 @@
     },
     {
       "mesh": 0,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube_0"
     },
     {
       "mesh": 1,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube_1"
     },
     {
       "mesh": 2,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cube_2"
     },
     {
       "mesh": 3,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube_3"
     },
     {
       "mesh": 4,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "Cube_4"
     },
     {
@@ -4923,10 +5009,20 @@
     },
     {
       "mesh": 5,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cylinder_0"
     },
     {
       "mesh": 6,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cylinder_1"
     },
     {
@@ -4981,6 +5077,11 @@
       "name": "Sun.001"
     },
     {
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 0
+        }
+      },
       "name": "Sun.001"
     },
     {
@@ -5010,10 +5111,20 @@
     },
     {
       "mesh": 7,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "2Fbuilding_0"
     },
     {
       "mesh": 8,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "2Fbuilding_1"
     },
     {
@@ -5044,14 +5155,29 @@
     },
     {
       "mesh": 9,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cube.009_0"
     },
     {
       "mesh": 10,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.009_1"
     },
     {
       "mesh": 11,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube.009_2"
     },
     {
@@ -5081,10 +5207,20 @@
     },
     {
       "mesh": 12,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "Cylinder.001_0"
     },
     {
       "mesh": 13,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cylinder.001_1"
     },
     {
@@ -5114,10 +5250,20 @@
     },
     {
       "mesh": 14,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cylinder.002_0"
     },
     {
       "mesh": 15,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cylinder.002_1"
     },
     {
@@ -5147,10 +5293,20 @@
     },
     {
       "mesh": 16,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cylinder.003_0"
     },
     {
       "mesh": 17,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cylinder.003_1"
     },
     {
@@ -5180,10 +5336,20 @@
     },
     {
       "mesh": 18,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cylinder.004_0"
     },
     {
       "mesh": 19,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cylinder.004_1"
     },
     {
@@ -5212,6 +5378,11 @@
     },
     {
       "mesh": 20,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.016_0"
     },
     {
@@ -5241,10 +5412,20 @@
     },
     {
       "mesh": 21,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube.017_0"
     },
     {
       "mesh": 22,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "Cube.017_1"
     },
     {
@@ -5273,6 +5454,11 @@
     },
     {
       "mesh": 23,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Plane.001_0"
     },
     {
@@ -5301,6 +5487,11 @@
     },
     {
       "mesh": 24,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Plane.002_0"
     },
     {
@@ -5329,6 +5520,11 @@
     },
     {
       "mesh": 25,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Plane.003_0"
     },
     {
@@ -5358,10 +5554,20 @@
     },
     {
       "mesh": 26,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cylinder.005_0"
     },
     {
       "mesh": 27,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cylinder.005_1"
     },
     {
@@ -5391,10 +5597,20 @@
     },
     {
       "mesh": 28,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "Cylinder.006_0"
     },
     {
       "mesh": 29,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cylinder.006_1"
     },
     {
@@ -5424,10 +5640,20 @@
     },
     {
       "mesh": 30,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cylinder.007_0"
     },
     {
       "mesh": 31,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cylinder.007_1"
     },
     {
@@ -5456,6 +5682,11 @@
     },
     {
       "mesh": 32,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Plane.005_0"
     },
     {
@@ -5485,10 +5716,20 @@
     },
     {
       "mesh": 33,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cube.021_0"
     },
     {
       "mesh": 34,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.021_1"
     },
     {
@@ -5517,6 +5758,11 @@
     },
     {
       "mesh": 35,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.023_0"
     },
     {
@@ -5547,14 +5793,29 @@
     },
     {
       "mesh": 36,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.030_0"
     },
     {
       "mesh": 37,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube.030_1"
     },
     {
       "mesh": 38,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cube.030_2"
     },
     {
@@ -5585,14 +5846,29 @@
     },
     {
       "mesh": 39,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube.031_0"
     },
     {
       "mesh": 40,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.031_1"
     },
     {
       "mesh": 41,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube.031_2"
     },
     {
@@ -5623,14 +5899,29 @@
     },
     {
       "mesh": 42,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cube.035_0"
     },
     {
       "mesh": 43,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.035_1"
     },
     {
       "mesh": 44,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube.035_2"
     },
     {
@@ -5660,10 +5951,20 @@
     },
     {
       "mesh": 45,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cube.037_0"
     },
     {
       "mesh": 46,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "Cube.037_1"
     },
     {
@@ -5693,10 +5994,20 @@
     },
     {
       "mesh": 47,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "2Fbuilding.001_0"
     },
     {
       "mesh": 48,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "2Fbuilding.001_1"
     },
     {
@@ -5727,14 +6038,29 @@
     },
     {
       "mesh": 49,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "2Fbuilding.002_0"
     },
     {
       "mesh": 50,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "2Fbuilding.002_0"
     },
     {
       "mesh": 51,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "2Fbuilding.002_1"
     },
     {
@@ -5767,22 +6093,47 @@
     },
     {
       "mesh": 52,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "light balls.344_0"
     },
     {
       "mesh": 53,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "light balls.344_0"
     },
     {
       "mesh": 54,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "light balls.344_0"
     },
     {
       "mesh": 55,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "light balls.344_0"
     },
     {
       "mesh": 56,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "light balls.344_0"
     },
     {
@@ -5814,18 +6165,38 @@
     },
     {
       "mesh": 57,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.001_0"
     },
     {
       "mesh": 58,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube.001_1"
     },
     {
       "mesh": 59,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cube.001_2"
     },
     {
       "mesh": 60,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "Cube.001_3"
     },
     {
@@ -5857,18 +6228,38 @@
     },
     {
       "mesh": 61,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "Cube.002_0"
     },
     {
       "mesh": 62,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.002_1"
     },
     {
       "mesh": 63,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "Cube.002_2"
     },
     {
       "mesh": 64,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "Cube.002_3"
     },
     {
@@ -5897,6 +6288,11 @@
     },
     {
       "mesh": 65,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "Cube.003_0"
     }
   ],
