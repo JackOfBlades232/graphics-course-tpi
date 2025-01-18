@@ -7,7 +7,7 @@ add_executable(deferred_renderer
 )
 
 target_link_libraries(deferred_renderer
-  PRIVATE glfw etna glm::glm wsi gui scene render_utils deferred_common_code)
+  PRIVATE glfw etna glm::glm wsi gui scene render_utils)
 
 target_add_shaders(deferred_renderer
   shaders/gbuffer_resolve.frag
