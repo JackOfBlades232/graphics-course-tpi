@@ -1,6 +1,5 @@
 #pragma once
 
-#include "render_utils/shaders/lights.h"
 #include <cstdint>
 #include <filesystem>
 
@@ -9,6 +8,7 @@
 #include <etna/Buffer.hpp>
 #include <etna/BlockingTransferHelper.hpp>
 #include <etna/VertexInput.hpp>
+#include <etna/GpuSharedResource.hpp>
 
 #include <lights.h>
 
@@ -64,9 +64,10 @@ public:
   vk::Buffer getVertexBuffer() { return unifiedVbuf.get(); }
   vk::Buffer getIndexBuffer() { return unifiedIbuf.get(); }
 
-  const etna::Buffer& getLightsBuffer() { return lightsUbuf; }
-
   etna::VertexByteStreamFormatDescription getVertexFormatDescription();
+
+  const UniformLights &lights() { return *lightsData; }
+  UniformLights &lightsRW() { return *lightsData; }
 
 private:
   std::optional<tinygltf::Model> loadModel(std::filesystem::path path);
@@ -112,8 +113,7 @@ private:
     std::span<glm::mat4x4> instances,
     std::span<uint32_t> instance_mapping) const;
 
-  void uploadData(
-    std::span<const Vertex> vertices, std::span<const uint32_t>, const UniformLights& lights);
+  void uploadData(std::span<const Vertex> vertices, std::span<const uint32_t> indices);
 
 private:
   tinygltf::TinyGLTF loader;
@@ -127,9 +127,8 @@ private:
   std::vector<glm::mat4x4> instanceMatrices;
   std::vector<uint32_t> instanceMeshes;
 
-  std::unique_ptr<UniformLights> lightsData;
-
   etna::Buffer unifiedVbuf;
   etna::Buffer unifiedIbuf;
-  etna::Buffer lightsUbuf;
+
+  std::unique_ptr<UniformLights> lightsData;
 };

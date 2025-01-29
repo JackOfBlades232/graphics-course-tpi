@@ -563,8 +563,7 @@ SceneManager::ProcessedLights SceneManager::processLights(
   return lights;
 }
 
-void SceneManager::uploadData(
-  std::span<const Vertex> vertices, std::span<const uint32_t> indices, const UniformLights& lights)
+void SceneManager::uploadData(std::span<const Vertex> vertices, std::span<const uint32_t> indices)
 {
   unifiedVbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
     .size = vertices.size_bytes(),
@@ -580,18 +579,8 @@ void SceneManager::uploadData(
     .name = "unifiedIbuf",
   });
 
-  // @TODO: make dynamic (and movable with imgui? Then should be moved out of scene?)
-  lightsUbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
-    .size = sizeof(UniformLights),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eUniformBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "lightsUbuf",
-  });
-
   transferHelper.uploadBuffer<Vertex>(*oneShotCommands, unifiedVbuf, 0, vertices);
   transferHelper.uploadBuffer<uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
-
-  transferHelper.uploadBuffer<UniformLights>(*oneShotCommands, lightsUbuf, 0, {&lights, 1});
 }
 
 void SceneManager::selectScene(std::filesystem::path path, SceneAssetType scene_type)
@@ -618,14 +607,14 @@ void SceneManager::selectScene(std::filesystem::path path, SceneAssetType scene_
     auto [verts, inds, relems, meshs] = processMeshes(model);
     renderElements = std::move(relems);
     meshes = std::move(meshs);
-    uploadData(verts, inds, *lightsData);
+    uploadData(verts, inds);
   }
   break;
   case SceneAssetType::BAKED: {
     auto [verts, inds, relems, meshs] = processBakedMeshes(model);
     renderElements = std::move(relems);
     meshes = std::move(meshs);
-    uploadData(verts, inds, *lightsData);
+    uploadData(verts, inds);
   }
   break;
   default:
