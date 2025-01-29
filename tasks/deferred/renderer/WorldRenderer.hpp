@@ -16,7 +16,7 @@
 class WorldRenderer
 {
 public:
-  WorldRenderer();
+  explicit WorldRenderer(const etna::GpuWorkCount& wc);
 
   void loadScene(std::filesystem::path path);
 
@@ -34,7 +34,6 @@ private:
   void renderScene(
     vk::CommandBuffer cmd_buf, const glm::mat4x4& glob_tm, vk::PipelineLayout pipeline_layout);
 
-
 private:
   std::unique_ptr<SceneManager> sceneMgr;
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
@@ -42,9 +41,13 @@ private:
   etna::Image gbufAlbedo, gbufNormal;
   etna::Image mainViewDepth;
 
-  etna::Buffer constants; // @TODO: port rendering to this from push_consts
+  // @TODO: port rendering to this from push_consts
+  std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
+  std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
 
   etna::Sampler defaultSampler;
+
+  const etna::GpuWorkCount& wc;
 
   struct PushConstants
   {

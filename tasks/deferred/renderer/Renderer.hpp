@@ -2,6 +2,7 @@
 
 #include <etna/GlobalContext.hpp>
 #include <etna/PerFrameCmdMgr.hpp>
+#include <etna/GpuWorkCount.hpp>
 #include <glm/glm.hpp>
 #include <function2/function2.hpp>
 
@@ -36,6 +37,8 @@ private:
 
   glm::uvec2 resolution;
   bool useVsync = true;
+
+  etna::GpuWorkCount gpuWorkCount;
 
   std::unique_ptr<WorldRenderer> worldRenderer;
 };

@@ -9,6 +9,7 @@
 
 Renderer::Renderer(glm::uvec2 res)
   : resolution{res}
+  , gpuWorkCount{2}
 {
 }
 
@@ -30,7 +31,7 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
     .deviceExtensions = deviceExtensions,
     .features = vk::PhysicalDeviceFeatures2{.features = {}},
     .physicalDeviceIndexOverride = {},
-    .numFramesInFlight = 2,
+    .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),
   });
 }
 
@@ -53,7 +54,7 @@ void Renderer::initFrameDelivery(vk::UniqueSurfaceKHR a_surface, ResolutionProvi
 
   resolution = {w, h};
 
-  worldRenderer = std::make_unique<WorldRenderer>();
+  worldRenderer = std::make_unique<WorldRenderer>(gpuWorkCount);
 
   worldRenderer->allocateResources(resolution);
   worldRenderer->loadShaders();
@@ -123,6 +124,7 @@ void Renderer::drawFrame()
     }
     ETNA_CHECK_VK_RESULT(currentCmdBuf.end());
 
+    gpuWorkCount.submit();
     auto renderingDone = commandManager->submit(std::move(currentCmdBuf), std::move(availableSem));
 
     const bool presented = window->present(std::move(renderingDone), view);
