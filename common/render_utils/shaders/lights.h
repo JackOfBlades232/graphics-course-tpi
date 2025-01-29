@@ -22,8 +22,8 @@ struct SpotLight
   float range;
   shader_vec3 color;
   float intensity;
-  float lightAngleScale;
-  float lightAngleOffset;
+  float innerConeAngle;
+  float outerConeAngle;
   shader_vec2 pad1;
 };
 
