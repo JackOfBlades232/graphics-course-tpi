@@ -43,6 +43,7 @@ private:
 
   // @TODO: port rendering to this from push_consts
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
+
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
 
   etna::Sampler defaultSampler;

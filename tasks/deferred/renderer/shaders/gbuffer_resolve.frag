@@ -101,15 +101,20 @@ void main()
   {
     const vec3 lightIntensity = lights.spotLights[i].color * lights.spotLights[i].intensity;
     const float lightAttenuation =
-      calculate_attenuation(pos, lights.pointLights[i].position, lights.pointLights[i].range);
+      calculate_attenuation(pos, lights.spotLights[i].position, lights.spotLights[i].range);
 
     const vec3 lightDir = normalize(lights.spotLights[i].direction);
     const vec3 toPosDir = normalize(pos - lights.spotLights[i].position);
 
+    // @TODO: this can be precalculated on cpu, left here to have a dumb imgui setting
+    const float lightAngleScale =
+      1.f / max(0.001f, cos(lights.spotLights[i].innerConeAngle) - cos(lights.spotLights[i].outerConeAngle));
+    const float lightAngleOffset = -cos(lights.spotLights[i].outerConeAngle) * lightAngleScale;
+
     const float lightAngularAttenuation = calculate_angular_attenuation(
       dot(lightDir, toPosDir),
-      lights.spotLights[i].lightAngleScale,
-      lights.spotLights[i].lightAngleOffset);
+      lightAngleScale,
+      lightAngleOffset);
 
     pixelColor += calculate_diffuse(
       toPosDir,
