@@ -8,8 +8,9 @@
 #include <etna/Etna.hpp>
 #include <glm/ext.hpp>
 
-WorldRenderer::WorldRenderer()
+WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc)
   : sceneMgr{std::make_unique<SceneManager>()}
+  , wc{wc}
 {
 }
 
@@ -39,6 +40,15 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
   defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
+
+  lights.emplace(wc, [&ctx](size_t) {
+    return ctx.createBuffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->lights()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "lights"});
+  });
+  lights->iterate([](auto& buf) { buf.map(); });
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -52,8 +62,6 @@ void WorldRenderer::loadShaders()
     "static_mesh_material",
     {DEFERRED_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
      DEFERRED_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
-  etna::create_program(
-    "static_mesh", {DEFERRED_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -164,6 +172,8 @@ void WorldRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
+  memcpy(lights->get().data(), &sceneMgr->lights(), sizeof(sceneMgr->lights()));
+
   // draw final scene to screen
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
@@ -212,7 +222,7 @@ void WorldRenderer::renderWorld(
       auto set = etna::create_descriptor_set(
         gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(0),
         cmd_buf,
-        {etna::Binding{1, sceneMgr->getLightsBuffer().genBinding()}});
+        {etna::Binding{1, lights->get().genBinding()}});
 
       auto gbufSet = etna::create_descriptor_set(
         gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(1),
