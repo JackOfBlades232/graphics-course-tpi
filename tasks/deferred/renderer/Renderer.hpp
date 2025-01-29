@@ -7,6 +7,7 @@
 #include <function2/function2.hpp>
 
 #include "wsi/Keyboard.hpp"
+#include "gui/ImGuiRenderer.hpp"
 
 #include "FramePacket.hpp"
 #include "WorldRenderer.hpp"
@@ -40,5 +41,6 @@ private:
 
   etna::GpuWorkCount gpuWorkCount;
 
+  std::unique_ptr<ImGuiRenderer> guiRenderer;
   std::unique_ptr<WorldRenderer> worldRenderer;
 };

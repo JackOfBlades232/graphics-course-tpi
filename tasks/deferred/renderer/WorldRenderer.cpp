@@ -1,3 +1,5 @@
+#define _USE_MATH_DEFINES
+
 #include "WorldRenderer.hpp"
 #include "render_utils/PostfxRenderer.hpp"
 
@@ -7,6 +9,12 @@
 #include <etna/Profiling.hpp>
 #include <etna/Etna.hpp>
 #include <glm/ext.hpp>
+#include <imgui.h>
+
+#include <cassert>
+#include <cmath>
+#include <memory>
+#include <vector>
 
 WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc)
   : sceneMgr{std::make_unique<SceneManager>()}
@@ -247,5 +255,140 @@ void WorldRenderer::renderWorld(
         gbufferResolver->pipelineLayout(), vk::ShaderStageFlagBits::eFragment, 0, {worldViewProj});
       gbufferResolver->render(cmd_buf, target_image, target_image_view);
     }
+  }
+}
+
+constexpr auto build_light_names_from_struct()
+{
+  std::vector<std::vector<std::string>> lightOptionsNames{};
+  std::vector<std::string> none{"none"};
+  std::vector<std::string> point{};
+  std::vector<std::string> spot{};
+  std::vector<std::string> dir{};
+  for (unsigned i = 0; i < POINT_LIGHT_BUF_SIZE; ++i)
+    point.emplace_back(std::string{"point_"} + std::to_string(i));
+  for (unsigned i = 0; i < SPOT_LIGHT_BUF_SIZE; ++i)
+    spot.emplace_back(std::string{"spot_"} + std::to_string(i));
+  for (unsigned i = 0; i < DIRECTIONAL_LIGHT_BUF_SIZE; ++i)
+    dir.emplace_back(std::string{"dir_"} + std::to_string(i));
+  lightOptionsNames.push_back(std::move(none));
+  lightOptionsNames.push_back(std::move(point));
+  lightOptionsNames.push_back(std::move(spot));
+  lightOptionsNames.push_back(std::move(dir));
+  return lightOptionsNames;
+};
+
+void WorldRenderer::drawGui()
+{
+  {
+    ImGui::Begin("Lights");
+
+    // @TODO: not static, not int, not thoughtless
+    static unsigned currentLightType = 0;
+    static unsigned currentLightId = 0;
+
+    // @TODO: bake it in somehow
+    static auto lightOptionsNames = build_light_names_from_struct();
+
+    auto lightName = [&](unsigned type, unsigned id) { return lightOptionsNames[type][id].c_str(); };
+    auto curLightName = [&] { return lightName(currentLightType, currentLightId); };
+
+    auto pointLightSettings = [this](int id) {
+      auto& l = sceneMgr->lightsRW().pointLights[id];
+      ImGui::SliderFloat3("position", (float*)&l.position, -15.f, 15.f);
+      ImGui::NewLine();
+      ImGui::SliderFloat("range", &l.range, 0.01f, 50.f);
+      ImGui::NewLine();
+      ImGui::ColorEdit3(
+        "Meshes base color",
+        (float*)&l.color,
+        ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+      ImGui::NewLine();
+      ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
+    };
+
+    auto spotLightSettings = [this](int id) {
+      auto& l = sceneMgr->lightsRW().spotLights[id];
+      ImGui::SliderFloat3("position", (float*)&l.position, -15.f, 15.f);
+      ImGui::NewLine();
+      ImGui::SliderFloat3("direction", (float*)&l.direction, -1.f, 1.f);
+      l.direction = glm::normalize(l.direction); // @TODO: can it be not here?
+      ImGui::NewLine();
+      ImGui::SliderFloat("range", &l.range, 0.01f, 50.f);
+      ImGui::NewLine();
+      ImGui::ColorEdit3(
+        "Meshes base color",
+        (float*)&l.color,
+        ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+      ImGui::NewLine();
+      ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
+      ImGui::NewLine();
+      ImGui::SliderFloat("innerConeAngle", &l.innerConeAngle, 0.01f, 2.f * (float)M_PI);
+      ImGui::NewLine();
+      ImGui::SliderFloat("outerConeAngle", &l.outerConeAngle, 0.01f, 2.f * (float)M_PI);
+
+      if (l.outerConeAngle < l.innerConeAngle + FLT_EPSILON)
+        l.outerConeAngle = l.innerConeAngle + FLT_EPSILON;
+    };
+
+    auto directionalLightSettings = [this](int id) {
+      auto& l = sceneMgr->lightsRW().directionalLights[id];
+      ImGui::SliderFloat3("direction", (float*)&l.direction, -1.f, 1.f);
+      l.direction = glm::normalize(l.direction); // @TODO: can it be not here?
+      ImGui::NewLine();
+      ImGui::ColorEdit3(
+        "Meshes base color",
+        (float*)&l.color,
+        ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+      ImGui::NewLine();
+      ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
+    };
+
+    switch (currentLightType)
+    {
+    case 1:
+      pointLightSettings(currentLightId);
+      break;
+    case 2:
+      spotLightSettings(currentLightId);
+      break;
+    case 3:
+      directionalLightSettings(currentLightId);
+      break;
+    default:
+      break;
+    }
+
+    auto lightDropdown = [&](unsigned type, unsigned count) {
+      for (unsigned i = 0; i < count; i++)
+      {
+        bool selected = currentLightType == type && currentLightId == i;
+        if (ImGui::Selectable(lightName(type, i), selected))
+        {
+          currentLightType = type;
+          currentLightId = i;
+        }
+        if (selected)
+          ImGui::SetItemDefaultFocus();
+      }
+    };
+
+    if (ImGui::BeginCombo("##lights", curLightName()))
+    {
+      {
+        bool selected = currentLightType == 0;
+        if (ImGui::Selectable("none", selected))
+          currentLightType = 0;
+        if (selected)
+          ImGui::SetItemDefaultFocus();
+      }
+      lightDropdown(1, sceneMgr->lights().pointLightsCount);
+      lightDropdown(2, sceneMgr->lights().spotLightsCount);
+      lightDropdown(3, sceneMgr->lights().directionalLightsCount);
+
+      ImGui::EndCombo();
+    }
+
+    ImGui::End();
   }
 }
