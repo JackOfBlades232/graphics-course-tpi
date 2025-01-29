@@ -496,14 +496,8 @@ SceneManager::ProcessedLights SceneManager::processLights(
       dest.range = (float)l.range;
       dest.position = translation;
       dest.direction = direction;
-
-      const float innerConeAngle = (float)l.spot.innerConeAngle;
-      const float outerConeAngle = (float)l.spot.outerConeAngle;
-
-      // @TODO: pull out (?)
-      dest.lightAngleScale =
-        1.f / std::max(0.001f, cosf(innerConeAngle) - cosf(outerConeAngle));
-      dest.lightAngleOffset = -cosf(outerConeAngle) * dest.lightAngleScale;
+      dest.innerConeAngle = (float)l.spot.innerConeAngle;
+      dest.outerConeAngle = (float)l.spot.outerConeAngle;
     }
     else if (l.type == "directional")
     {
