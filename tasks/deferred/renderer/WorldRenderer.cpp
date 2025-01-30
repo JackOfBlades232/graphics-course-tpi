@@ -12,7 +12,6 @@
 #include <imgui.h>
 
 #include <cassert>
-#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -268,11 +267,11 @@ constexpr auto build_light_names_from_struct()
   std::vector<std::string> point{};
   std::vector<std::string> spot{};
   std::vector<std::string> dir{};
-  for (unsigned i = 0; i < POINT_LIGHT_BUF_SIZE; ++i)
+  for (shader_uint i = 0; i < POINT_LIGHT_BUF_SIZE; ++i)
     point.emplace_back(std::string{"point_"} + std::to_string(i));
-  for (unsigned i = 0; i < SPOT_LIGHT_BUF_SIZE; ++i)
+  for (shader_uint i = 0; i < SPOT_LIGHT_BUF_SIZE; ++i)
     spot.emplace_back(std::string{"spot_"} + std::to_string(i));
-  for (unsigned i = 0; i < DIRECTIONAL_LIGHT_BUF_SIZE; ++i)
+  for (shader_uint i = 0; i < DIRECTIONAL_LIGHT_BUF_SIZE; ++i)
     dir.emplace_back(std::string{"dir_"} + std::to_string(i));
   lightOptionsNames.push_back(std::move(none));
   lightOptionsNames.push_back(std::move(point));
@@ -295,12 +294,12 @@ void WorldRenderer::drawGui()
       SPOT = 2,
       DIRECTIONAL = 3
     } currentLightType = NONE;
-    static unsigned currentLightId = 0;
+    static shader_uint currentLightId = 0;
 
     // @TODO: bake it in somehow
     static auto lightOptionsNames = build_light_names_from_struct();
 
-    auto lightName = [&](LType type, unsigned id) { return lightOptionsNames[type][id].c_str(); };
+    auto lightName = [&](LType type, shader_uint id) { return lightOptionsNames[type][id].c_str(); };
     auto curLightName = [&] { return lightName(currentLightType, currentLightId); };
 
     auto pointLightSettings = [this](int id) {
@@ -369,8 +368,8 @@ void WorldRenderer::drawGui()
       break;
     }
 
-    auto lightDropdown = [&](LType type, unsigned count) {
-      for (unsigned i = 0; i < count; i++)
+    auto lightDropdown = [&](LType type, shader_uint count) {
+      for (shader_uint i = 0; i < count; i++)
       {
         bool selected = currentLightType == type && currentLightId == i;
         if (ImGui::Selectable(lightName(type, i), selected))
