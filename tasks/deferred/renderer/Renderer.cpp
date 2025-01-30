@@ -76,7 +76,7 @@ void Renderer::debugInput(const Keyboard& kb, const Mouse& ms, bool mouse_captur
   if (kb[KeyboardKey::kB] == ButtonState::Falling)
   {
     const int retval = std::system("cd " GRAPHICS_COURSE_ROOT "/build"
-                                   " && cmake --build . --target model_bakery_renderer_shaders");
+                                   " && cmake --build . --target deferred_renderer_shaders");
     if (retval != 0)
       spdlog::warn("Shader recompilation returned a non-zero return code!");
     else
