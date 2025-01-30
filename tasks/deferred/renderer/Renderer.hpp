@@ -7,6 +7,7 @@
 #include <function2/function2.hpp>
 
 #include "wsi/Keyboard.hpp"
+#include "wsi/Mouse.hpp"
 #include "gui/ImGuiRenderer.hpp"
 
 #include "FramePacket.hpp"
@@ -26,7 +27,7 @@ public:
   void recreateSwapchain(glm::uvec2 res);
   void loadScene(std::filesystem::path path);
 
-  void debugInput(const Keyboard& kb);
+  void debugInput(const Keyboard& kb, const Mouse& ms, bool mouse_captured);
   void update(const FramePacket& packet);
   void drawFrame();
 
