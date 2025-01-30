@@ -8,7 +8,9 @@
 
 #include "render_utils/PostfxRenderer.hpp"
 #include "scene/SceneManager.hpp"
+
 #include "wsi/Keyboard.hpp"
+#include "wsi/Mouse.hpp"
 
 #include "FramePacket.hpp"
 
@@ -24,7 +26,7 @@ public:
   void allocateResources(glm::uvec2 swapchain_resolution);
   void setupPipelines(vk::Format swapchain_format);
 
-  void debugInput(const Keyboard& kb);
+  void debugInput(const Keyboard& kb, const Mouse& ms, bool mouse_captured);
   void update(const FramePacket& packet);
   void drawGui();
   void renderWorld(
@@ -62,4 +64,5 @@ private:
   etna::GraphicsPipeline staticMeshPipeline{};
 
   glm::uvec2 resolution;
+  bool settingsGuiEnabled = false;
 };
