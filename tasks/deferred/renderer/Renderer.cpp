@@ -69,9 +69,9 @@ void Renderer::loadScene(std::filesystem::path path)
   worldRenderer->loadScene(path);
 }
 
-void Renderer::debugInput(const Keyboard& kb)
+void Renderer::debugInput(const Keyboard& kb, const Mouse& ms, bool mouse_captured)
 {
-  worldRenderer->debugInput(kb);
+  worldRenderer->debugInput(kb, ms, mouse_captured);
 
   if (kb[KeyboardKey::kB] == ButtonState::Falling)
   {

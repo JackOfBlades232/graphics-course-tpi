@@ -63,7 +63,7 @@ void App::processInput(float dt)
   if (mainWindow->captureMouse)
     rotateCam(mainCam, mainWindow->mouse, dt);
 
-  renderer->debugInput(mainWindow->keyboard);
+  renderer->debugInput(mainWindow->keyboard, mainWindow->mouse, mainWindow->captureMouse);
 }
 
 void App::drawFrame()

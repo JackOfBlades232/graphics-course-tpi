@@ -125,7 +125,10 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     {resolution.x, resolution.y}});
 }
 
-void WorldRenderer::debugInput(const Keyboard&) {}
+void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
+{
+  settingsGuiEnabled = !mouse_captured;
+}
 
 void WorldRenderer::update(const FramePacket& packet)
 {
@@ -280,17 +283,24 @@ constexpr auto build_light_names_from_struct()
 
 void WorldRenderer::drawGui()
 {
+  if (settingsGuiEnabled)
   {
     ImGui::Begin("Lights");
 
-    // @TODO: not static, not int, not thoughtless
-    static unsigned currentLightType = 0;
+    // @TODO: not static
+    static enum LType
+    {
+      NONE = 0,
+      POINT = 1,
+      SPOT = 2,
+      DIRECTIONAL = 3
+    } currentLightType = NONE;
     static unsigned currentLightId = 0;
 
     // @TODO: bake it in somehow
     static auto lightOptionsNames = build_light_names_from_struct();
 
-    auto lightName = [&](unsigned type, unsigned id) { return lightOptionsNames[type][id].c_str(); };
+    auto lightName = [&](LType type, unsigned id) { return lightOptionsNames[type][id].c_str(); };
     auto curLightName = [&] { return lightName(currentLightType, currentLightId); };
 
     auto pointLightSettings = [this](int id) {
@@ -346,20 +356,20 @@ void WorldRenderer::drawGui()
 
     switch (currentLightType)
     {
-    case 1:
+    case POINT:
       pointLightSettings(currentLightId);
       break;
-    case 2:
+    case SPOT:
       spotLightSettings(currentLightId);
       break;
-    case 3:
+    case DIRECTIONAL:
       directionalLightSettings(currentLightId);
       break;
     default:
       break;
     }
 
-    auto lightDropdown = [&](unsigned type, unsigned count) {
+    auto lightDropdown = [&](LType type, unsigned count) {
       for (unsigned i = 0; i < count; i++)
       {
         bool selected = currentLightType == type && currentLightId == i;
@@ -378,13 +388,13 @@ void WorldRenderer::drawGui()
       {
         bool selected = currentLightType == 0;
         if (ImGui::Selectable("none", selected))
-          currentLightType = 0;
+          currentLightType = NONE;
         if (selected)
           ImGui::SetItemDefaultFocus();
       }
-      lightDropdown(1, sceneMgr->lights().pointLightsCount);
-      lightDropdown(2, sceneMgr->lights().spotLightsCount);
-      lightDropdown(3, sceneMgr->lights().directionalLightsCount);
+      lightDropdown(POINT, sceneMgr->lights().pointLightsCount);
+      lightDropdown(SPOT, sceneMgr->lights().spotLightsCount);
+      lightDropdown(DIRECTIONAL, sceneMgr->lights().directionalLightsCount);
 
       ImGui::EndCombo();
     }
