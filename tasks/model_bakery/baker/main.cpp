@@ -21,7 +21,7 @@
 #define FAIL(fmt_, ...)                                                                            \
   do                                                                                               \
   {                                                                                                \
-    spdlog::error(fmt_, ##__VA_ARGS__);                                                            \
+    spdlog::error(fmt_ __VA_OPT__(, ) __VA_ARGS__);                                                \
     exit(1);                                                                                       \
   } while (0)
 
@@ -29,7 +29,7 @@
   do                                                                                               \
   {                                                                                                \
     if (!(e_))                                                                                     \
-      FAIL(fmt_, ##__VA_ARGS__);                                                                   \
+      FAIL(fmt_ __VA_OPT__(, ) __VA_ARGS__);                                                       \
   } while (0)
 
 uint32_t best_fit_quantize_normal(glm::vec3 normal)
