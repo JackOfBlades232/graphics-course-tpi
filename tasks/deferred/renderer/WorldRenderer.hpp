@@ -59,7 +59,6 @@ private:
   } pushConst2M;
 
   glm::mat4x4 worldViewProj;
-  glm::mat4x4 lightMatrix;
 
   etna::GraphicsPipeline staticMeshPipeline{};
 
