@@ -40,6 +40,11 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .name = "gbuffer_albedo",
     .format = vk::Format::eR32G32B32A32Sfloat,
     .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  gbufMaterial = ctx.createImage(etna::Image::CreateInfo{
+    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+    .name = "gbuffer_material",
+    .format = vk::Format::eR32G32B32A32Sfloat,
+    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
   gbufNormal = ctx.createImage(etna::Image::CreateInfo{
     .extent = vk::Extent3D{resolution.x, resolution.y, 1},
     .name = "gbuffer_normal",
@@ -48,6 +53,13 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
   defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
 
+  constants.emplace(wc, [&ctx](size_t) {
+    return ctx.createBuffer(etna::Buffer::CreateInfo{
+      .size = sizeof(constantsData),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "constants"});
+  });
   lights.emplace(wc, [&ctx](size_t) {
     return ctx.createBuffer(etna::Buffer::CreateInfo{
       .size = sizeof(sceneMgr->getLights()),
@@ -55,20 +67,91 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
       .name = "lights"});
   });
+  constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
 {
+  // @TODO: make recallable, i.e. implement cleanup
+
   sceneMgr->selectScene(path);
+
+  // @TODO: more graceful
+  ETNA_ASSERT(sceneMgr->getTextures().size() <= MAX_BINDLESS_TEXTURES);
+  ETNA_ASSERT(sceneMgr->getSamplers().size() <= MAX_BINDLESS_SAMPLERS);
+
+  // @TODO: pull out
+  auto& ctx = etna::get_context();
+
+  static constexpr std::array<vk::DescriptorPoolSize, 2> BINDLESS_POOL_SIZES{
+    vk::DescriptorPoolSize{vk::DescriptorType::eSampler, MAX_BINDLESS_SAMPLERS},
+    vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage, MAX_BINDLESS_TEXTURES}};
+
+  vk::DescriptorPoolCreateInfo pinfo{
+    .maxSets = 1,
+    .poolSizeCount = uint32_t(BINDLESS_POOL_SIZES.size()),
+    .pPoolSizes = BINDLESS_POOL_SIZES.data()};
+  bindlessDescriptorPool =
+    etna::unwrap_vk_result(ctx.getDevice().createDescriptorPoolUnique(pinfo));
+
+  auto layoutId = etna::get_shader_program("static_mesh").getDescriptorLayoutId(0);
+  auto setLayouts = {ctx.getDescriptorSetLayouts().getVkLayout(layoutId)};
+
+  vk::DescriptorSetAllocateInfo dainfo{};
+  dainfo.setDescriptorPool(bindlessDescriptorPool.get());
+  dainfo.setSetLayouts(setLayouts);
+
+  ETNA_VERIFY(
+    ctx.getDevice().allocateDescriptorSets(&dainfo, &bindlessDset) == vk::Result::eSuccess);
+
+  std::vector<vk::DescriptorImageInfo> textureInfos, samplerInfos;
+  textureInfos.reserve(sceneMgr->getTextures().size());
+  samplerInfos.reserve(sceneMgr->getSamplers().size());
+
+  for (const auto& tex : sceneMgr->getTextures())
+  {
+    textureInfos.emplace_back(vk::DescriptorImageInfo{
+      .imageView = tex.getView({}), .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal});
+  }
+  for (const auto& smp : sceneMgr->getSamplers())
+    samplerInfos.emplace_back(vk::DescriptorImageInfo{.sampler = smp.get()});
+
+  vk::DescriptorBufferInfo materialBufferInfo{
+    .buffer = sceneMgr->getMaterialParamsBuf().get(),
+    .offset = 0u,
+    .range = sceneMgr->getMaterialParamsBufSizeBytes()};
+
+  ctx.getDevice().updateDescriptorSets(
+    {
+      vk::WriteDescriptorSet{
+        .dstSet = bindlessDset,
+        .dstBinding = 0,
+        .descriptorCount = uint32_t(textureInfos.size()),
+        .descriptorType = vk::DescriptorType::eSampledImage,
+        .pImageInfo = textureInfos.data()},
+      vk::WriteDescriptorSet{
+        .dstSet = bindlessDset,
+        .dstBinding = 1,
+        .descriptorCount = uint32_t(samplerInfos.size()),
+        .descriptorType = vk::DescriptorType::eSampler,
+        .pImageInfo = samplerInfos.data()},
+      vk::WriteDescriptorSet{
+        .dstSet = bindlessDset,
+        .dstBinding = 2,
+        .descriptorCount = 1,
+        .descriptorType = vk::DescriptorType::eStorageBuffer,
+        .pBufferInfo = &materialBufferInfo},
+    },
+    {});
 }
 
 void WorldRenderer::loadShaders()
 {
   etna::create_program(
-    "static_mesh_material",
-    {DEFERRED_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
-     DEFERRED_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+    "static_mesh",
+    {BINDLESS_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
+     BINDLESS_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -82,44 +165,52 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   auto& pipelineManager = etna::get_context().getPipelineManager();
 
   // @TODO: compactify
-  staticMeshPipeline =
-    pipelineManager.createGraphicsPipeline(
-      "static_mesh_material",
-      etna::GraphicsPipeline::CreateInfo{
-        .vertexShaderInput = sceneVertexInputDesc,
-        .rasterizationConfig =
-          vk::PipelineRasterizationStateCreateInfo{
-            .polygonMode = vk::PolygonMode::eFill,
-            .cullMode = vk::CullModeFlagBits::eBack,
-            .frontFace = vk::FrontFace::eCounterClockwise,
-            .lineWidth = 1.f,
-          },
-        .blendingConfig =
-          {.attachments =
-             {
-               vk::PipelineColorBlendAttachmentState{
-                 .blendEnable = vk::False,
-                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-               },
-               vk::PipelineColorBlendAttachmentState{
-                 .blendEnable = vk::False,
-                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-               },
+  auto meshPipelineCreateInfo =
+    etna::GraphicsPipeline::CreateInfo{
+      .vertexShaderInput = sceneVertexInputDesc,
+      .rasterizationConfig =
+        vk::PipelineRasterizationStateCreateInfo{
+          .polygonMode = vk::PolygonMode::eFill,
+          .cullMode = vk::CullModeFlagBits::eBack,
+          .frontFace = vk::FrontFace::eCounterClockwise,
+          .lineWidth = 1.f,
+        },
+      .blendingConfig =
+        {.attachments =
+           {
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
              },
-           .logicOp = vk::LogicOp::eSet},
-        .fragmentShaderOutput =
-          {
-            .colorAttachmentFormats = // @TODO: save these into vars
-            {vk::Format::eR32G32B32A32Sfloat, vk::Format::eR32G32B32A32Sfloat},
-            .depthAttachmentFormat = vk::Format::eD32Sfloat,
-          },
-      });
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+           },
+         .logicOp = vk::LogicOp::eSet},
+      .fragmentShaderOutput =
+        {
+          .colorAttachmentFormats = // @TODO: save these into vars
+          {vk::Format::eR32G32B32A32Sfloat,
+           vk::Format::eR32G32B32A32Sfloat,
+           vk::Format::eR32G32B32A32Sfloat},
+          .depthAttachmentFormat = vk::Format::eD32Sfloat,
+        },
+    };
+
+  staticMeshPipeline =
+    pipelineManager.createGraphicsPipeline("static_mesh", meshPipelineCreateInfo);
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
-    DEFERRED_RENDERER_SHADERS_ROOT "gbuffer_resolve.frag.spv",
+    BINDLESS_RENDERER_SHADERS_ROOT "gbuffer_resolve.frag.spv",
     swapchain_format,
     {resolution.x, resolution.y}});
 }
@@ -149,7 +240,7 @@ void WorldRenderer::renderScene(
   cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
   cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
 
-  pushConst2M.projView = glob_tm;
+  pushConst.projView = glob_tm;
 
   auto instanceMeshes = sceneMgr->getInstanceMeshes();
   auto instanceMatrices = sceneMgr->getInstanceMatrices();
@@ -159,10 +250,10 @@ void WorldRenderer::renderScene(
 
   for (size_t instIdx = 0; instIdx < instanceMeshes.size(); ++instIdx)
   {
-    pushConst2M.model = instanceMatrices[instIdx];
-
-    cmd_buf.pushConstants<PushConstants>(
-      pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, {pushConst2M});
+    pushConst.modelAndMatId = instanceMatrices[instIdx];
+    ETNA_ASSERT(
+      pushConst.modelAndMatId[0].w == 0.f && pushConst.modelAndMatId[1].w == 0.f &&
+      pushConst.modelAndMatId[2].w == 0.f && pushConst.modelAndMatId[3].w == 1.f);
 
     const auto meshIdx = instanceMeshes[instIdx];
     if (meshIdx == (uint32_t)(-1))
@@ -172,6 +263,15 @@ void WorldRenderer::renderScene(
     {
       const auto relemIdx = meshes[meshIdx].firstRelem + j;
       const auto& relem = relems[relemIdx];
+
+      // @TODO: coalesce somehow, or better move projView to ubuf? or sort
+      pushConst.modelAndMatId[3].w = std::bit_cast<float>(relem.materialId);
+      cmd_buf.pushConstants<PushConstants>(
+        pipeline_layout,
+        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+        0,
+        {pushConst});
+
       cmd_buf.drawIndexed(relem.indexCount, 1, relem.indexOffset, relem.vertexOffset, 0);
     }
   }
@@ -182,6 +282,7 @@ void WorldRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
+  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
   memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
 
   // draw final scene to screen
@@ -191,12 +292,20 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
 
-      etna::RenderTargetState renderTargets(
+      etna::RenderTargetState renderTargets{
         cmd_buf,
         {{0, 0}, {resolution.x, resolution.y}},
         {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
+         {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
          {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
-        {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})});
+        {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}};
+
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        staticMeshPipeline.getVkPipelineLayout(),
+        0,
+        {bindlessDset},
+        {});
 
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
       renderScene(cmd_buf, worldViewProj, staticMeshPipeline.getVkPipelineLayout());
@@ -206,6 +315,13 @@ void WorldRenderer::renderWorld(
     etna::set_state(
       cmd_buf,
       gbufAlbedo.get(),
+      vk::PipelineStageFlagBits2::eFragmentShader,
+      vk::AccessFlagBits2::eShaderSampledRead,
+      vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::ImageAspectFlagBits::eColor);
+    etna::set_state(
+      cmd_buf,
+      gbufMaterial.get(),
       vk::PipelineStageFlagBits2::eFragmentShader,
       vk::AccessFlagBits2::eShaderSampledRead,
       vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -240,7 +356,10 @@ void WorldRenderer::renderWorld(
         {etna::Binding{
            0, gbufAlbedo.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
-           1, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           1,
+           gbufMaterial.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+         etna::Binding{
+           2, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
            8,
            mainViewDepth.genBinding(
@@ -260,7 +379,7 @@ void WorldRenderer::renderWorld(
   }
 }
 
-constexpr auto build_light_names_from_struct()
+static constexpr auto build_light_names_from_struct()
 {
   std::vector<std::vector<std::string>> lightOptionsNames{};
   std::vector<std::string> none{"none"};
@@ -299,7 +418,9 @@ void WorldRenderer::drawGui()
     // @TODO: bake it in somehow
     static auto lightOptionsNames = build_light_names_from_struct();
 
-    auto lightName = [&](LType type, shader_uint id) { return lightOptionsNames[type][id].c_str(); };
+    auto lightName = [&](LType type, shader_uint id) {
+      return lightOptionsNames[type][id].c_str();
+    };
     auto curLightName = [&] { return lightName(currentLightType, currentLightId); };
 
     auto pointLightSettings = [this](int id) {
