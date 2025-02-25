@@ -6,11 +6,15 @@
 #include <glm/glm.hpp>
 #include <tiny_gltf.h>
 #include <etna/Buffer.hpp>
+#include <etna/Image.hpp>
+#include <etna/Sampler.hpp>
 #include <etna/BlockingTransferHelper.hpp>
 #include <etna/VertexInput.hpp>
 #include <etna/GpuSharedResource.hpp>
+#include <etna/DescriptorSet.hpp>
 
 #include <lights.h>
+#include <materials.h>
 
 
 // A single render element (relem) corresponds to a single draw call
@@ -20,8 +24,7 @@ struct RenderElement
   uint32_t vertexOffset;
   uint32_t indexOffset;
   uint32_t indexCount;
-  // Not implemented!
-  // Material* material;
+  MaterialId materialId = MaterialId::INVALID;
 };
 
 // A mesh is a collection of relems. A scene may have the same mesh
@@ -38,17 +41,9 @@ struct Mesh
 class SceneManager
 {
 public:
-  enum class SceneAssetType
-  {
-    NOT_LOADED,
-    GENERIC,
-    BAKED,
-  };
-
   SceneManager();
 
-  void selectScene(
-    std::filesystem::path path, SceneAssetType scene_type = SceneManager::SceneAssetType::GENERIC);
+  void selectScene(std::filesystem::path path);
 
   // Every instance is a mesh drawn with a certain transform
   // NOTE: maybe you can pass some additional data through unused matrix entries?
@@ -66,8 +61,16 @@ public:
 
   etna::VertexByteStreamFormatDescription getVertexFormatDescription();
 
-  const UniformLights &lights() { return *lightsData; }
-  UniformLights &lightsRW() { return *lightsData; }
+  const UniformLights& getLights() const { return *lightsData; }
+
+  std::span<const etna::Image> getTextures() const { return textures; }
+  std::span<const etna::Sampler> getSamplers() const { return samplers; }
+  const etna::Buffer& getMaterialParamsBuf() const { return materialParamsBuf; }
+
+  uint32_t getMaterialParamsBufSizeBytes() const { return materialParamsBufSizeBytes; }
+
+  // For imgui, kinda hacky
+  UniformLights& lightsRW() { return *lightsData; }
 
 private:
   std::optional<tinygltf::Model> loadModel(std::filesystem::path path);
@@ -91,36 +94,33 @@ private:
 
   static_assert(sizeof(Vertex) == sizeof(float) * 8);
 
-  template <bool Baked>
   struct ProcessedMeshes
   {
-    using VertexDataCont = std::conditional_t<Baked, std::span<Vertex>, std::vector<Vertex>>;
-    using IndexDataCont = std::conditional_t<Baked, std::span<uint32_t>, std::vector<uint32_t>>;
-
-    VertexDataCont vertices;
-    IndexDataCont indices;
+    std::span<Vertex> vertices;
+    std::span<uint32_t> indices;
     std::vector<RenderElement> relems;
     std::vector<Mesh> meshes;
   };
 
   using ProcessedLights = std::unique_ptr<UniformLights>;
 
-  ProcessedMeshes<false> processMeshes(const tinygltf::Model& model) const;
-  ProcessedMeshes<true> processBakedMeshes(const tinygltf::Model& model) const;
+  ProcessedMeshes processMeshes(
+    const tinygltf::Model& model, std::span<const MaterialId> material_remapping) const;
 
   ProcessedLights processLights(
     const tinygltf::Model& model,
     std::span<glm::mat4x4> instances,
     std::span<uint32_t> instance_mapping) const;
 
-  void uploadData(std::span<const Vertex> vertices, std::span<const uint32_t> indices);
+  void uploadData(
+    std::span<const Vertex> vertices,
+    std::span<const uint32_t> indices,
+    std::span<const Material> material_params);
 
 private:
   tinygltf::TinyGLTF loader;
   std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
   etna::BlockingTransferHelper transferHelper;
-
-  SceneAssetType selectedSceneType = SceneManager::SceneAssetType::NOT_LOADED;
 
   std::vector<RenderElement> renderElements;
   std::vector<Mesh> meshes;
@@ -130,5 +130,14 @@ private:
   etna::Buffer unifiedVbuf;
   etna::Buffer unifiedIbuf;
 
-  std::unique_ptr<UniformLights> lightsData;
+  // @TODO: do we support reentrability in selectScene?
+  std::vector<etna::Image> textures{};
+  std::vector<etna::Sampler> samplers{};
+
+  etna::Buffer materialParamsBuf;
+  uint32_t materialParamsBufSizeBytes = 0;
+
+  std::unique_ptr<UniformLights> lightsData{};
+
+  bool loaded = false;
 };
