@@ -14,6 +14,9 @@
 #include <etna/GlobalContext.hpp>
 #include <etna/OneShotCmdMgr.hpp>
 
+#include <quantization.h>
+#include <materials.h>
+
 
 SceneManager::SceneManager()
   : oneShotCommands{etna::get_context().createOneShotCmdMgr()}
@@ -144,227 +147,10 @@ SceneManager::ProcessedInstances SceneManager::processInstances(const tinygltf::
   return result;
 }
 
-static uint32_t encode_normal(glm::vec3 normal)
+SceneManager::ProcessedMeshes SceneManager::processMeshes(
+  const tinygltf::Model& model, std::span<const MaterialId> material_remapping) const
 {
-  const int32_t x = static_cast<int32_t>(normal.x * 32767.0f);
-  const int32_t y = static_cast<int32_t>(normal.y * 32767.0f);
-
-  const uint32_t sign = normal.z >= 0 ? 0 : 1;
-  const uint32_t sx = static_cast<uint32_t>(x & 0xfffe) | sign;
-  const uint32_t sy = static_cast<uint32_t>(y & 0xffff) << 16;
-
-  return sx | sy;
-}
-
-SceneManager::ProcessedMeshes<false> SceneManager::processMeshes(const tinygltf::Model& model) const
-{
-  // NOTE: glTF assets can have pretty wonky data layouts which are not appropriate
-  // for real-time rendering, so we have to press the data first. In serious engines
-  // this is mitigated by storing assets on the disc in an engine-specific format that
-  // is appropriate for GPU upload right after reading from disc.
-
-  ProcessedMeshes<false> result;
-
-  // Pre-allocate enough memory so as not to hit the
-  // allocator on the memcpy hotpath
-  {
-    size_t vertexBytes = 0;
-    size_t indexBytes = 0;
-    for (const auto& bufView : model.bufferViews)
-    {
-      switch (bufView.target)
-      {
-      case TINYGLTF_TARGET_ARRAY_BUFFER:
-        vertexBytes += bufView.byteLength;
-        break;
-      case TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER:
-        indexBytes += bufView.byteLength;
-        break;
-      default:
-        break;
-      }
-    }
-    result.vertices.reserve(vertexBytes / sizeof(Vertex));
-    result.indices.reserve(indexBytes / sizeof(uint32_t));
-  }
-
-  {
-    size_t totalPrimitives = 0;
-    for (const auto& mesh : model.meshes)
-      totalPrimitives += mesh.primitives.size();
-    result.relems.reserve(totalPrimitives);
-  }
-
-  result.meshes.reserve(model.meshes.size());
-
-  for (const auto& mesh : model.meshes)
-  {
-    result.meshes.push_back(Mesh{
-      .firstRelem = static_cast<uint32_t>(result.relems.size()),
-      .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
-    });
-
-    for (const auto& prim : mesh.primitives)
-    {
-      if (prim.mode != TINYGLTF_MODE_TRIANGLES)
-      {
-        spdlog::warn(
-          "Encountered a non-triangles primitive, these are not supported for now, skipping it!");
-        --result.meshes.back().relemCount;
-        continue;
-      }
-
-      const auto normalIt = prim.attributes.find("NORMAL");
-      const auto tangentIt = prim.attributes.find("TANGENT");
-      const auto texcoordIt = prim.attributes.find("TEXCOORD_0");
-
-      const bool hasNormals = normalIt != prim.attributes.end();
-      const bool hasTangents = tangentIt != prim.attributes.end();
-      const bool hasTexcoord = texcoordIt != prim.attributes.end();
-      std::array accessorIndices{
-        prim.indices,
-        prim.attributes.at("POSITION"),
-        hasNormals ? normalIt->second : -1,
-        hasTangents ? tangentIt->second : -1,
-        hasTexcoord ? texcoordIt->second : -1,
-      };
-
-      std::array accessors{
-        &model.accessors[prim.indices],
-        &model.accessors[accessorIndices[1]],
-        hasNormals ? &model.accessors[accessorIndices[2]] : nullptr,
-        hasTangents ? &model.accessors[accessorIndices[3]] : nullptr,
-        hasTexcoord ? &model.accessors[accessorIndices[4]] : nullptr,
-      };
-
-      std::array bufViews{
-        &model.bufferViews[accessors[0]->bufferView],
-        &model.bufferViews[accessors[1]->bufferView],
-        hasNormals ? &model.bufferViews[accessors[2]->bufferView] : nullptr,
-        hasTangents ? &model.bufferViews[accessors[3]->bufferView] : nullptr,
-        hasTexcoord ? &model.bufferViews[accessors[4]->bufferView] : nullptr,
-      };
-
-      result.relems.push_back(RenderElement{
-        .vertexOffset = static_cast<uint32_t>(result.vertices.size()),
-        .indexOffset = static_cast<uint32_t>(result.indices.size()),
-        .indexCount = static_cast<uint32_t>(accessors[0]->count),
-      });
-
-      const size_t vertexCount = accessors[1]->count;
-
-      std::array ptrs{
-        reinterpret_cast<const std::byte*>(model.buffers[bufViews[0]->buffer].data.data()) +
-          bufViews[0]->byteOffset + accessors[0]->byteOffset,
-        reinterpret_cast<const std::byte*>(model.buffers[bufViews[1]->buffer].data.data()) +
-          bufViews[1]->byteOffset + accessors[1]->byteOffset,
-        hasNormals
-          ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[2]->buffer].data.data()) +
-            bufViews[2]->byteOffset + accessors[2]->byteOffset
-          : nullptr,
-        hasTangents
-          ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[3]->buffer].data.data()) +
-            bufViews[3]->byteOffset + accessors[3]->byteOffset
-          : nullptr,
-        hasTexcoord
-          ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[4]->buffer].data.data()) +
-            bufViews[4]->byteOffset + accessors[4]->byteOffset
-          : nullptr,
-      };
-
-      std::array strides{
-        bufViews[0]->byteStride != 0
-          ? bufViews[0]->byteStride
-          : tinygltf::GetComponentSizeInBytes(accessors[0]->componentType) *
-            tinygltf::GetNumComponentsInType(accessors[0]->type),
-        bufViews[1]->byteStride != 0
-          ? bufViews[1]->byteStride
-          : tinygltf::GetComponentSizeInBytes(accessors[1]->componentType) *
-            tinygltf::GetNumComponentsInType(accessors[1]->type),
-        hasNormals ? (bufViews[2]->byteStride != 0
-                        ? bufViews[2]->byteStride
-                        : tinygltf::GetComponentSizeInBytes(accessors[2]->componentType) *
-                          tinygltf::GetNumComponentsInType(accessors[2]->type))
-                   : 0,
-        hasTangents ? (bufViews[3]->byteStride != 0
-                         ? bufViews[3]->byteStride
-                         : tinygltf::GetComponentSizeInBytes(accessors[3]->componentType) *
-                           tinygltf::GetNumComponentsInType(accessors[3]->type))
-                    : 0,
-        hasTexcoord ? (bufViews[4]->byteStride != 0
-                         ? bufViews[4]->byteStride
-                         : tinygltf::GetComponentSizeInBytes(accessors[4]->componentType) *
-                           tinygltf::GetNumComponentsInType(accessors[4]->type))
-                    : 0,
-      };
-
-      for (size_t i = 0; i < vertexCount; ++i)
-      {
-        auto& vtx = result.vertices.emplace_back();
-        glm::vec3 pos;
-        // Fall back to 0 in case we don't have something.
-        // NOTE: if tangents are not available, one could use http://mikktspace.com/
-        // NOTE: if normals are not available, reconstructing them is possible but will look ugly
-        glm::vec3 normal{0};
-        glm::vec3 tangent{0};
-        glm::vec2 texcoord{0};
-        memcpy(&pos, ptrs[1], sizeof(pos));
-
-        // NOTE: it's faster to do a template here with specializations for all combinations than to
-        // do ifs at runtime. Also, SIMD should be used. Try implementing this!
-        if (hasNormals)
-          memcpy(&normal, ptrs[2], sizeof(normal));
-        if (hasTangents)
-          memcpy(&tangent, ptrs[3], sizeof(tangent));
-        if (hasTexcoord)
-          memcpy(&texcoord, ptrs[4], sizeof(texcoord));
-
-
-        vtx.positionAndNormal = glm::vec4(pos, std::bit_cast<float>(encode_normal(normal)));
-        vtx.texCoordAndTangentAndPadding =
-          glm::vec4(texcoord, std::bit_cast<float>(encode_normal(tangent)), 0);
-
-        ptrs[1] += strides[1];
-        if (hasNormals)
-          ptrs[2] += strides[2];
-        if (hasTangents)
-          ptrs[3] += strides[3];
-        if (hasTexcoord)
-          ptrs[4] += strides[4];
-      }
-
-      // Indices are guaranteed to have no stride
-      ETNA_VERIFY(bufViews[0]->byteStride == 0);
-      const size_t indexCount = accessors[0]->count;
-      if (accessors[0]->componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
-      {
-        for (size_t i = 0; i < indexCount; ++i)
-        {
-          uint16_t index;
-          memcpy(&index, ptrs[0], sizeof(index));
-          result.indices.push_back(index);
-          ptrs[0] += 2;
-        }
-      }
-      else if (accessors[0]->componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
-      {
-        const size_t lastTotalIndices = result.indices.size();
-        result.indices.resize(lastTotalIndices + indexCount);
-        memcpy(
-          result.indices.data() + lastTotalIndices,
-          ptrs[0],
-          sizeof(result.indices[0]) * indexCount);
-      }
-    }
-  }
-
-  return result;
-}
-
-SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(
-  const tinygltf::Model& model) const
-{
-  ProcessedMeshes<true> result;
+  ProcessedMeshes result;
 
   {
     size_t totalPrimitives = 0;
@@ -399,7 +185,8 @@ SceneManager::ProcessedMeshes<true> SceneManager::processBakedMeshes(
         .vertexOffset = static_cast<uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
         .indexOffset = static_cast<uint32_t>(indAccessor.byteOffset / sizeof(uint32_t)),
         .indexCount = static_cast<uint32_t>(indAccessor.count),
-      });
+        .materialId =
+          prim.material == -1 ? MaterialId::INVALID : material_remapping[prim.material]});
     }
   }
 
@@ -557,7 +344,10 @@ SceneManager::ProcessedLights SceneManager::processLights(
   return lights;
 }
 
-void SceneManager::uploadData(std::span<const Vertex> vertices, std::span<const uint32_t> indices)
+void SceneManager::uploadData(
+  std::span<const Vertex> vertices,
+  std::span<const uint32_t> indices,
+  std::span<const Material> material_params)
 {
   unifiedVbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
     .size = vertices.size_bytes(),
@@ -573,21 +363,217 @@ void SceneManager::uploadData(std::span<const Vertex> vertices, std::span<const 
     .name = "unifiedIbuf",
   });
 
+  // @TODO: it isn't big, maybe make uniform?
+  materialParamsBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = material_params.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "materialParamsBuf",
+  });
+  materialParamsBufSizeBytes = uint32_t(material_params.size_bytes());
+
   transferHelper.uploadBuffer<Vertex>(*oneShotCommands, unifiedVbuf, 0, vertices);
   transferHelper.uploadBuffer<uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
+  transferHelper.uploadBuffer<Material>(*oneShotCommands, materialParamsBuf, 0, material_params);
 }
 
-void SceneManager::selectScene(std::filesystem::path path, SceneAssetType scene_type)
+void SceneManager::selectScene(std::filesystem::path path)
 {
   auto maybeModel = loadModel(path);
   if (!maybeModel.has_value())
     return;
 
-  ETNA_ASSERT(scene_type != SceneAssetType::NOT_LOADED);
-  ETNA_ASSERT(selectedSceneType == SceneAssetType::NOT_LOADED || selectedSceneType == scene_type);
-  selectedSceneType = scene_type;
+  ETNA_ASSERT(!loaded);
+  loaded = true;
 
   auto model = std::move(*maybeModel);
+
+  // @TODO: only load referenced
+
+  // @TODO: pull out
+  //
+  // @TODO: Maybe bake this shit into bindata?
+  {
+    textures.reserve(model.images.size());
+    for (auto& loadedImg : model.images)
+    {
+      ETNA_ASSERT(
+        loadedImg.bits == 8 && loadedImg.component == 4 &&
+        loadedImg.pixel_type ==
+          TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE); // @TODO: support or graciously err
+
+      etna::Image img = etna::get_context().createImage(etna::Image::CreateInfo{
+        .extent = {(uint32_t)loadedImg.width, (uint32_t)loadedImg.height, 1},
+        .name = loadedImg.name,
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+          vk::ImageUsageFlagBits::eTransferDst});
+
+      // @TODO: gen mips
+      transferHelper.uploadImage(
+        *oneShotCommands,
+        img,
+        0,
+        0,
+        {(const std::byte*)loadedImg.image.data(), loadedImg.image.size()});
+
+      loadedImg.image.clear();
+      loadedImg.image.shrink_to_fit();
+
+      textures.push_back(std::move(img));
+    }
+  }
+
+  std::vector<size_t> samplerRemapping{};
+  {
+    samplers.emplace_back(etna::Sampler::CreateInfo{
+      .filter = vk::Filter::eNearest,
+      .addressMode = vk::SamplerAddressMode::eRepeat,
+      .name = "<default sampler>"});
+
+    // @TODO: only load referenced
+    auto hashGltfSampler = [](const tinygltf::Sampler& smp) {
+      auto hasher = std::hash<int>{};
+      return hasher(smp.minFilter) ^ (hasher(smp.wrapS) << 1);
+    };
+
+    std::vector<size_t> samplerHashes{};
+    samplerHashes.reserve(model.samplers.size());
+    samplerRemapping.reserve(model.samplers.size());
+    for (const auto& loadedSampler : model.samplers)
+    {
+      size_t hash = hashGltfSampler(loadedSampler);
+      if (auto it = std::find(samplerHashes.begin(), samplerHashes.end(), hash);
+          it != samplerHashes.end())
+      {
+        samplerRemapping.push_back(std::distance(samplerHashes.begin(), it));
+      }
+      else
+      {
+        samplerRemapping.push_back(samplerHashes.size());
+        samplerHashes.push_back(hash);
+
+        const vk::Filter filterMode =
+          (loadedSampler.minFilter == TINYGLTF_TEXTURE_FILTER_LINEAR ||
+           loadedSampler.minFilter == TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR ||
+           loadedSampler.minFilter == TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST)
+          ? vk::Filter::eLinear
+          : vk::Filter::eNearest;
+        const vk::SamplerAddressMode addressMode =
+          loadedSampler.wrapS == TINYGLTF_TEXTURE_WRAP_REPEAT
+          ? vk::SamplerAddressMode::eClampToEdge
+          : (loadedSampler.wrapS == TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT
+               ? vk::SamplerAddressMode::eMirroredRepeat
+               : vk::SamplerAddressMode::eRepeat);
+
+        samplers.emplace_back(etna::Sampler::CreateInfo{
+          .filter = filterMode, .addressMode = addressMode, .name = loadedSampler.name});
+      }
+    }
+  }
+
+  std::vector<Material> materialParams{};
+  std::vector<MaterialId> materialRemapping{};
+  {
+    // @TODO: only load referenced
+    auto translateMaterial = [&model, &samplerRemapping](const tinygltf::Material& gmat) {
+      Material mat{};
+
+      auto idPairForTexture = [&](int id) {
+        if (id < 0)
+          return TexSmpIdPair::INVALID;
+        const auto& gtex = model.textures[id];
+        const uint32_t samplerId = gtex.sampler < 0 ? 0 : samplerRemapping[gtex.sampler];
+        // @TODO graceful
+        ETNA_ASSERT(gtex.source >= 0 && gtex.source <= 65535);
+        ETNA_ASSERT(samplerId >= 0 && samplerId <= 65535);
+        return pack_tex_smp_id_pair(TexId{uint16_t(gtex.source)}, SmpId{uint16_t(samplerId)});
+      };
+
+      // @TODO: texcoord params from material textures
+
+      if (auto it = gmat.extensions.find("KHR_materials_pbrSpecularGlossiness");
+          it != gmat.extensions.end())
+      {
+        mat.mat = MaterialType::DIFFUSE;
+        const auto& params = it->second;
+
+        if (params.Has("diffuseFactor"))
+        {
+          const auto& factor = params.Get("diffuseFactor");
+          // @TODO: graceful
+          ETNA_ASSERT(factor.IsNumber() || (factor.IsArray() && factor.ArrayLen() == 4));
+          if (factor.IsNumber())
+            mat.diffuseColorFactor = quantizefcol(float(factor.GetNumberAsDouble()));
+          else
+          {
+            ETNA_ASSERT(
+              factor.Get(0).IsNumber() && factor.Get(1).IsNumber() && factor.Get(2).IsNumber() &&
+              factor.Get(3).IsNumber());
+
+            mat.diffuseColorFactor = quantize4fcol(
+              {float(factor.Get(0).GetNumberAsDouble()),
+               float(factor.Get(1).GetNumberAsDouble()),
+               float(factor.Get(2).GetNumberAsDouble()),
+               float(factor.Get(3).GetNumberAsDouble())});
+          }
+        }
+        else
+          mat.diffuseColorFactor = 0xFFFFFFFF;
+
+        if (params.Has("diffuseTexture"))
+        {
+          const auto& tex = params.Get("diffuseTexture");
+          // @TODO: graceful
+          ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
+          const auto& ind = tex.Get("index");
+          ETNA_ASSERT(tex.IsInt());
+          mat.diffuseTexSmp = idPairForTexture(ind.GetNumberAsInt());
+        }
+        else
+          mat.diffuseTexSmp = TexSmpIdPair::INVALID;
+
+        // @TODO: spec/gloss
+      }
+      else
+      {
+        mat.mat = MaterialType::PBR;
+
+        mat.baseColorFactor = quantize4fcol(
+          {float(gmat.pbrMetallicRoughness.baseColorFactor[0]),
+           float(gmat.pbrMetallicRoughness.baseColorFactor[1]),
+           float(gmat.pbrMetallicRoughness.baseColorFactor[2]),
+           float(gmat.pbrMetallicRoughness.baseColorFactor[3])});
+        mat.baseColorTexSmp = idPairForTexture(gmat.pbrMetallicRoughness.baseColorTexture.index);
+        mat.metalnessFactor = float(gmat.pbrMetallicRoughness.metallicFactor);
+        mat.roughnessFactor = float(gmat.pbrMetallicRoughness.roughnessFactor);
+        mat.metalnessRoughnessTexSmp =
+          idPairForTexture(gmat.pbrMetallicRoughness.metallicRoughnessTexture.index);
+      }
+
+      return mat;
+    };
+
+    // @TODO: more efficient dedup
+    materialRemapping.reserve(model.materials.size());
+    for (const auto& loadedMat : model.materials)
+    {
+      auto mat = translateMaterial(loadedMat);
+      if (auto it = std::find_if(
+            materialParams.begin(),
+            materialParams.end(),
+            [&mat](const Material& m) { return memcmp(&m, &mat, sizeof(m)) == 0; });
+          it != materialParams.end())
+      {
+        materialRemapping.push_back(MaterialId(std::distance(it, materialParams.begin())));
+      }
+      else
+      {
+        materialRemapping.push_back(MaterialId(materialParams.size()));
+        materialParams.push_back(mat);
+      }
+    }
+  }
 
   auto [instMats, instMeshes, instLights] = processInstances(model);
   instanceMatrices = std::move(instMats);
@@ -595,25 +581,10 @@ void SceneManager::selectScene(std::filesystem::path path, SceneAssetType scene_
 
   lightsData = processLights(model, instanceMatrices, instLights);
 
-  switch (scene_type)
-  {
-  case SceneAssetType::GENERIC: {
-    auto [verts, inds, relems, meshs] = processMeshes(model);
-    renderElements = std::move(relems);
-    meshes = std::move(meshs);
-    uploadData(verts, inds);
-  }
-  break;
-  case SceneAssetType::BAKED: {
-    auto [verts, inds, relems, meshs] = processBakedMeshes(model);
-    renderElements = std::move(relems);
-    meshes = std::move(meshs);
-    uploadData(verts, inds);
-  }
-  break;
-  default:
-    ETNA_PANIC("we have gone insane");
-  }
+  auto [verts, inds, relems, meshs] = processMeshes(model, materialRemapping);
+  renderElements = std::move(relems);
+  meshes = std::move(meshs);
+  uploadData(verts, inds, materialParams);
 }
 
 etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription()
