@@ -82,68 +82,25 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   ETNA_ASSERT(sceneMgr->getSamplers().size() <= MAX_BINDLESS_SAMPLERS);
 
   // @TODO: pull out
-  auto& ctx = etna::get_context();
+  std::vector<etna::Binding> bindings;
+  bindings.reserve(sceneMgr->getTextures().size() + sceneMgr->getSamplers().size() + 1);
 
-  static constexpr std::array<vk::DescriptorPoolSize, 2> BINDLESS_POOL_SIZES{
-    vk::DescriptorPoolSize{vk::DescriptorType::eSampler, MAX_BINDLESS_SAMPLERS},
-    vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage, MAX_BINDLESS_TEXTURES}};
-
-  vk::DescriptorPoolCreateInfo pinfo{
-    .maxSets = 1,
-    .poolSizeCount = uint32_t(BINDLESS_POOL_SIZES.size()),
-    .pPoolSizes = BINDLESS_POOL_SIZES.data()};
-  bindlessDescriptorPool =
-    etna::unwrap_vk_result(ctx.getDevice().createDescriptorPoolUnique(pinfo));
-
-  auto layoutId = etna::get_shader_program("static_mesh").getDescriptorLayoutId(0);
-  auto setLayouts = {ctx.getDescriptorSetLayouts().getVkLayout(layoutId)};
-
-  vk::DescriptorSetAllocateInfo dainfo{};
-  dainfo.setDescriptorPool(bindlessDescriptorPool.get());
-  dainfo.setSetLayouts(setLayouts);
-
-  ETNA_VERIFY(
-    ctx.getDevice().allocateDescriptorSets(&dainfo, &bindlessDset) == vk::Result::eSuccess);
-
-  std::vector<vk::DescriptorImageInfo> textureInfos, samplerInfos;
-  textureInfos.reserve(sceneMgr->getTextures().size());
-  samplerInfos.reserve(sceneMgr->getSamplers().size());
-
-  for (const auto& tex : sceneMgr->getTextures())
+  for (size_t i = 0; i < sceneMgr->getTextures().size(); ++i)
   {
-    textureInfos.emplace_back(vk::DescriptorImageInfo{
-      .imageView = tex.getView({}), .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal});
+    const auto& tex = sceneMgr->getTextures()[i];
+    bindings.emplace_back(
+      etna::Binding{0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal), uint32_t(i)});
   }
-  for (const auto& smp : sceneMgr->getSamplers())
-    samplerInfos.emplace_back(vk::DescriptorImageInfo{.sampler = smp.get()});
+  for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
+  {
+    const auto& smp = sceneMgr->getSamplers()[i];
+    bindings.emplace_back(etna::Binding{1, smp.genBinding(), uint32_t(i)});
+  }
+  bindings.emplace_back(etna::Binding{2, sceneMgr->getMaterialParamsBuf().genBinding()});
 
-  vk::DescriptorBufferInfo materialBufferInfo{
-    .buffer = sceneMgr->getMaterialParamsBuf().get(),
-    .offset = 0u,
-    .range = sceneMgr->getMaterialParamsBufSizeBytes()};
-
-  ctx.getDevice().updateDescriptorSets(
-    {
-      vk::WriteDescriptorSet{
-        .dstSet = bindlessDset,
-        .dstBinding = 0,
-        .descriptorCount = uint32_t(textureInfos.size()),
-        .descriptorType = vk::DescriptorType::eSampledImage,
-        .pImageInfo = textureInfos.data()},
-      vk::WriteDescriptorSet{
-        .dstSet = bindlessDset,
-        .dstBinding = 1,
-        .descriptorCount = uint32_t(samplerInfos.size()),
-        .descriptorType = vk::DescriptorType::eSampler,
-        .pImageInfo = samplerInfos.data()},
-      vk::WriteDescriptorSet{
-        .dstSet = bindlessDset,
-        .dstBinding = 2,
-        .descriptorCount = 1,
-        .descriptorType = vk::DescriptorType::eStorageBuffer,
-        .pBufferInfo = &materialBufferInfo},
-    },
-    {});
+  auto programInfo = etna::get_shader_program("static_mesh");
+  bindlessDset = etna::create_persistent_descriptor_set(
+    programInfo.getDescriptorLayoutId(0), std::move(bindings), true);
 }
 
 void WorldRenderer::loadShaders()
@@ -284,6 +241,13 @@ void WorldRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
+  // @TODO: unhack
+  if (!transitionedBindlessLayouts)
+  {
+    transitionedBindlessLayouts = true;
+    bindlessDset.processBarriers(cmd_buf);
+  }
+
   memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
   memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
 
@@ -306,7 +270,7 @@ void WorldRenderer::renderWorld(
         vk::PipelineBindPoint::eGraphics,
         staticMeshPipeline.getVkPipelineLayout(),
         0,
-        {bindlessDset},
+        {bindlessDset.getVkSet()},
         {});
 
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
