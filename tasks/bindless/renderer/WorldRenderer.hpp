@@ -56,16 +56,24 @@ private:
 
   const etna::GpuWorkCount& wc;
 
-  struct PushConstants
+  struct PushConstantsMesh
   {
     glm::mat4x4 projView;
     glm::mat4x4 modelAndMatId;
-  } pushConst;
+  } pushConstMesh;
+
+  struct PushConstantsResolve
+  {
+    glm::mat4x4 proj;
+    glm::mat4x4 view;
+  } pushConstResolve;
 
   // @TODO: what are guarantees for in-command buffer changes & move data here
   Constants constantsData = {};
 
   glm::mat4x4 worldViewProj;
+  glm::mat4x4 worldView;
+  glm::mat4x4 proj;
 
   etna::GraphicsPipeline staticMeshPipeline{};
 
