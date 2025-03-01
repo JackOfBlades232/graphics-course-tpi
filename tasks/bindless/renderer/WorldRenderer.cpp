@@ -100,7 +100,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
   auto programInfo = etna::get_shader_program("static_mesh");
   bindlessDset = etna::create_persistent_descriptor_set(
-    programInfo.getDescriptorLayoutId(0), std::move(bindings), true);
+    programInfo.getDescriptorLayoutId(1), std::move(bindings), true);
 }
 
 void WorldRenderer::loadShaders()
@@ -269,7 +269,7 @@ void WorldRenderer::renderWorld(
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
         staticMeshPipeline.getVkPipelineLayout(),
-        0,
+        1,
         {bindlessDset.getVkSet()},
         {});
 

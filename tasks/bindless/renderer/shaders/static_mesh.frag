@@ -17,9 +17,9 @@ layout(push_constant) uniform params_t
   mat4 mModelAndMatId;
 } params;
 
-layout(binding = 0, set = 0) uniform texture2D bindlessTextures[MAX_BINDLESS_TEXTURES];
-layout(binding = 1, set = 0) uniform sampler bindlessSamplers[MAX_BINDLESS_SAMPLERS];
-layout(binding = 2, set = 0) readonly buffer material_params_t
+layout(binding = 0, set = 1) uniform texture2D bindlessTextures[MAX_BINDLESS_TEXTURES];
+layout(binding = 1, set = 1) uniform sampler bindlessSamplers[MAX_BINDLESS_SAMPLERS];
+layout(binding = 2, set = 1) readonly buffer material_params_t
 {
   Material materialParams[];
 };
