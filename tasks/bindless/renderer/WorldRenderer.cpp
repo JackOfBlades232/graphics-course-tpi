@@ -227,7 +227,9 @@ void WorldRenderer::update(const FramePacket& packet)
   // calc camera matrix
   {
     const float aspect = float(resolution.x) / float(resolution.y);
-    worldViewProj = packet.mainCam.projTm(aspect) * packet.mainCam.viewTm();
+    worldView = packet.mainCam.viewTm();
+    proj = packet.mainCam.projTm(aspect);
+    worldViewProj = proj * worldView;
   }
 }
 
@@ -240,7 +242,7 @@ void WorldRenderer::renderScene(
   cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
   cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
 
-  pushConst.projView = glob_tm;
+  pushConstMesh.projView = glob_tm;
 
   auto instanceMeshes = sceneMgr->getInstanceMeshes();
   auto instanceMatrices = sceneMgr->getInstanceMatrices();
@@ -250,10 +252,10 @@ void WorldRenderer::renderScene(
 
   for (size_t instIdx = 0; instIdx < instanceMeshes.size(); ++instIdx)
   {
-    pushConst.modelAndMatId = instanceMatrices[instIdx];
+    pushConstMesh.modelAndMatId = instanceMatrices[instIdx];
     ETNA_ASSERT(
-      pushConst.modelAndMatId[0].w == 0.f && pushConst.modelAndMatId[1].w == 0.f &&
-      pushConst.modelAndMatId[2].w == 0.f && pushConst.modelAndMatId[3].w == 1.f);
+      pushConstMesh.modelAndMatId[0].w == 0.f && pushConstMesh.modelAndMatId[1].w == 0.f &&
+      pushConstMesh.modelAndMatId[2].w == 0.f && pushConstMesh.modelAndMatId[3].w == 1.f);
 
     const auto meshIdx = instanceMeshes[instIdx];
     if (meshIdx == (uint32_t)(-1))
@@ -265,12 +267,12 @@ void WorldRenderer::renderScene(
       const auto& relem = relems[relemIdx];
 
       // @TODO: coalesce somehow, or better move projView to ubuf? or sort
-      pushConst.modelAndMatId[3].w = std::bit_cast<float>(relem.materialId);
-      cmd_buf.pushConstants<PushConstants>(
+      pushConstMesh.modelAndMatId[3].w = std::bit_cast<float>(relem.materialId);
+      cmd_buf.pushConstants<PushConstantsMesh>(
         pipeline_layout,
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
         0,
-        {pushConst});
+        {pushConstMesh});
 
       cmd_buf.drawIndexed(relem.indexCount, 1, relem.indexOffset, relem.vertexOffset, 0);
     }
@@ -372,8 +374,14 @@ void WorldRenderer::renderWorld(
         {set.getVkSet(), gbufSet.getVkSet()},
         {});
 
-      cmd_buf.pushConstants<glm::mat4x4>(
-        gbufferResolver->pipelineLayout(), vk::ShaderStageFlagBits::eFragment, 0, {worldViewProj});
+      pushConstResolve.proj = proj;
+      pushConstResolve.view = worldView;
+      cmd_buf.pushConstants<PushConstantsResolve>(
+        gbufferResolver->pipelineLayout(),
+        vk::ShaderStageFlagBits::eFragment,
+        0,
+        {pushConstResolve});
+
       gbufferResolver->render(cmd_buf, target_image, target_image_view);
     }
   }

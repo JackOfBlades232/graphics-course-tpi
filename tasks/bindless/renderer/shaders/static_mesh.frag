@@ -59,18 +59,19 @@ void main()
   {
     if (materialParams[matId].normalTexSmp != NO_TEXTURE_ID)
     {
-      const vec3 sampledNormal = sample_bindless_tex(
-        materialParams[matId].normalTexSmp, surf.texCoord).xyz;
+      const vec3 norm = normalize(surf.wNorm);
+      const vec3 sampledNormal =
+        2.f * sample_bindless_tex(materialParams[matId].normalTexSmp, surf.texCoord).xyz - 1.f;
 
-      // @TODO: can I assume tang and normal are orthogonal, or should I project and normalize?
       const vec3 tang = surf.wTangent.xyz;
-      const vec3 ptang = normalize(tang - surf.wNorm * dot(tang, surf.wNorm));
-      const vec3 bitang = cross(surf.wNorm, ptang) * surf.wTangent.w;
+      const vec3 ptang = normalize(tang - norm * dot(tang, norm));
+      const vec3 bitang = cross(norm, ptang) * surf.wTangent.w;
 
-      normal = sampledNormal.x * ptang + sampledNormal.y * bitang + sampledNormal.z * surf.wNorm;
+      normal = normalize(
+        sampledNormal.x * ptang + sampledNormal.y * bitang + sampledNormal.z * norm);
     }
     else
-      normal = surf.wNorm;
+      normal = normalize(surf.wNorm);
 
     if (materialParams[matId].mat == MATERIAL_PBR)
     {

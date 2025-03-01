@@ -392,38 +392,7 @@ void SceneManager::selectScene(std::filesystem::path path)
 
   // @TODO: pull out
   //
-  // @TODO: Maybe bake this shit into bindata?
-  {
-    textures.reserve(model.images.size());
-    for (auto& loadedImg : model.images)
-    {
-      ETNA_ASSERT(
-        loadedImg.bits == 8 && loadedImg.component == 4 &&
-        loadedImg.pixel_type ==
-          TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE); // @TODO: support or graciously err
-
-      etna::Image img = etna::get_context().createImage(etna::Image::CreateInfo{
-        .extent = {(uint32_t)loadedImg.width, (uint32_t)loadedImg.height, 1},
-        .name = loadedImg.name,
-        .format = vk::Format::eR8G8B8A8Unorm,
-        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-          vk::ImageUsageFlagBits::eTransferDst});
-
-      // @TODO: gen mips
-      transferHelper.uploadImage(
-        *oneShotCommands,
-        img,
-        0,
-        0,
-        {(const std::byte*)loadedImg.image.data(), loadedImg.image.size()});
-
-      loadedImg.image.clear();
-      loadedImg.image.shrink_to_fit();
-
-      textures.push_back(std::move(img));
-    }
-  }
-
+  // @TODO: Maybe bake all this shit into bindata? Instances, everything. How fast it would be!
   std::vector<size_t> samplerRemapping{};
   {
     samplers.emplace_back(etna::Sampler::CreateInfo{
@@ -474,9 +443,12 @@ void SceneManager::selectScene(std::filesystem::path path)
 
   std::vector<Material> materialParams{};
   std::vector<MaterialId> materialRemapping{};
+  std::vector<vk::Format> requiredImageFormats{};
+  requiredImageFormats.resize(model.images.size(), vk::Format::eUndefined);
   {
     // @TODO: only load referenced
-    auto translateMaterial = [&model, &samplerRemapping](const tinygltf::Material& gmat) {
+    auto translateMaterial = [&model, &samplerRemapping, &requiredImageFormats](
+                               const tinygltf::Material& gmat) {
       Material mat{};
 
       auto idPairForTexture = [&](int id) {
@@ -490,7 +462,21 @@ void SceneManager::selectScene(std::filesystem::path path)
         return pack_tex_smp_id_pair(TexId{uint16_t(gtex.source)}, SmpId{uint16_t(samplerId)});
       };
 
+      auto setTexFmt = [&](int id, vk::Format fmt) {
+        if (id < 0)
+          return;
+        if (requiredImageFormats[id] == fmt)
+          return;
+
+        // @TODO: graceful
+        ETNA_ASSERT(requiredImageFormats[id] == vk::Format::eUndefined);
+        requiredImageFormats[id] = fmt;
+      };
+
       // @TODO: texcoord params from material textures
+
+      mat.normalTexSmp = idPairForTexture(gmat.normalTexture.index);
+      setTexFmt(gmat.normalTexture.index, vk::Format::eR8G8B8A8Unorm);
 
       if (auto it = gmat.extensions.find("KHR_materials_pbrSpecularGlossiness");
           it != gmat.extensions.end())
@@ -527,8 +513,10 @@ void SceneManager::selectScene(std::filesystem::path path)
           // @TODO: graceful
           ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
           const auto& ind = tex.Get("index");
-          ETNA_ASSERT(tex.IsInt());
-          mat.diffuseTexSmp = idPairForTexture(ind.GetNumberAsInt());
+          ETNA_ASSERT(ind.IsInt());
+          const int id = ind.GetNumberAsInt();
+          mat.diffuseTexSmp = idPairForTexture(id);
+          setTexFmt(id, vk::Format::eR8G8B8A8Srgb);
         }
         else
           mat.diffuseTexSmp = TexSmpIdPair::INVALID;
@@ -549,6 +537,10 @@ void SceneManager::selectScene(std::filesystem::path path)
         mat.roughnessFactor = float(gmat.pbrMetallicRoughness.roughnessFactor);
         mat.metalnessRoughnessTexSmp =
           idPairForTexture(gmat.pbrMetallicRoughness.metallicRoughnessTexture.index);
+
+        setTexFmt(gmat.pbrMetallicRoughness.baseColorTexture.index, vk::Format::eR8G8B8A8Srgb);
+        setTexFmt(
+          gmat.pbrMetallicRoughness.metallicRoughnessTexture.index, vk::Format::eR8G8B8A8Unorm);
       }
 
       return mat;
@@ -572,6 +564,43 @@ void SceneManager::selectScene(std::filesystem::path path)
         materialRemapping.push_back(MaterialId(materialParams.size()));
         materialParams.push_back(mat);
       }
+    }
+  }
+
+  {
+    textures.reserve(model.images.size());
+    for (size_t i = 0; i < model.images.size(); ++i)
+    {
+      auto& loadedImg = model.images[i];
+
+      ETNA_ASSERT(
+        loadedImg.bits == 8 && loadedImg.component == 4 &&
+        loadedImg.pixel_type ==
+          TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE); // @TODO: support or graciously err
+
+      // Needed until it's pruned for usage
+      auto format = requiredImageFormats[i] == vk::Format::eUndefined ? vk::Format::eR8G8B8A8Unorm
+                                                                      : requiredImageFormats[i];
+
+      etna::Image img = etna::get_context().createImage(etna::Image::CreateInfo{
+        .extent = {(uint32_t)loadedImg.width, (uint32_t)loadedImg.height, 1},
+        .name = loadedImg.name,
+        .format = format,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+          vk::ImageUsageFlagBits::eTransferDst});
+
+      // @TODO: gen mips
+      transferHelper.uploadImage(
+        *oneShotCommands,
+        img,
+        0,
+        0,
+        {(const std::byte*)loadedImg.image.data(), loadedImg.image.size()});
+
+      loadedImg.image.clear();
+      loadedImg.image.shrink_to_fit();
+
+      textures.push_back(std::move(img));
     }
   }
 

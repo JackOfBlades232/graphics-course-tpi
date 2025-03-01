@@ -65,11 +65,17 @@ int main(int argc, char** argv)
   std::filesystem::path path{argv[1]};
 
   bool bestFitNormal = false;
+  bool embedImages = false;
+  bool embedBuffers = false;
 
   for (int i = 2; i < argc; ++i)
   {
     if (strcmp(argv[i], "-bfn") == 0)
       bestFitNormal = true;
+    else if (strcmp(argv[i], "-embedImg") == 0)
+      embedImages = true;
+    else if (strcmp(argv[i], "-embedBuf") == 0)
+      embedBuffers = true;
     else
       FAIL("Invalid arg: {}", argv[i]);
   }
@@ -399,7 +405,8 @@ int main(int argc, char** argv)
   if (!std::filesystem::exists(path.parent_path()))
     std::filesystem::create_directory(path.parent_path());
 
-  bool res = api.WriteGltfSceneToFile(&model, path.string(), false, false, true, false);
+  bool res =
+    api.WriteGltfSceneToFile(&model, path.string(), embedImages, embedBuffers, true, false);
   VERIFY(res, "Failed to write baked scene to {}", path.string().c_str());
 
   return 0;
