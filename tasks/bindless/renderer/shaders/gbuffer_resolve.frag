@@ -5,9 +5,6 @@
 #include "lights.h"
 #include "materials.h"
 
-#define EPS 1e-5
-#define PI 3.14159265359
-
 
 layout(location = 0) out vec4 out_fragColor;
 
@@ -40,54 +37,70 @@ vec3 depth_and_tc_to_pos(float depth, vec2 tc, mat4 invProjView)
   return posHom.xyz / posHom.w;
 }
 
-const float GAMMA_POW = 2.2;
-const float F_DIEL = 0.04;
-
-// With Shlick approximation, determines fraction of light that is reflected
-// for a material (microface which is supposed to be an ideal mirror)
-vec3 fresnel(vec3 f0, float prod)
-{
-  prod = clamp(prod, 0.f, 1.f);
-  return f0 + (1.f - f0) * pow(1.f - prod, 5.f); 
-}
-
-// Distribution of rays that reflect towards the eye in the microfacet model
-float d_ggx(float roughness, float nh)
-{
-  const float m = roughness * roughness;
-  const float m2 = m * m;
-  const float nh2 = nh * nh;
-  const float d = nh2 * (m2 - 1.f) + 1.f;
-  return m2 / (PI * d * d); 
-}
-
-float g_default(float nh, float nv, float hv, float nl)
-{
-  const float ihv = 1.f / hv;
-  return min(1.f, min(2.f * nh * nv * ihv, 2.f * nh * nl * ihv));
-}
+const float EPS = 1e-5f;
+const float PI = 3.14159265359f;
+const float GAMMA_POW = 2.2f;
+const float F_DIEL = 0.04f;
 
 // @TODO add (back) anisotropy
+
+#define HPLUS(v_) ((v_) > 0.f ? 1.f : 0.f)
+
+float d_ggx(vec3 n, vec3 h, float alpha2)
+{
+  float nh = dot(n, h);
+  float nh2 = nh * nh;
+  float divterm = nh2 * (alpha2 - 1.f) + 1.f;
+  return (alpha2 * HPLUS(nh)) / (PI * divterm * divterm);
+}
+
+float g_smith_ggx(vec3 n, vec3 l, vec3 v, vec3 h, float alpha2)
+{
+  float nl = dot(n, l);
+  float nv = dot(n, v);
+  float hl = dot(h, l);
+  float hv = dot(h, v);
+
+  float anl = abs(nl);
+  float anv = abs(nv);
+
+  float sl = sqrt(mix(nl * nl, 1.f, alpha2));
+  float sv = sqrt(mix(nv * nv, 1.f, alpha2));
+
+  return (4.f * anl * anv * HPLUS(hl) * HPLUS(hv)) / ((anl + sl) * (anv + sv));
+}
 
 vec4 shade_cook_torrance(
   vec3 n, vec3 l, vec3 v, float metalness, float roughness, vec3 albedo, vec3 lightCol)
 {
-  const vec3 h = normalize(l + v);
-  const float nl = max(0.f, dot(n, l));
-  const float nv = max(0.f, dot(n, v));
-  const float nh = max(0.f, dot(n, h));
-  const float hv = max(0.f, dot(h, v));
+  //vec3 c = albedo;
+  vec3 c = pow(albedo, vec3(GAMMA_POW));
+  //vec3 lc = lightCol;
+  vec3 lc = pow(lightCol, vec3(GAMMA_POW));
 
-  const vec3 c = pow(albedo, vec3(GAMMA_POW));
-  const vec3 lc = pow(lightCol, vec3(GAMMA_POW));
-  const vec3 mat_f0 = mix(vec3(F_DIEL), c, metalness);
-  const vec3 f = fresnel(mat_f0, nv);
-  const float d = d_ggx(roughness, nh);
-  const float g = g_default(nh, nv, hv, nl);
-  const vec3 spec = f*d*g / max(0.001, 4.0 * nl * nv);
-  const vec3 diff = mix(c, vec3(0.0), metalness) * (1.0 - f) / PI;
+  vec3 h = normalize(l + v);
+  float alpha = roughness * roughness;
+  float alpha2 = alpha * alpha;
+  float ahv = abs(dot(h, v));
+  float anl = abs(dot(n, l));
+  float anv = abs(dot(n, v));
+  float mixc = pow(1.f - ahv, 5.f);
 
-  return pow(vec4((spec + diff) * nl * lc, 1.0), 1.0 / vec4(GAMMA_POW)); 
+  const vec3 BLACK = vec3(0.f);
+  vec3 c_diff = mix(c, BLACK, metalness);
+  vec3 f0 = mix(vec3(F_DIEL), c, metalness);
+
+  vec3 f = f0 + (1.f - f0) * mixc;
+  float d = d_ggx(n, h, alpha2);
+  float g = g_smith_ggx(n, l, v, h, alpha2);
+
+  vec3 f_diffuse = (1.f - f) * (1.f / PI) * c_diff;
+  vec3 f_specular = f * d * g / (4.f * anv * anv);
+
+  vec3 material = f_diffuse + f_specular;
+
+  //return vec4(material * lc, 1.f); 
+  return pow(vec4(material * lc, 1.f), 1.f / vec4(GAMMA_POW)); 
 }
 
 vec3 calculate_diffuse(vec3 normal, vec3 lightDir, vec3 albedo, vec3 lightIntensity)
