@@ -962,23 +962,83 @@
     }
   ],
   "extensionsUsed": [
-    "KHR_materials_transmission"
+    "KHR_materials_transmission",
+    "KHR_lights_punctual"
   ],
+  "extensions": {
+    "KHR_lights_punctual": {
+      "lights": [
+        {
+          "color": [
+            1.0,
+            0.8,
+            0.9
+          ],
+          "intensity": 0.5,
+          "type": "directional"
+        },
+        {
+          "spot": {
+            "innerConeAngle": 1.185398163397448,
+            "outerConeAngle": 1.97079632679
+          },
+          "color": [
+            0.3,
+            1.0,
+            0.0
+          ],
+          "intensity": 2.5,
+          "range": 20.0,
+          "type": "spot"
+        },
+        {
+          "color": [
+            0.5,
+            1.0,
+            0.9
+          ],
+          "intensity": 1.0,
+          "range": 5.7,
+          "type": "point"
+        },
+        {
+          "color": [
+            0.7,
+            0.4,
+            1.0
+          ],
+          "intensity": 1.0,
+          "range": 7.7,
+          "type": "point"
+        },
+        {
+          "color": [
+            0.5,
+            1.0,
+            1.0
+          ],
+          "intensity": 0.6,
+          "range": 6.7,
+          "type": "point"
+        }
+      ]
+    }
+  },
   "images": [
     {
-      "uri": "textures/material_baseColor.jpeg"
+      "uri": "textures/material_baseColor.png"
     },
     {
-      "uri": "textures/material_3_baseColor.jpeg"
+      "uri": "textures/material_3_baseColor.png"
     },
     {
-      "uri": "textures/material_4_baseColor.jpeg"
+      "uri": "textures/material_4_baseColor.png"
     },
     {
-      "uri": "textures/material_5_baseColor.jpeg"
+      "uri": "textures/material_5_baseColor.png"
     },
     {
-      "uri": "textures/material_8_baseColor.jpeg"
+      "uri": "textures/material_8_baseColor.png"
     },
     {
       "uri": "textures/material_8_metallicRoughness.png"
@@ -987,19 +1047,19 @@
       "uri": "textures/material_8_normal.png"
     },
     {
-      "uri": "textures/material_9_baseColor.jpeg"
+      "uri": "textures/material_9_baseColor.png"
     },
     {
       "uri": "textures/material_9_normal.png"
     },
     {
-      "uri": "textures/material_10_baseColor.jpeg"
+      "uri": "textures/material_10_baseColor.png"
     },
     {
       "uri": "textures/material_10_normal.png"
     },
     {
-      "uri": "textures/material_11_baseColor.jpeg"
+      "uri": "textures/material_11_baseColor.png"
     }
   ],
   "materials": [
@@ -1397,12 +1457,22 @@
         0.0,
         1.0
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 0
+        }
+      },
       "name": "Sketchfab_model"
     },
     {
       "children": [
         2
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1438,12 +1508,22 @@
         25,
         27
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "RootNode"
     },
     {
       "children": [
         4
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1466,12 +1546,22 @@
     },
     {
       "mesh": 0,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "04_Houses_4_0"
     },
     {
       "children": [
         6
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1494,6 +1584,11 @@
     },
     {
       "mesh": 1,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "07_Fencing_7_0"
     },
     {
@@ -1501,6 +1596,11 @@
         8,
         9
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1523,6 +1623,11 @@
     },
     {
       "mesh": 2,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "09_Props_9_0"
     },
     {
@@ -1534,6 +1639,11 @@
         11,
         12
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1556,16 +1666,31 @@
     },
     {
       "mesh": 4,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "08_Plants_8_0"
     },
     {
       "mesh": 5,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "08_Plants_8_0"
     },
     {
       "children": [
         14
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1588,12 +1713,22 @@
     },
     {
       "mesh": 6,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "06_Windows_6_0"
     },
     {
       "children": [
         16
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1616,12 +1751,22 @@
     },
     {
       "mesh": 7,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "10_Sand_10_0"
     },
     {
       "children": [
         18
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1644,12 +1789,22 @@
     },
     {
       "mesh": 8,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "name": "11_Water_11_0"
     },
     {
       "children": [
         20
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1672,12 +1827,22 @@
     },
     {
       "mesh": 9,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "name": "12_Birds_12_0"
     },
     {
       "children": [
         22
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1700,12 +1865,22 @@
     },
     {
       "mesh": 10,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "01_Streets_1_0"
     },
     {
       "children": [
         24
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1728,12 +1903,22 @@
     },
     {
       "mesh": 11,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "02_Greens_2_0"
     },
     {
       "children": [
         26
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 4
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1756,12 +1941,22 @@
     },
     {
       "mesh": 12,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 1
+        }
+      },
       "name": "05_Roofs_5_0"
     },
     {
       "children": [
         28
       ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 2
+        }
+      },
       "matrix": [
         1.0,
         0.0,
@@ -1784,6 +1979,11 @@
     },
     {
       "mesh": 13,
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 3
+        }
+      },
       "name": "03_Walls_3_0"
     }
   ],
