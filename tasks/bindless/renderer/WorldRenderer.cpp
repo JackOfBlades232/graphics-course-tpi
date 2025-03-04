@@ -188,6 +188,11 @@ void WorldRenderer::update(const FramePacket& packet)
     proj = packet.mainCam.projTm(aspect);
     worldViewProj = proj * worldView;
   }
+
+  {
+    dt = prevTime >= 0.f ? (packet.currentTime - prevTime) : 0.f;
+    prevTime = packet.currentTime;
+  }
 }
 
 void WorldRenderer::renderScene(
@@ -373,124 +378,132 @@ static constexpr auto build_light_names_from_struct()
 
 void WorldRenderer::drawGui()
 {
+  {
+    ImGui::Begin("App");
+    ImGui::Text("%.2fms (%dfps)", dt * 1e3f, int(1.f / dt));
+    ImGui::End();
+  }
+
   if (settingsGuiEnabled)
   {
-    ImGui::Begin("Lights");
-
-    // @TODO: not static
-    static enum LType
     {
-      NONE = 0,
-      POINT = 1,
-      SPOT = 2,
-      DIRECTIONAL = 3
-    } currentLightType = NONE;
-    static shader_uint currentLightId = 0;
+      ImGui::Begin("Lights");
 
-    // @TODO: bake it in somehow
-    static auto lightOptionsNames = build_light_names_from_struct();
-
-    auto lightName = [&](LType type, shader_uint id) {
-      return lightOptionsNames[type][id].c_str();
-    };
-    auto curLightName = [&] { return lightName(currentLightType, currentLightId); };
-
-    auto pointLightSettings = [this](int id) {
-      auto& l = sceneMgr->lightsRW().pointLights[id];
-      ImGui::SliderFloat3("position", (float*)&l.position, -15.f, 15.f);
-      ImGui::NewLine();
-      ImGui::SliderFloat("range", &l.range, 0.01f, 50.f);
-      ImGui::NewLine();
-      ImGui::ColorEdit3(
-        "Meshes base color",
-        (float*)&l.color,
-        ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-      ImGui::NewLine();
-      ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
-    };
-
-    auto spotLightSettings = [this](int id) {
-      auto& l = sceneMgr->lightsRW().spotLights[id];
-      ImGui::SliderFloat3("position", (float*)&l.position, -15.f, 15.f);
-      ImGui::NewLine();
-      ImGui::SliderFloat3("direction", (float*)&l.direction, -1.f, 1.f);
-      l.direction = glm::normalize(l.direction); // @TODO: can it be not here?
-      ImGui::NewLine();
-      ImGui::SliderFloat("range", &l.range, 0.01f, 50.f);
-      ImGui::NewLine();
-      ImGui::ColorEdit3(
-        "Meshes base color",
-        (float*)&l.color,
-        ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-      ImGui::NewLine();
-      ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
-      ImGui::NewLine();
-      ImGui::SliderFloat("innerConeAngle", &l.innerConeAngle, 0.01f, 2.f * (float)M_PI);
-      ImGui::NewLine();
-      ImGui::SliderFloat("outerConeAngle", &l.outerConeAngle, 0.01f, 2.f * (float)M_PI);
-
-      if (l.outerConeAngle < l.innerConeAngle + FLT_EPSILON)
-        l.outerConeAngle = l.innerConeAngle + FLT_EPSILON;
-    };
-
-    auto directionalLightSettings = [this](int id) {
-      auto& l = sceneMgr->lightsRW().directionalLights[id];
-      ImGui::SliderFloat3("direction", (float*)&l.direction, -1.f, 1.f);
-      l.direction = glm::normalize(l.direction); // @TODO: can it be not here?
-      ImGui::NewLine();
-      ImGui::ColorEdit3(
-        "Meshes base color",
-        (float*)&l.color,
-        ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-      ImGui::NewLine();
-      ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
-    };
-
-    switch (currentLightType)
-    {
-    case POINT:
-      pointLightSettings(currentLightId);
-      break;
-    case SPOT:
-      spotLightSettings(currentLightId);
-      break;
-    case DIRECTIONAL:
-      directionalLightSettings(currentLightId);
-      break;
-    default:
-      break;
-    }
-
-    auto lightDropdown = [&](LType type, shader_uint count) {
-      for (shader_uint i = 0; i < count; i++)
+      // @TODO: not static
+      static enum LType
       {
-        bool selected = currentLightType == type && currentLightId == i;
-        if (ImGui::Selectable(lightName(type, i), selected))
+        NONE = 0,
+        POINT = 1,
+        SPOT = 2,
+        DIRECTIONAL = 3
+      } currentLightType = NONE;
+      static shader_uint currentLightId = 0;
+
+      // @TODO: bake it in somehow
+      static auto lightOptionsNames = build_light_names_from_struct();
+
+      auto lightName = [&](LType type, shader_uint id) {
+        return lightOptionsNames[type][id].c_str();
+      };
+      auto curLightName = [&] { return lightName(currentLightType, currentLightId); };
+
+      auto pointLightSettings = [this](int id) {
+        auto& l = sceneMgr->lightsRW().pointLights[id];
+        ImGui::SliderFloat3("position", (float*)&l.position, -15.f, 15.f);
+        ImGui::NewLine();
+        ImGui::SliderFloat("range", &l.range, 0.01f, 50.f);
+        ImGui::NewLine();
+        ImGui::ColorEdit3(
+          "Meshes base color",
+          (float*)&l.color,
+          ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+        ImGui::NewLine();
+        ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
+      };
+
+      auto spotLightSettings = [this](int id) {
+        auto& l = sceneMgr->lightsRW().spotLights[id];
+        ImGui::SliderFloat3("position", (float*)&l.position, -15.f, 15.f);
+        ImGui::NewLine();
+        ImGui::SliderFloat3("direction", (float*)&l.direction, -1.f, 1.f);
+        l.direction = glm::normalize(l.direction); // @TODO: can it be not here?
+        ImGui::NewLine();
+        ImGui::SliderFloat("range", &l.range, 0.01f, 50.f);
+        ImGui::NewLine();
+        ImGui::ColorEdit3(
+          "Meshes base color",
+          (float*)&l.color,
+          ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+        ImGui::NewLine();
+        ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
+        ImGui::NewLine();
+        ImGui::SliderFloat("innerConeAngle", &l.innerConeAngle, 0.01f, 2.f * (float)M_PI);
+        ImGui::NewLine();
+        ImGui::SliderFloat("outerConeAngle", &l.outerConeAngle, 0.01f, 2.f * (float)M_PI);
+
+        if (l.outerConeAngle < l.innerConeAngle + FLT_EPSILON)
+          l.outerConeAngle = l.innerConeAngle + FLT_EPSILON;
+      };
+
+      auto directionalLightSettings = [this](int id) {
+        auto& l = sceneMgr->lightsRW().directionalLights[id];
+        ImGui::SliderFloat3("direction", (float*)&l.direction, -1.f, 1.f);
+        l.direction = glm::normalize(l.direction); // @TODO: can it be not here?
+        ImGui::NewLine();
+        ImGui::ColorEdit3(
+          "Meshes base color",
+          (float*)&l.color,
+          ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+        ImGui::NewLine();
+        ImGui::SliderFloat("intensity", &l.intensity, 0.01f, 4.f);
+      };
+
+      switch (currentLightType)
+      {
+      case POINT:
+        pointLightSettings(currentLightId);
+        break;
+      case SPOT:
+        spotLightSettings(currentLightId);
+        break;
+      case DIRECTIONAL:
+        directionalLightSettings(currentLightId);
+        break;
+      default:
+        break;
+      }
+
+      auto lightDropdown = [&](LType type, shader_uint count) {
+        for (shader_uint i = 0; i < count; i++)
         {
-          currentLightType = type;
-          currentLightId = i;
+          bool selected = currentLightType == type && currentLightId == i;
+          if (ImGui::Selectable(lightName(type, i), selected))
+          {
+            currentLightType = type;
+            currentLightId = i;
+          }
+          if (selected)
+            ImGui::SetItemDefaultFocus();
         }
-        if (selected)
-          ImGui::SetItemDefaultFocus();
-      }
-    };
+      };
 
-    if (ImGui::BeginCombo("##lights", curLightName()))
-    {
+      if (ImGui::BeginCombo("##lights", curLightName()))
       {
-        bool selected = currentLightType == 0;
-        if (ImGui::Selectable("none", selected))
-          currentLightType = NONE;
-        if (selected)
-          ImGui::SetItemDefaultFocus();
+        {
+          bool selected = currentLightType == 0;
+          if (ImGui::Selectable("none", selected))
+            currentLightType = NONE;
+          if (selected)
+            ImGui::SetItemDefaultFocus();
+        }
+        lightDropdown(POINT, sceneMgr->getLights().pointLightsCount);
+        lightDropdown(SPOT, sceneMgr->getLights().spotLightsCount);
+        lightDropdown(DIRECTIONAL, sceneMgr->getLights().directionalLightsCount);
+
+        ImGui::EndCombo();
       }
-      lightDropdown(POINT, sceneMgr->getLights().pointLightsCount);
-      lightDropdown(SPOT, sceneMgr->getLights().spotLightsCount);
-      lightDropdown(DIRECTIONAL, sceneMgr->getLights().directionalLightsCount);
 
-      ImGui::EndCombo();
+      ImGui::End();
     }
-
-    ImGui::End();
   }
 }
