@@ -75,6 +75,9 @@ private:
   glm::mat4x4 worldView;
   glm::mat4x4 proj;
 
+  float prevTime = -1.f;
+  float dt = 0.f;
+
   etna::GraphicsPipeline staticMeshPipeline{};
 
   glm::uvec2 resolution;
