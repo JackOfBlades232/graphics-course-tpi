@@ -64,7 +64,7 @@ private:
 
   struct PushConstantsResolve
   {
-    glm::mat4x4 proj;
+    glm::mat4x4 projView;
     glm::mat4x4 view;
   } pushConstResolve;
 
@@ -73,7 +73,6 @@ private:
 
   glm::mat4x4 worldViewProj;
   glm::mat4x4 worldView;
-  glm::mat4x4 proj;
 
   float prevTime = -1.f;
   float dt = 0.f;

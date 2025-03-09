@@ -184,8 +184,8 @@ void WorldRenderer::update(const FramePacket& packet)
   // calc camera matrix
   {
     const float aspect = float(resolution.x) / float(resolution.y);
+    const auto proj = packet.mainCam.projTm(aspect);
     worldView = packet.mainCam.viewTm();
-    proj = packet.mainCam.projTm(aspect);
     worldViewProj = proj * worldView;
   }
 
@@ -343,7 +343,7 @@ void WorldRenderer::renderWorld(
         {set.getVkSet(), gbufSet.getVkSet()},
         {});
 
-      pushConstResolve.proj = proj;
+      pushConstResolve.projView = worldViewProj;
       pushConstResolve.view = worldView;
       cmd_buf.pushConstants<PushConstantsResolve>(
         gbufferResolver->pipelineLayout(),
