@@ -10,7 +10,7 @@ layout(location = 0) out vec4 out_fragColor;
 
 layout(push_constant) uniform params_t
 {
-  mat4 mProj;
+  mat4 mViewProj;
   mat4 mView;
 } params;
 
@@ -30,10 +30,10 @@ layout(location = 0) in VS_OUT
   vec2 texCoord;
 } surf;
 
-vec3 depth_and_tc_to_pos(float depth, vec2 tc, mat4 invProjView)
+vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 {
   const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
-  const vec4 posHom = invProjView * cameraToScreen;
+  const vec4 posHom = inverse(params.mViewProj) * cameraToScreen;
   return posHom.xyz / posHom.w;
 }
 
@@ -46,61 +46,72 @@ const float F_DIEL = 0.04f;
 
 #define HPLUS(v_) ((v_) > 0.f ? 1.f : 0.f)
 
-float d_ggx(vec3 n, vec3 h, float alpha2)
+float d_ggx(float nh, float alpha2)
 {
-  float nh = dot(n, h);
   float nh2 = nh * nh;
   float divterm = nh2 * (alpha2 - 1.f) + 1.f;
   return (alpha2 * HPLUS(nh)) / (PI * divterm * divterm);
 }
 
-float g_smith_ggx(vec3 n, vec3 l, vec3 v, vec3 h, float alpha2)
+float g_smith(float nl, float nv, float hl, float hv, float alpha2)
 {
-  float nl = dot(n, l);
-  float nv = dot(n, v);
-  float hl = dot(h, l);
-  float hv = dot(h, v);
-
-  float anl = abs(nl);
-  float anv = abs(nv);
-
   float sl = sqrt(mix(nl * nl, 1.f, alpha2));
   float sv = sqrt(mix(nv * nv, 1.f, alpha2));
 
-  return (4.f * anl * anv * HPLUS(hl) * HPLUS(hv)) / ((anl + sl) * (anv + sv));
+  return (4.f * nl * nv * HPLUS(hl) * HPLUS(hv)) / ((nl + sl) * (nv + sv));
+}
+
+float diffuse_brdf()
+{
+  return 1.f / PI;
+}
+
+float specular_brdf(float nl, float nv, float hl, float hv, float nh, float a2)
+{
+  return (d_ggx(nh, a2) * g_smith(nl, nv, hl, hv, a2)) / max(0.001f, 4.f * nl * nv);
+}
+
+vec3 conductor_frensel_shlick(vec3 f0, float hv)
+{
+  return mix(f0, vec3(1.f), pow(1.f - abs(hv), 5.f));
 }
 
 vec4 shade_cook_torrance(
   vec3 n, vec3 l, vec3 v, float metalness, float roughness, vec3 albedo, vec3 lightCol)
 {
-  //vec3 c = albedo;
-  vec3 c = pow(albedo, vec3(GAMMA_POW));
-  //vec3 lc = lightCol;
-  vec3 lc = pow(lightCol, vec3(GAMMA_POW));
+  // @HUH: why does this look more adequate on with no gamma correction?
 
-  vec3 h = normalize(l + v);
-  float alpha = roughness * roughness;
-  float alpha2 = alpha * alpha;
-  float ahv = abs(dot(h, v));
-  float anl = abs(dot(n, l));
-  float anv = abs(dot(n, v));
-  float mixc = pow(1.f - ahv, 5.f);
+  vec3 c = albedo;
+  //vec3 c = pow(albedo, vec3(GAMMA_POW));
+  vec3 lc = lightCol;
+  //vec3 lc = pow(lightCol, vec3(GAMMA_POW));
 
-  const vec3 BLACK = vec3(0.f);
-  vec3 c_diff = mix(c, BLACK, metalness);
+  vec3 c_diff = mix(c, vec3(0.0f), metalness);
+
+  vec3 nn = normalize(n);
+  vec3 ll = normalize(l);
+  vec3 vv = normalize(v);
+  vec3 hh = normalize(ll + vv);
+  float nl = max(dot(nn, ll), 0.f);
+  float nv = max(dot(nn, vv), 0.f);
+  float hl = max(dot(hh, ll), 0.f);
+  float hv = max(dot(hh, vv), 0.f);
+  float nh = max(dot(nn, hh), 0.f);
+
+  float a = roughness * roughness;
+  float a2 = a * a;
+
   vec3 f0 = mix(vec3(F_DIEL), c, metalness);
+  vec3 f = conductor_frensel_shlick(f0, hv);
 
-  vec3 f = f0 + (1.f - f0) * mixc;
-  float d = d_ggx(n, h, alpha2);
-  float g = g_smith_ggx(n, l, v, h, alpha2);
+  float diff_bsdf = diffuse_brdf();
+  float spec_bsdf = specular_brdf(nl, nv, hl, hv, nh, a2);
 
-  vec3 f_diffuse = (1.f - f) * (1.f / PI) * c_diff;
-  vec3 f_specular = f * d * g / (4.f * anv * anv);
+  vec3 diff = nl * (1.f - f) * diff_bsdf * c_diff;
+  vec3 spec = nl * f * spec_bsdf;
 
-  vec3 material = f_diffuse + f_specular;
-
-  //return vec4(material * lc, 1.f); 
-  return pow(vec4(material * lc, 1.f), 1.f / vec4(GAMMA_POW)); 
+  return vec4((spec + diff) * lc, 1.f);
+  //return pow(vec4((spec + diff) * lc, 1.f), 1.f / vec4(GAMMA_POW)); 
 }
 
 vec3 calculate_diffuse(vec3 normal, vec3 lightDir, vec3 albedo, vec3 lightIntensity)
@@ -139,14 +150,14 @@ void main()
     return;
   }
 
-  const mat4 invProjView = inverse(params.mProj * params.mView);
-  const vec3 camPos = params.mView[3].xyz / params.mView[3].w;
+  const mat4 invView = inverse(params.mView);
+  const vec3 camPos = invView[3].xyz / invView[3].w;
 
   const vec3 albedo = texture(gbufAlbedo, surf.texCoord).xyz;
   const vec4 matData = texture(gbufMaterial, surf.texCoord);
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
 
-  const vec3 pos = depth_and_tc_to_pos(depth, surf.texCoord, invProjView);
+  const vec3 pos = depth_and_tc_to_pos(depth, surf.texCoord);
   const vec3 viewVec = normalize(camPos - pos);
 
   const uint mat = uint(matData.x); 
@@ -160,7 +171,7 @@ void main()
   // Calculate lighting
   
   // @TODO: parametrize
-  const float ambient = 0.01f;
+  const float ambient = 0.f;//0.01f;
 
   vec3 color = ambient * albedo;
 
