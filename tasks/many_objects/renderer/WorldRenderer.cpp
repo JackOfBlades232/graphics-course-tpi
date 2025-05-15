@@ -107,8 +107,8 @@ void WorldRenderer::loadShaders()
 {
   etna::create_program(
     "static_mesh",
-    {BINDLESS_RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
-     BINDLESS_RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+    {RENDERER_SHADERS_ROOT "static_mesh.frag.spv",
+     RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -167,7 +167,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
-    BINDLESS_RENDERER_SHADERS_ROOT "gbuffer_resolve.frag.spv",
+    RENDERER_SHADERS_ROOT "gbuffer_resolve.frag.spv",
     swapchain_format,
     {resolution.x, resolution.y}});
 }

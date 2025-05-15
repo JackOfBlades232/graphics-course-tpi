@@ -9,21 +9,21 @@ App::App(const char *scene_name)
     .resolution = initialRes,
   });
 
-  renderer.reset(new Renderer(initialRes));
+  render.reset(new Renderer(initialRes));
 
   auto instExts = windowing.getRequiredVulkanInstanceExtensions();
-  renderer->initVulkan(instExts);
+  render->initVulkan(instExts);
 
   auto surface = mainWindow->createVkSurface(etna::get_context().getInstance());
 
-  renderer->initFrameDelivery(std::move(surface), [this]() { return mainWindow->getResolution(); });
+  render->initFrameDelivery(std::move(surface), [this]() { return mainWindow->getResolution(); });
 
   ImGuiRenderer::enableImGuiForWindow(mainWindow->native());
 
   mainCam.lookAt({0, 10, 10}, {0, 0, 0}, {0, 1, 0});
 
   std::string scenePath = (GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/") + std::string{scene_name};
-  renderer->loadScene(scenePath.c_str());
+  render->loadScene(scenePath.c_str());
 }
 
 void App::run()
@@ -64,18 +64,18 @@ void App::processInput(float dt)
   if (mainWindow->captureMouse)
     rotateCam(mainCam, mainWindow->mouse, dt);
 
-  renderer->debugInput(mainWindow->keyboard, mainWindow->mouse, mainWindow->captureMouse);
+  render->debugInput(mainWindow->keyboard, mainWindow->mouse, mainWindow->captureMouse);
 }
 
 void App::drawFrame()
 {
   ZoneScoped;
 
-  renderer->update(FramePacket{
+  render->update(FramePacket{
     .mainCam = mainCam,
     .currentTime = static_cast<float>(windowing.getTime()),
   });
-  renderer->drawFrame();
+  render->drawFrame();
 }
 
 void App::moveCam(Camera& cam, const Keyboard& kb, float dt)
