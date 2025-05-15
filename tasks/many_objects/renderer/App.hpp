@@ -29,5 +29,6 @@ private:
   float zoomSensitivity = 2.0f;
   Camera mainCam;
 
-  std::unique_ptr<Renderer> renderer;
+  // @TODO: figure out how to remove #define renderer 1
+  std::unique_ptr<Renderer> render;
 };
