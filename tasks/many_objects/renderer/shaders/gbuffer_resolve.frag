@@ -140,7 +140,7 @@ float calculate_angular_attenuation(float cosine, float lightAngleScale, float l
   return angularAttenuation;
 }
 
-void main()
+void main(void)
 {
   // Unpack gbuffer
   const float depth = texture(gbufDepth, surf.texCoord).x;

@@ -15,21 +15,17 @@
 
 #include <lights.h>
 #include <materials.h>
+#include <geometry.h>
+#include <draw.h>
 
-
-// A single render element (relem) corresponds to a single draw call
-// of a certain pipeline with specific bindings (including material data)
 struct RenderElement
 {
-  uint32_t vertexOffset;
-  uint32_t indexOffset;
-  uint32_t indexCount;
-  MaterialId materialId = MaterialId::INVALID;
+  shader_uint vertexOffset;
+  shader_uint indexOffset;
+  shader_uint indexCount;
+  MaterialId materialId;
 };
 
-// A mesh is a collection of relems. A scene may have the same mesh
-// located in several different places, so a scene consists of **instances**,
-// not meshes.
 struct Mesh
 {
   uint32_t firstRelem;
@@ -45,15 +41,13 @@ public:
 
   void selectScene(std::filesystem::path path);
 
-  // Every instance is a mesh drawn with a certain transform
-  // NOTE: maybe you can pass some additional data through unused matrix entries?
-  std::span<const glm::mat4x4> getInstanceMatrices() { return instanceMatrices; }
+  // @TODO: restore data getters if needed
+  std::span<const IndirectCommand> getIndirectCommands() const { return sceneDrawCommands; }
+  std::span<const CullableInstance> getInstances() const { return allInstances; }
+
+  std::span<const glm::mat4> getInstanceMatrices() { return instanceMatrices; }
   std::span<const uint32_t> getInstanceMeshes() { return instanceMeshes; }
-
-  // Every mesh is a collection of relems
   std::span<const Mesh> getMeshes() { return meshes; }
-
-  // Every relem is a single draw call
   std::span<const RenderElement> getRenderElements() { return renderElements; }
 
   vk::Buffer getVertexBuffer() { return unifiedVbuf.get(); }
@@ -65,9 +59,12 @@ public:
 
   std::span<const etna::Image> getTextures() const { return textures; }
   std::span<const etna::Sampler> getSamplers() const { return samplers; }
-  const etna::Buffer& getMaterialParamsBuf() const { return materialParamsBuf; }
 
-  uint32_t getMaterialParamsBufSizeBytes() const { return materialParamsBufSizeBytes; }
+  const etna::Buffer& getInstanceMatricesBuf() const { return matricesBuf; }
+  const etna::Buffer& getIndirectCommandsBuf() const { return indirectDrawBuf; }
+  const etna::Buffer& getBboxesBuf() const { return bboxesBuf; }
+  const etna::Buffer& getInstancesBuf() const { return instancesBuf; }
+  const etna::Buffer& getMaterialParamsBuf() const { return materialParamsBuf; }
 
   // For imgui, kinda hacky
   UniformLights& lightsRW() { return *lightsData; }
@@ -77,7 +74,7 @@ private:
 
   struct ProcessedInstances
   {
-    std::vector<glm::mat4x4> matrices;
+    std::vector<glm::mat4> matrices;
     std::vector<uint32_t> meshes;
     std::vector<uint32_t> lights;
   };
@@ -100,6 +97,9 @@ private:
     std::span<uint32_t> indices;
     std::vector<RenderElement> relems;
     std::vector<Mesh> meshes;
+    std::vector<IndirectCommand> sceneDrawCommands;
+    std::vector<BBox> bboxes;
+    std::vector<CullableInstance> allInstances;
   };
 
   using ProcessedLights = std::unique_ptr<UniformLights>;
@@ -109,12 +109,16 @@ private:
 
   ProcessedLights processLights(
     const tinygltf::Model& model,
-    std::span<glm::mat4x4> instances,
+    std::span<glm::mat4> instances,
     std::span<uint32_t> instance_mapping) const;
 
   void uploadData(
     std::span<const Vertex> vertices,
     std::span<const uint32_t> indices,
+    std::span<const glm::mat4> instance_matrices,
+    std::span<const IndirectCommand> draw_commands,
+    std::span<const BBox> bboxes,
+    std::span<const CullableInstance> instances,
     std::span<const Material> material_params);
 
 private:
@@ -122,22 +126,31 @@ private:
   std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
   etna::BlockingTransferHelper transferHelper;
 
+  // @NOTE: keeping meshes and relems around can help add live scene editing
   std::vector<RenderElement> renderElements;
   std::vector<Mesh> meshes;
-  std::vector<glm::mat4x4> instanceMatrices;
+  std::vector<glm::mat4> instanceMatrices;
   std::vector<uint32_t> instanceMeshes;
 
-  etna::Buffer unifiedVbuf;
-  etna::Buffer unifiedIbuf;
+  std::vector<IndirectCommand> sceneDrawCommands;
+  std::vector<BBox> bboxes;
+  std::vector<CullableInstance> allInstances;
+
+  std::unique_ptr<UniformLights> lightsData{};
 
   // @TODO: do we support reentrability in selectScene?
   std::vector<etna::Image> textures{};
   std::vector<etna::Sampler> samplers{};
 
-  etna::Buffer materialParamsBuf;
-  uint32_t materialParamsBufSizeBytes = 0;
+  etna::Buffer unifiedVbuf;
+  etna::Buffer unifiedIbuf;
 
-  std::unique_ptr<UniformLights> lightsData{};
+  // @TODO: drag out into WR to be tweakable
+  etna::Buffer matricesBuf;
+  etna::Buffer indirectDrawBuf;
+  etna::Buffer bboxesBuf;
+  etna::Buffer instancesBuf;
+  etna::Buffer materialParamsBuf;
 
   bool loaded = false;
 };

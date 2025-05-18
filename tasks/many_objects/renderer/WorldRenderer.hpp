@@ -4,6 +4,7 @@
 #include <etna/Sampler.hpp>
 #include <etna/Buffer.hpp>
 #include <etna/GraphicsPipeline.hpp>
+#include <etna/ComputePipeline.hpp>
 #include <glm/glm.hpp>
 
 #include <constants.h>
@@ -35,18 +36,20 @@ public:
     vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
 
 private:
-  void renderScene(
-    vk::CommandBuffer cmd_buf, const glm::mat4x4& glob_tm, vk::PipelineLayout pipeline_layout);
-
-private:
   std::unique_ptr<SceneManager> sceneMgr;
+
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
+  etna::GraphicsPipeline staticMeshPipeline{};
+  etna::ComputePipeline cullingPipeline{};
+  etna::ComputePipeline resetIndirectCommandsPipeline{};
 
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image mainViewDepth;
 
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
+
+  etna::Buffer culledInstancesBuf;
 
   // @TODO: unify with one in scene manager
   etna::Sampler defaultSampler;
@@ -56,11 +59,10 @@ private:
 
   const etna::GpuWorkCount& wc;
 
-  struct PushConstantsMesh
+  struct PushConstants
   {
     glm::mat4x4 projView;
-    glm::mat4x4 modelAndMatId;
-  } pushConstMesh;
+  } pushConst;
 
   struct PushConstantsResolve
   {
@@ -76,8 +78,6 @@ private:
 
   float prevTime = -1.f;
   float dt = 0.f;
-
-  etna::GraphicsPipeline staticMeshPipeline{};
 
   glm::uvec2 resolution;
   bool settingsGuiEnabled = false;

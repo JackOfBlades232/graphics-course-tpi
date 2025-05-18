@@ -25,12 +25,15 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
 
   deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
+  vk::PhysicalDeviceVulkan12Features features12{.runtimeDescriptorArray = true};
+
   etna::initialize(etna::InitParams{
     .applicationName = "renderer",
     .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
     .instanceExtensions = instanceExtensions,
     .deviceExtensions = deviceExtensions,
-    .features = vk::PhysicalDeviceFeatures2{.features = {}},
+    .features =
+      vk::PhysicalDeviceFeatures2{.pNext = &features12, .features = {.multiDrawIndirect = true}},
     .physicalDeviceIndexOverride = {},
     .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),
   });
