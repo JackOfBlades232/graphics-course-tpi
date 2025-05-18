@@ -38,7 +38,8 @@ private:
   std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
 
   glm::uvec2 resolution;
-  bool useVsync = true;
+  // bool useVsync = true; // @TODO restore
+  bool useVsync = false;
 
   etna::GpuWorkCount gpuWorkCount;
 

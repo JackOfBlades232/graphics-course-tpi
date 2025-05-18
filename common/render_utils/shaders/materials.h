@@ -80,17 +80,12 @@ struct Material
   TexSmpIdPair baseColorTexSmp; 
   TexSmpIdPair metalnessRoughnessTexSmp; 
 
-  // Diffuse (@NOTE: can be aliased w/ PBR
+  // Diffuse @NOTE: can be aliased w/ PBR
   shader_uint diffuseColorFactor;
   //shader_uint specularFactor;
   //float glossinessFactor;
   TexSmpIdPair diffuseTexSmp; 
   //TexSmpIdPair specularGlossinessTexSmp; 
 };
-
-// @TODO: access macros w/ bounds checking
-
-#define MAX_BINDLESS_TEXTURES 512
-#define MAX_BINDLESS_SAMPLERS 128
 
 #endif // MATERIALS_H_INCLUDED
