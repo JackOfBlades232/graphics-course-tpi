@@ -16,12 +16,12 @@ layout(push_constant) uniform params_t
   mat4 mProjView;
 } params;
 
-layout(binding = 0, set = 1) uniform texture2D bindlessTextures[];
-layout(binding = 1, set = 1) uniform sampler bindlessSamplers[];
-layout(binding = 2, set = 1) readonly buffer material_params_t
+layout(binding = 0, set = 1) readonly buffer material_params_t
 {
   Material materialParams[];
 };
+layout(binding = 0, set = 2) uniform texture2D bindlessTextures[];
+layout(binding = 0, set = 3) uniform sampler bindlessSamplers[];
 
 layout(location = 0) in VS_OUT
 {
