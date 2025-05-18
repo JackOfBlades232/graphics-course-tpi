@@ -14,6 +14,7 @@
 // NOTE: This is technically completely wrong,
 // as GLSL words are guaranteed to be 32-bit,
 // while C++ unsigned int can be 16-bit.
+using shader_int = int;
 using shader_uint = glm::uint;
 using shader_uvec2 = glm::uvec2;
 using shader_uvec3 = glm::uvec3;
@@ -22,6 +23,7 @@ using shader_float = float;
 using shader_vec2 = glm::vec2;
 using shader_vec3 = glm::vec3;
 using shader_vec4 = glm::vec4;
+using shader_mat4x3 = glm::mat4x3;
 using shader_mat4 = glm::mat4x4;
 
 // The funny thing is, on a GPU, you might as well consider
@@ -31,6 +33,7 @@ using shader_bool = glm::uint;
 
 #else
 
+#define shader_int int
 #define shader_uint uint
 #define shader_uvec2 uvec2
 
@@ -38,6 +41,7 @@ using shader_bool = glm::uint;
 #define shader_vec2 vec2
 #define shader_vec3 vec3
 #define shader_vec4 vec4
+#define shader_mat4x3 mat4x3
 #define shader_mat4 mat4
 
 #define shader_bool bool

@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <stack>
+#include <unordered_map>
 
 #include <spdlog/spdlog.h>
 #include <fmt/std.h>
@@ -16,6 +17,7 @@
 
 #include <quantization.h>
 #include <materials.h>
+#include <geometry.h>
 
 
 SceneManager::SceneManager()
@@ -121,7 +123,6 @@ SceneManager::ProcessedInstances SceneManager::processInstances(const tinygltf::
 
   ProcessedInstances result;
 
-  // Don't overallocate matrices, they are pretty chonky.
   {
     size_t totalRelevantNodes = 0;
     for (size_t i = 0; i < model.nodes.size(); ++i)
@@ -147,10 +148,47 @@ SceneManager::ProcessedInstances SceneManager::processInstances(const tinygltf::
   return result;
 }
 
+namespace
+{
+
+struct RelemIdentifier
+{
+  uint32_t indexCount;
+  uint32_t indexOffset;
+  uint32_t vertexOffset;
+
+  friend bool operator==(RelemIdentifier i1, RelemIdentifier i2) = default;
+};
+struct RelemData
+{
+  std::vector<DrawableInstance> instances;
+  BBox bbox;
+};
+
+} // namespace
+
+template <>
+struct std::hash<RelemIdentifier>
+{
+  size_t operator()(const RelemIdentifier& rid) const noexcept
+  {
+    size_t h1 = std::hash<uint32_t>{}(rid.indexCount);
+    size_t h2 = std::hash<uint32_t>{}(rid.indexOffset);
+    size_t h3 = std::hash<uint32_t>{}(rid.vertexOffset);
+    return h1 ^ ((h2 ^ (h3 << 1)) << 1);
+  }
+};
+
 SceneManager::ProcessedMeshes SceneManager::processMeshes(
   const tinygltf::Model& model, std::span<const MaterialId> material_remapping) const
 {
   ProcessedMeshes result;
+
+  result.vertices = {
+    (Vertex*)model.buffers[0].data.data(), model.bufferViews[0].byteLength / sizeof(Vertex)};
+  result.indices = {
+    (uint32_t*)(result.vertices.data() + result.vertices.size()),
+    model.bufferViews[1].byteLength / sizeof(uint32_t)};
 
   {
     size_t totalPrimitives = 0;
@@ -161,12 +199,25 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 
   result.meshes.reserve(model.meshes.size());
 
-  for (const auto& mesh : model.meshes)
+  std::unordered_map<RelemIdentifier, RelemData> batchedInstances{};
+
+  uint32_t totalInstCount = 0;
+
+  for (size_t i = 0; i < model.meshes.size(); ++i)
   {
+    const auto& mesh = model.meshes[i];
     result.meshes.push_back(Mesh{
       .firstRelem = static_cast<uint32_t>(result.relems.size()),
       .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
     });
+
+    std::vector<uint32_t> matrixIds{};
+
+    for (size_t j = 0; j < instanceMeshes.size(); ++j)
+    {
+      if (instanceMeshes[j] == i)
+        matrixIds.push_back(uint32_t(j));
+    }
 
     for (const auto& prim : mesh.primitives)
     {
@@ -187,14 +238,60 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
         .indexCount = static_cast<uint32_t>(indAccessor.count),
         .materialId =
           prim.material == -1 ? MaterialId::INVALID : material_remapping[prim.material]});
+
+      const auto& relem = result.relems.back();
+
+      const RelemIdentifier batchId{relem.indexCount, relem.indexOffset, relem.vertexOffset};
+      auto [it, inserted] = batchedInstances.try_emplace(batchId);
+      auto& data = it->second;
+
+      for (size_t matrixId : matrixIds)
+      {
+        data.instances.push_back(
+          DrawableInstance{shader_uint(matrixId), shader_uint(relem.materialId)});
+      }
+
+      totalInstCount += matrixIds.size();
+
+      if (!inserted) // Only calculte bbox on first encounter of relem
+        continue;
+
+      BBox box{glm::vec4{100000.f}, glm::vec4{-100000.f}};
+      for (uint32_t ind : result.indices.subspan(relem.indexOffset, relem.indexCount))
+      {
+        auto pos = result.vertices[relem.vertexOffset + ind].positionAndNormal;
+        box.min = glm::min(box.min, pos);
+        box.max = glm::max(box.max, pos);
+      }
+
+      // @TODO: handle no indices case? (what should be done?)
+
+      box.min.w = box.max.w = 1.f;
+      data.bbox = box;
     }
   }
 
-  result.vertices = {
-    (Vertex*)model.buffers[0].data.data(), model.bufferViews[0].byteLength / sizeof(Vertex)};
-  result.indices = {
-    (uint32_t*)(result.vertices.data() + result.vertices.size()),
-    model.bufferViews[1].byteLength / sizeof(uint32_t)};
+  result.sceneDrawCommands.reserve(batchedInstances.size());
+  result.bboxes.reserve(batchedInstances.size());
+  result.allInstances.reserve(totalInstCount);
+  for (auto&& [batch, data] : batchedInstances)
+  {
+    auto& cmd = result.sceneDrawCommands.emplace_back();
+    cmd.indexCount = batch.indexCount;
+    cmd.firstIndex = batch.indexOffset;
+    cmd.vertexOffset = batch.vertexOffset;
+    cmd.instanceCount = 0;
+    cmd.firstInstance = shader_uint(result.allInstances.size());
+
+    result.bboxes.push_back(data.bbox);
+
+    auto instances = std::move(data.instances);
+    for (DrawableInstance inst : instances)
+    {
+      result.allInstances.push_back(CullableInstance{
+        inst.matrixId, inst.materialId, shader_uint(result.sceneDrawCommands.size() - 1)});
+    }
+  }
 
   return result;
 }
@@ -205,7 +302,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 // this requires instancing so that these matrices are even on the gpu in bulk.
 SceneManager::ProcessedLights SceneManager::processLights(
   const tinygltf::Model& model,
-  std::span<glm::mat4x4> instances,
+  std::span<glm::mat4> instances,
   std::span<uint32_t> instance_mapping) const
 {
   ProcessedLights lights = std::make_unique<UniformLights>();
@@ -231,7 +328,7 @@ SceneManager::ProcessedLights SceneManager::processLights(
     if (lightId == (uint32_t)(-1))
       continue;
 
-    const glm::mat4x4& inst = instances[instId];
+    auto inst = glm::mat4x4(instances[instId]);
 
     const auto& l = model.lights[lightId];
     const glm::vec3 color = {(float)l.color[0], (float)l.color[1], (float)l.color[2]};
@@ -347,6 +444,10 @@ SceneManager::ProcessedLights SceneManager::processLights(
 void SceneManager::uploadData(
   std::span<const Vertex> vertices,
   std::span<const uint32_t> indices,
+  std::span<const glm::mat4> instance_matrices,
+  std::span<const IndirectCommand> draw_commands,
+  std::span<const BBox> bboxes,
+  std::span<const CullableInstance> instances,
   std::span<const Material> material_params)
 {
   unifiedVbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
@@ -363,6 +464,35 @@ void SceneManager::uploadData(
     .name = "unifiedIbuf",
   });
 
+  matricesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = instance_matrices.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "matricesBuf",
+  });
+
+  indirectDrawBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = draw_commands.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer |
+      vk::BufferUsageFlagBits::eIndirectBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "indirectDrawBuf",
+  });
+
+  bboxesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = bboxes.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "bboxesBuf",
+  });
+
+  instancesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = instances.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "instancesBuf",
+  });
+
   // @TODO: it isn't big, maybe make uniform?
   materialParamsBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
     .size = material_params.size_bytes(),
@@ -370,10 +500,13 @@ void SceneManager::uploadData(
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "materialParamsBuf",
   });
-  materialParamsBufSizeBytes = uint32_t(material_params.size_bytes());
 
   transferHelper.uploadBuffer<Vertex>(*oneShotCommands, unifiedVbuf, 0, vertices);
   transferHelper.uploadBuffer<uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
+  transferHelper.uploadBuffer<glm::mat4>(*oneShotCommands, matricesBuf, 0, instance_matrices);
+  transferHelper.uploadBuffer<IndirectCommand>(*oneShotCommands, indirectDrawBuf, 0, draw_commands);
+  transferHelper.uploadBuffer<BBox>(*oneShotCommands, bboxesBuf, 0, bboxes);
+  transferHelper.uploadBuffer<CullableInstance>(*oneShotCommands, instancesBuf, 0, instances);
   transferHelper.uploadBuffer<Material>(*oneShotCommands, materialParamsBuf, 0, material_params);
 }
 
@@ -406,7 +539,7 @@ void SceneManager::selectScene(std::filesystem::path path)
       return hasher(smp.minFilter) ^ (hasher(smp.wrapS) << 1);
     };
 
-    std::vector<size_t> samplerHashes{};
+    std::vector<size_t> samplerHashes{size_t(-1)}; // Fake hash for default sampler
     samplerHashes.reserve(model.samplers.size());
     samplerRemapping.reserve(model.samplers.size());
     for (const auto& loadedSampler : model.samplers)
@@ -447,104 +580,104 @@ void SceneManager::selectScene(std::filesystem::path path)
   requiredImageFormats.resize(model.images.size(), vk::Format::eUndefined);
   {
     // @TODO: only load referenced
-    auto translateMaterial = [&model, &samplerRemapping, &requiredImageFormats](
-                               const tinygltf::Material& gmat) {
-      Material mat{};
+    auto translateMaterial =
+      [&model, &samplerRemapping, &requiredImageFormats](const tinygltf::Material& gmat) {
+        Material mat{};
 
-      auto idPairForTexture = [&](int id) {
-        if (id < 0)
-          return TexSmpIdPair::INVALID;
-        const auto& gtex = model.textures[id];
-        const uint32_t samplerId = gtex.sampler < 0 ? 0 : samplerRemapping[gtex.sampler];
-        // @TODO graceful
-        ETNA_ASSERT(gtex.source >= 0 && gtex.source <= 65535);
-        ETNA_ASSERT(samplerId >= 0 && samplerId <= 65535);
-        return pack_tex_smp_id_pair(TexId{uint16_t(gtex.source)}, SmpId{uint16_t(samplerId)});
-      };
+        auto idPairForTexture = [&](int id) {
+          if (id < 0)
+            return TexSmpIdPair::INVALID;
+          const auto& gtex = model.textures[id];
+          const uint32_t samplerId = gtex.sampler < 0 ? 0 : samplerRemapping[gtex.sampler];
+          // @TODO graceful
+          ETNA_ASSERT(gtex.source >= 0 && gtex.source <= 65535);
+          ETNA_ASSERT(samplerId >= 0 && samplerId <= 65535);
+          return pack_tex_smp_id_pair(TexId{uint16_t(gtex.source)}, SmpId{uint16_t(samplerId)});
+        };
 
-      auto setTexFmt = [&](int id, vk::Format fmt) {
-        if (id < 0)
-          return;
-        if (requiredImageFormats[id] == fmt)
-          return;
+        auto setTexFmt = [&](int id, vk::Format fmt) {
+          if (id < 0)
+            return;
+          if (requiredImageFormats[id] == fmt)
+            return;
 
-        // @TODO: graceful
-        ETNA_ASSERT(requiredImageFormats[id] == vk::Format::eUndefined);
-        requiredImageFormats[id] = fmt;
-      };
-
-      // @TODO: texcoord params from material textures
-
-      mat.normalTexSmp = idPairForTexture(gmat.normalTexture.index);
-      setTexFmt(gmat.normalTexture.index, vk::Format::eR8G8B8A8Unorm);
-
-      if (auto it = gmat.extensions.find("KHR_materials_pbrSpecularGlossiness");
-          it != gmat.extensions.end())
-      {
-        mat.mat = MaterialType::DIFFUSE;
-        const auto& params = it->second;
-
-        if (params.Has("diffuseFactor"))
-        {
-          const auto& factor = params.Get("diffuseFactor");
           // @TODO: graceful
-          ETNA_ASSERT(factor.IsNumber() || (factor.IsArray() && factor.ArrayLen() == 4));
-          if (factor.IsNumber())
-            mat.diffuseColorFactor = quantizefcol(float(factor.GetNumberAsDouble()));
-          else
+          ETNA_ASSERT(requiredImageFormats[id] == vk::Format::eUndefined);
+          requiredImageFormats[id] = fmt;
+        };
+
+        // @TODO: texcoord params from material textures
+
+        mat.normalTexSmp = idPairForTexture(gmat.normalTexture.index);
+        setTexFmt(gmat.normalTexture.index, vk::Format::eR8G8B8A8Unorm);
+
+        if (auto it = gmat.extensions.find("KHR_materials_pbrSpecularGlossiness");
+            it != gmat.extensions.end())
+        {
+          mat.mat = MaterialType::DIFFUSE;
+          const auto& params = it->second;
+
+          if (params.Has("diffuseFactor"))
           {
-            ETNA_ASSERT(
-              factor.Get(0).IsNumber() && factor.Get(1).IsNumber() && factor.Get(2).IsNumber() &&
-              factor.Get(3).IsNumber());
+            const auto& factor = params.Get("diffuseFactor");
+            // @TODO: graceful
+            ETNA_ASSERT(factor.IsNumber() || (factor.IsArray() && factor.ArrayLen() == 4));
+            if (factor.IsNumber())
+              mat.diffuseColorFactor = quantizefcol(float(factor.GetNumberAsDouble()));
+            else
+            {
+              ETNA_ASSERT(
+                factor.Get(0).IsNumber() && factor.Get(1).IsNumber() && factor.Get(2).IsNumber() &&
+                factor.Get(3).IsNumber());
 
-            mat.diffuseColorFactor = quantize4fcol(
-              {float(factor.Get(0).GetNumberAsDouble()),
-               float(factor.Get(1).GetNumberAsDouble()),
-               float(factor.Get(2).GetNumberAsDouble()),
-               float(factor.Get(3).GetNumberAsDouble())});
+              mat.diffuseColorFactor = quantize4fcol(
+                {float(factor.Get(0).GetNumberAsDouble()),
+                 float(factor.Get(1).GetNumberAsDouble()),
+                 float(factor.Get(2).GetNumberAsDouble()),
+                 float(factor.Get(3).GetNumberAsDouble())});
+            }
           }
+          else
+            mat.diffuseColorFactor = 0xFFFFFFFF;
+
+          if (params.Has("diffuseTexture"))
+          {
+            const auto& tex = params.Get("diffuseTexture");
+            // @TODO: graceful
+            ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
+            const auto& ind = tex.Get("index");
+            ETNA_ASSERT(ind.IsInt());
+            const int id = ind.GetNumberAsInt();
+            mat.diffuseTexSmp = idPairForTexture(id);
+            setTexFmt(id, vk::Format::eR8G8B8A8Srgb);
+          }
+          else
+            mat.diffuseTexSmp = TexSmpIdPair::INVALID;
+
+          // @TODO: spec/gloss
         }
         else
-          mat.diffuseColorFactor = 0xFFFFFFFF;
-
-        if (params.Has("diffuseTexture"))
         {
-          const auto& tex = params.Get("diffuseTexture");
-          // @TODO: graceful
-          ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
-          const auto& ind = tex.Get("index");
-          ETNA_ASSERT(ind.IsInt());
-          const int id = ind.GetNumberAsInt();
-          mat.diffuseTexSmp = idPairForTexture(id);
-          setTexFmt(id, vk::Format::eR8G8B8A8Srgb);
+          mat.mat = MaterialType::PBR;
+
+          mat.baseColorFactor = quantize4fcol(
+            {float(gmat.pbrMetallicRoughness.baseColorFactor[0]),
+             float(gmat.pbrMetallicRoughness.baseColorFactor[1]),
+             float(gmat.pbrMetallicRoughness.baseColorFactor[2]),
+             float(gmat.pbrMetallicRoughness.baseColorFactor[3])});
+          mat.baseColorTexSmp = idPairForTexture(gmat.pbrMetallicRoughness.baseColorTexture.index);
+          mat.metalnessFactor = float(gmat.pbrMetallicRoughness.metallicFactor);
+          mat.roughnessFactor = float(gmat.pbrMetallicRoughness.roughnessFactor);
+          mat.metalnessRoughnessTexSmp =
+            idPairForTexture(gmat.pbrMetallicRoughness.metallicRoughnessTexture.index);
+
+          setTexFmt(gmat.pbrMetallicRoughness.baseColorTexture.index, vk::Format::eR8G8B8A8Srgb);
+          setTexFmt(
+            gmat.pbrMetallicRoughness.metallicRoughnessTexture.index, vk::Format::eR8G8B8A8Unorm);
         }
-        else
-          mat.diffuseTexSmp = TexSmpIdPair::INVALID;
 
-        // @TODO: spec/gloss
-      }
-      else
-      {
-        mat.mat = MaterialType::PBR;
-
-        mat.baseColorFactor = quantize4fcol(
-          {float(gmat.pbrMetallicRoughness.baseColorFactor[0]),
-           float(gmat.pbrMetallicRoughness.baseColorFactor[1]),
-           float(gmat.pbrMetallicRoughness.baseColorFactor[2]),
-           float(gmat.pbrMetallicRoughness.baseColorFactor[3])});
-        mat.baseColorTexSmp = idPairForTexture(gmat.pbrMetallicRoughness.baseColorTexture.index);
-        mat.metalnessFactor = float(gmat.pbrMetallicRoughness.metallicFactor);
-        mat.roughnessFactor = float(gmat.pbrMetallicRoughness.roughnessFactor);
-        mat.metalnessRoughnessTexSmp =
-          idPairForTexture(gmat.pbrMetallicRoughness.metallicRoughnessTexture.index);
-
-        setTexFmt(gmat.pbrMetallicRoughness.baseColorTexture.index, vk::Format::eR8G8B8A8Srgb);
-        setTexFmt(
-          gmat.pbrMetallicRoughness.metallicRoughnessTexture.index, vk::Format::eR8G8B8A8Unorm);
-      }
-
-      return mat;
-    };
+        return mat;
+      };
 
     // @TODO: more efficient dedup
     materialRemapping.reserve(model.materials.size());
@@ -557,7 +690,7 @@ void SceneManager::selectScene(std::filesystem::path path)
             [&mat](const Material& m) { return memcmp(&m, &mat, sizeof(m)) == 0; });
           it != materialParams.end())
       {
-        materialRemapping.push_back(MaterialId(std::distance(it, materialParams.begin())));
+        materialRemapping.push_back(MaterialId(std::distance(materialParams.begin(), it)));
       }
       else
       {
@@ -610,10 +743,15 @@ void SceneManager::selectScene(std::filesystem::path path)
 
   lightsData = processLights(model, instanceMatrices, instLights);
 
-  auto [verts, inds, relems, meshs] = processMeshes(model, materialRemapping);
+  auto [verts, inds, relems, meshs, commands, bboxs, insts] =
+    processMeshes(model, materialRemapping);
   renderElements = std::move(relems);
   meshes = std::move(meshs);
-  uploadData(verts, inds, materialParams);
+  sceneDrawCommands = std::move(commands);
+  bboxes = std::move(bboxs);
+  allInstances = std::move(insts);
+  uploadData(
+    verts, inds, instanceMatrices, sceneDrawCommands, bboxes, allInstances, materialParams);
 }
 
 etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription()
