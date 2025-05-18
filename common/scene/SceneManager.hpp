@@ -20,10 +20,10 @@
 
 struct RenderElement
 {
-  shader_uint vertexOffset;
-  shader_uint indexOffset;
-  shader_uint indexCount;
-  MaterialId materialId;
+  uint32_t vertexOffset;
+  uint32_t indexOffset;
+  uint32_t indexCount;
+  MaterialId materialId = MaterialId::INVALID;
 };
 
 struct Mesh

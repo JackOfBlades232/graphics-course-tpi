@@ -5,7 +5,7 @@
 #include "materials.h"
 
 // @TODO: tweak, maybe move to another file?
-#define CULLING_WORK_GROUP_SIZE 64
+#define BASE_WORK_GROUP_SIZE 64
 
 struct IndirectCommand
 {
@@ -28,6 +28,15 @@ struct DrawableInstance
   shader_uint matrixId;                                                                                          
   shader_uint materialId;
 };
+
+#ifdef __cplusplus
+
+inline uint32_t get_linear_wg_count(uint32_t work_count, uint32_t wg_size)
+{
+  return (work_count - 1) / wg_size + 1;
+}
+
+#endif
 
 #endif // DRAW_H_INCLUDED
 

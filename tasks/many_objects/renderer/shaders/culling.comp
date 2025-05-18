@@ -6,7 +6,7 @@
 #include "geometry.h"
 
 
-layout(local_size_x = CULLING_WORK_GROUP_SIZE) in;
+layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 
 layout(push_constant) uniform params_t
 {
