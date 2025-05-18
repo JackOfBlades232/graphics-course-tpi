@@ -1,7 +1,8 @@
 #define _USE_MATH_DEFINES
 
 #include "WorldRenderer.hpp"
-#include "render_utils/PostfxRenderer.hpp"
+
+#include <render_utils/PostfxRenderer.hpp>
 
 #include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
@@ -77,28 +78,32 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
   sceneMgr->selectScene(path);
 
-  // @TODO: move to real bindless -- now that exts are enabled
+  auto programInfo = etna::get_shader_program("static_mesh");
+  materialParamsDset = etna::create_persistent_descriptor_set(
+    programInfo.getDescriptorLayoutId(1),
+    {etna::Binding{0, sceneMgr->getMaterialParamsBuf().genBinding()}});
 
   // @TODO: pull out
-  std::vector<etna::Binding> bindings;
-  bindings.reserve(sceneMgr->getTextures().size() + sceneMgr->getSamplers().size() + 1);
+  std::vector<etna::Binding> texBindings, smpBindings;
+  texBindings.reserve(sceneMgr->getTextures().size());
+  smpBindings.reserve(sceneMgr->getSamplers().size());
 
   for (size_t i = 0; i < sceneMgr->getTextures().size(); ++i)
   {
     const auto& tex = sceneMgr->getTextures()[i];
-    bindings.emplace_back(
+    texBindings.emplace_back(
       etna::Binding{0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal), uint32_t(i)});
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
   {
     const auto& smp = sceneMgr->getSamplers()[i];
-    bindings.emplace_back(etna::Binding{1, smp.genBinding(), uint32_t(i)});
+    smpBindings.emplace_back(etna::Binding{0, smp.genBinding(), uint32_t(i)});
   }
-  bindings.emplace_back(etna::Binding{2, sceneMgr->getMaterialParamsBuf().genBinding()});
 
-  auto programInfo = etna::get_shader_program("static_mesh");
-  bindlessDset = etna::create_persistent_descriptor_set(
-    programInfo.getDescriptorLayoutId(1), std::move(bindings), true);
+  bindlessTexturesDset = etna::create_persistent_descriptor_set(
+    programInfo.getDescriptorLayoutId(2), std::move(texBindings));
+  bindlessSamplersDset = etna::create_persistent_descriptor_set(
+    programInfo.getDescriptorLayoutId(3), std::move(smpBindings));
 
   culledInstancesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
     .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance),
@@ -214,7 +219,9 @@ void WorldRenderer::renderWorld(
   if (!transitionedBindlessLayouts)
   {
     transitionedBindlessLayouts = true;
-    bindlessDset.processBarriers(cmd_buf);
+    materialParamsDset.processBarriers(cmd_buf);
+    bindlessTexturesDset.processBarriers(cmd_buf);
+    bindlessSamplersDset.processBarriers(cmd_buf);
   }
 
   memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
@@ -243,10 +250,8 @@ void WorldRenderer::renderWorld(
       cmd_buf.bindPipeline(
         vk::PipelineBindPoint::eCompute, resetIndirectCommandsPipeline.getVkPipeline());
 
-      // @TODO: pull out
-      uint32_t groupCount =
-        (sceneMgr->getIndirectCommands().size() - 1) / CULLING_WORK_GROUP_SIZE + 1;
-      cmd_buf.dispatch(groupCount, 1, 1);
+      cmd_buf.dispatch(
+        get_linear_wg_count(sceneMgr->getIndirectCommands().size(), BASE_WORK_GROUP_SIZE), 1, 1);
     }
 
     std::array resetAndCulledBarriers = {
@@ -299,8 +304,8 @@ void WorldRenderer::renderWorld(
       cmd_buf.pushConstants<PushConstants>(
         cullingPipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eCompute, 0, {pushConst});
 
-      uint32_t groupCount = (sceneMgr->getInstances().size() - 1) / CULLING_WORK_GROUP_SIZE + 1;
-      cmd_buf.dispatch(groupCount, 1, 1);
+      cmd_buf.dispatch(
+        get_linear_wg_count(sceneMgr->getInstances().size(), BASE_WORK_GROUP_SIZE), 1, 1);
     }
 
     std::array resetAndCulledBarriers2 = {
@@ -308,8 +313,8 @@ void WorldRenderer::renderWorld(
         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
         .srcAccessMask =
           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+        .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .buffer = sceneMgr->getIndirectCommandsBuf().get(),
@@ -352,7 +357,10 @@ void WorldRenderer::renderWorld(
         vk::PipelineBindPoint::eGraphics,
         staticMeshPipeline.getVkPipelineLayout(),
         0,
-        {set.getVkSet(), bindlessDset.getVkSet()},
+        {set.getVkSet(),
+         materialParamsDset.getVkSet(),
+         bindlessTexturesDset.getVkSet(),
+         bindlessSamplersDset.getVkSet()},
         {});
 
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
@@ -372,6 +380,22 @@ void WorldRenderer::renderWorld(
         sceneMgr->getIndirectCommands().size(),
         sizeof(IndirectCommand));
     }
+
+    std::array resetAndCulledBarriers3 = {
+      vk::BufferMemoryBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+        .srcAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer = sceneMgr->getIndirectCommandsBuf().get(),
+        .offset = 0u,
+        .size = sceneMgr->getIndirectCommands().size()}};
+    cmd_buf.pipelineBarrier2(vk::DependencyInfo{
+      .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+      .bufferMemoryBarrierCount = resetAndCulledBarriers3.size(),
+      .pBufferMemoryBarriers = resetAndCulledBarriers3.data()});
 
     // @TODO: etna should not require this for no READ_AFTER_WRITE hazards. Investigate!
     etna::set_state(

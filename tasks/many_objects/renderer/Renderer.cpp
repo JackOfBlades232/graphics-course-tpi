@@ -25,7 +25,11 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
 
   deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
-  vk::PhysicalDeviceVulkan12Features features12{.runtimeDescriptorArray = true};
+  vk::PhysicalDeviceDescriptorIndexingFeatures featuresDescIndexing{
+    .shaderSampledImageArrayNonUniformIndexing = true,
+    .descriptorBindingPartiallyBound = true,
+    .descriptorBindingVariableDescriptorCount = true,
+    .runtimeDescriptorArray = true};
 
   etna::initialize(etna::InitParams{
     .applicationName = "renderer",
@@ -33,7 +37,9 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
     .instanceExtensions = instanceExtensions,
     .deviceExtensions = deviceExtensions,
     .features =
-      vk::PhysicalDeviceFeatures2{.pNext = &features12, .features = {.multiDrawIndirect = true}},
+      vk::PhysicalDeviceFeatures2{
+        .pNext = &featuresDescIndexing,
+        .features = {.multiDrawIndirect = true, .drawIndirectFirstInstance = true}},
     .physicalDeviceIndexOverride = {},
     .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),
   });

@@ -54,7 +54,7 @@ private:
   // @TODO: unify with one in scene manager
   etna::Sampler defaultSampler;
 
-  etna::PersistentDescriptorSet bindlessDset;
+  etna::PersistentDescriptorSet materialParamsDset, bindlessTexturesDset, bindlessSamplersDset;
   bool transitionedBindlessLayouts = false; // @HACK
 
   const etna::GpuWorkCount& wc;
