@@ -30,7 +30,7 @@ layout (location = 0) out VS_OUT
   vec3 wNorm;
   vec4 wTangent;
   vec2 texCoord;
-  uint matId;
+  flat uint matId;
 } vOut;
 
 out gl_PerVertex { vec4 gl_Position; };
