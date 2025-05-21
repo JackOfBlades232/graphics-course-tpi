@@ -1,7 +1,7 @@
 #version 450
-#extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
-#extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_ARB_separate_shader_objects : enable
 
 #include "materials.h"
 #include "quantization.h"
@@ -29,7 +29,7 @@ layout(location = 0) in VS_OUT
   vec3 wNorm;
   vec4 wTangent;
   vec2 texCoord;
-  uint matId;
+  flat uint matId;
 } surf;
 
 vec4 sample_bindless_tex(TexSmpIdPair ids, vec2 uv)
@@ -38,7 +38,11 @@ vec4 sample_bindless_tex(TexSmpIdPair ids, vec2 uv)
     return vec4(1.0f);
 
   const uvec2 texSmpIds = unpack_tex_smp_id_pair(ids);
-  return texture(sampler2D(bindlessTextures[texSmpIds.x], bindlessSamplers[texSmpIds.y]), uv);
+  return texture(
+    sampler2D(
+      bindlessTextures[nonuniformEXT(texSmpIds.x)],
+      bindlessSamplers[nonuniformEXT(texSmpIds.y)]),
+    uv);
 }
 
 void main(void)
@@ -47,7 +51,9 @@ void main(void)
   vec3 materialData;
   vec3 normal;
 
-  if (surf.matId == NO_MATERIAL)
+  const uint matId = uint(surf.matId);
+
+  if (matId == NO_MATERIAL)
   {
     surfaceColor = vec3(1.f, 0.f, 1.f);
     materialData = vec3(0.0f);
@@ -55,11 +61,11 @@ void main(void)
   }
   else
   {
-    if (materialParams[surf.matId].normalTexSmp != NO_TEXTURE_ID)
+    if (materialParams[matId].normalTexSmp != NO_TEXTURE_ID)
     {
       const vec3 norm = normalize(surf.wNorm);
       const vec3 sampledNormal =
-        2.f * sample_bindless_tex(materialParams[surf.matId].normalTexSmp, surf.texCoord).xyz - 1.f;
+        2.f * sample_bindless_tex(materialParams[matId].normalTexSmp, surf.texCoord).xyz - 1.f;
 
       const vec3 tang = surf.wTangent.xyz;
       const vec3 ptang = normalize(tang - norm * dot(tang, norm));
@@ -71,32 +77,32 @@ void main(void)
     else
       normal = normalize(surf.wNorm);
 
-    if (materialParams[surf.matId].mat == MATERIAL_PBR)
+    if (materialParams[matId].mat == MATERIAL_PBR)
     {
-      surfaceColor = dequantize4fcol(materialParams[surf.matId].baseColorFactor).xyz;
-      float metalness = materialParams[surf.matId].metalnessFactor;
-      float roughness = materialParams[surf.matId].roughnessFactor;
+      surfaceColor = dequantize4fcol(materialParams[matId].baseColorFactor).xyz;
+      float metalness = materialParams[matId].metalnessFactor;
+      float roughness = materialParams[matId].roughnessFactor;
 
-      if (materialParams[surf.matId].baseColorTexSmp != NO_TEXTURE_ID)
+      if (materialParams[matId].baseColorTexSmp != NO_TEXTURE_ID)
         surfaceColor *= sample_bindless_tex(
-          materialParams[surf.matId].baseColorTexSmp, surf.texCoord).xyz;
-      if (materialParams[surf.matId].metalnessRoughnessTexSmp != NO_TEXTURE_ID)
+          materialParams[matId].baseColorTexSmp, surf.texCoord).xyz;
+      if (materialParams[matId].metalnessRoughnessTexSmp != NO_TEXTURE_ID)
       {
         vec2 mr = sample_bindless_tex(
-          materialParams[surf.matId].metalnessRoughnessTexSmp, surf.texCoord).xy;
+          materialParams[matId].metalnessRoughnessTexSmp, surf.texCoord).xy;
         metalness *= mr.x;
         roughness *= mr.y;
       }
 
       materialData = vec3(float(MATERIAL_PBR), metalness, roughness);
     }
-    else if (materialParams[surf.matId].mat == MATERIAL_DIFFUSE)
+    else if (materialParams[matId].mat == MATERIAL_DIFFUSE)
     {
-      surfaceColor = dequantize4fcol(materialParams[surf.matId].diffuseColorFactor).xyz;
-      if (materialParams[surf.matId].diffuseTexSmp != NO_TEXTURE_ID)
+      surfaceColor = dequantize4fcol(materialParams[matId].diffuseColorFactor).xyz;
+      if (materialParams[matId].diffuseTexSmp != NO_TEXTURE_ID)
       {
         surfaceColor *= sample_bindless_tex(
-          materialParams[surf.matId].diffuseTexSmp, surf.texCoord).xyz;
+          materialParams[matId].diffuseTexSmp, surf.texCoord).xyz;
       }
 
       materialData = vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
