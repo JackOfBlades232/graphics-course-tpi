@@ -55,7 +55,7 @@ private:
   etna::Sampler defaultSampler;
 
   etna::PersistentDescriptorSet materialParamsDset, bindlessTexturesDset, bindlessSamplersDset;
-  bool transitionedBindlessLayouts = false; // @HACK
+  bool initialTransition = true; // @HACK
 
   const etna::GpuWorkCount& wc;
 

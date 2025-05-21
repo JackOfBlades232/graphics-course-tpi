@@ -216,12 +216,12 @@ void WorldRenderer::renderWorld(
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
   // @TODO: unhack
-  if (!transitionedBindlessLayouts)
+  if (initialTransition)
   {
-    transitionedBindlessLayouts = true;
     materialParamsDset.processBarriers(cmd_buf);
     bindlessTexturesDset.processBarriers(cmd_buf);
     bindlessSamplersDset.processBarriers(cmd_buf);
+    initialTransition = false;
   }
 
   memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
@@ -233,6 +233,19 @@ void WorldRenderer::renderWorld(
   // draw final scene to screen
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
+
+    std::array resetAndCulledBarriers = {vk::BufferMemoryBarrier2{
+      .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+      .srcAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+      .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+      .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+      .buffer = sceneMgr->getIndirectCommandsBuf().get(),
+      .size = sceneMgr->getIndirectCommands().size_bytes()}};
+    vk::DependencyInfo dep{
+      .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+      .bufferMemoryBarrierCount = static_cast<uint32_t>(resetAndCulledBarriers.size()),
+      .pBufferMemoryBarriers = resetAndCulledBarriers.data()};
+    cmd_buf.pipelineBarrier2(dep);
 
     {
       ETNA_PROFILE_GPU(cmd_buf, reset);
@@ -254,32 +267,27 @@ void WorldRenderer::renderWorld(
         get_linear_wg_count(sceneMgr->getIndirectCommands().size(), BASE_WORK_GROUP_SIZE), 1, 1);
     }
 
-    std::array resetAndCulledBarriers = {
+    std::array resetAndCulledBarriers2 = {
       vk::BufferMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
         .dstAccessMask =
           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-        .offset = 0u,
-        .size = sceneMgr->getIndirectCommands().size()},
+        .size = sceneMgr->getIndirectCommands().size_bytes()},
       vk::BufferMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eVertexShader,
         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .buffer = culledInstancesBuf.get(),
-        .offset = 0u,
         .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance)}};
-    cmd_buf.pipelineBarrier2(vk::DependencyInfo{
+    vk::DependencyInfo dep2{
       .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-      .bufferMemoryBarrierCount = resetAndCulledBarriers.size(),
-      .pBufferMemoryBarriers = resetAndCulledBarriers.data()});
+      .bufferMemoryBarrierCount = static_cast<uint32_t>(resetAndCulledBarriers2.size()),
+      .pBufferMemoryBarriers = resetAndCulledBarriers2.data()};
+    cmd_buf.pipelineBarrier2(dep2);
 
     {
       ETNA_PROFILE_GPU(cmd_buf, culling);
@@ -308,32 +316,27 @@ void WorldRenderer::renderWorld(
         get_linear_wg_count(sceneMgr->getInstances().size(), BASE_WORK_GROUP_SIZE), 1, 1);
     }
 
-    std::array resetAndCulledBarriers2 = {
+    std::array resetAndCulledBarriers3 = {
       vk::BufferMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
         .srcAccessMask =
           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
         .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
         .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-        .offset = 0u,
-        .size = sceneMgr->getIndirectCommands().size()},
+        .size = sceneMgr->getIndirectCommands().size_bytes()},
       vk::BufferMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
         .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .buffer = culledInstancesBuf.get(),
-        .offset = 0u,
         .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance)}};
-    cmd_buf.pipelineBarrier2(vk::DependencyInfo{
+    vk::DependencyInfo dep3{
       .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-      .bufferMemoryBarrierCount = resetAndCulledBarriers2.size(),
-      .pBufferMemoryBarriers = resetAndCulledBarriers2.data()});
+      .bufferMemoryBarrierCount = static_cast<uint32_t>(resetAndCulledBarriers3.size()),
+      .pBufferMemoryBarriers = resetAndCulledBarriers3.data()};
+    cmd_buf.pipelineBarrier2(dep3);
 
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
@@ -380,52 +383,6 @@ void WorldRenderer::renderWorld(
         sceneMgr->getIndirectCommands().size(),
         sizeof(IndirectCommand));
     }
-
-    std::array resetAndCulledBarriers3 = {
-      vk::BufferMemoryBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
-        .srcAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-        .offset = 0u,
-        .size = sceneMgr->getIndirectCommands().size()}};
-    cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-      .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-      .bufferMemoryBarrierCount = resetAndCulledBarriers3.size(),
-      .pBufferMemoryBarriers = resetAndCulledBarriers3.data()});
-
-    // @TODO: etna should not require this for no READ_AFTER_WRITE hazards. Investigate!
-    etna::set_state(
-      cmd_buf,
-      gbufAlbedo.get(),
-      vk::PipelineStageFlagBits2::eFragmentShader,
-      vk::AccessFlagBits2::eShaderSampledRead,
-      vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::ImageAspectFlagBits::eColor);
-    etna::set_state(
-      cmd_buf,
-      gbufMaterial.get(),
-      vk::PipelineStageFlagBits2::eFragmentShader,
-      vk::AccessFlagBits2::eShaderSampledRead,
-      vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::ImageAspectFlagBits::eColor);
-    etna::set_state(
-      cmd_buf,
-      gbufNormal.get(),
-      vk::PipelineStageFlagBits2::eFragmentShader,
-      vk::AccessFlagBits2::eShaderSampledRead,
-      vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::ImageAspectFlagBits::eColor);
-    etna::set_state(
-      cmd_buf,
-      mainViewDepth.get(),
-      vk::PipelineStageFlagBits2::eFragmentShader,
-      vk::AccessFlagBits2::eShaderSampledRead,
-      vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::ImageAspectFlagBits::eDepth);
 
     // @TODO: should resolve be in renderer rather than in world renderer?
     {
