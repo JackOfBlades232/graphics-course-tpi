@@ -200,8 +200,8 @@ void WorldRenderer::update(const FramePacket& packet)
   {
     const float aspect = float(resolution.x) / float(resolution.y);
     const auto proj = packet.mainCam.projTm(aspect);
-    worldView = packet.mainCam.viewTm();
-    worldViewProj = proj * worldView;
+    constantsData.mView = packet.mainCam.viewTm();
+    constantsData.mProjView = proj * constantsData.mView;
   }
 
   {
@@ -228,7 +228,6 @@ void WorldRenderer::renderWorld(
   memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
 
   // @TODO pack culling & draw back into a renderScene method (will need for shadow maps)
-  pushConst.projView = worldViewProj;
 
   // draw final scene to screen
   {
@@ -253,7 +252,7 @@ void WorldRenderer::renderWorld(
       auto set = etna::create_descriptor_set(
         programInfo.getDescriptorLayoutId(0),
         cmd_buf,
-        {{etna::Binding{0, sceneMgr->getIndirectCommandsBuf().genBinding()}}});
+        {etna::Binding{0, sceneMgr->getIndirectCommandsBuf().genBinding()}});
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eCompute,
         resetIndirectCommandsPipeline.getVkPipelineLayout(),
@@ -296,11 +295,12 @@ void WorldRenderer::renderWorld(
       auto set = etna::create_descriptor_set(
         programInfo.getDescriptorLayoutId(0),
         cmd_buf,
-        {{etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()}},
-         {etna::Binding{1, sceneMgr->getInstancesBuf().genBinding()}},
-         {etna::Binding{2, sceneMgr->getBboxesBuf().genBinding()}},
-         {etna::Binding{3, culledInstancesBuf.genBinding()}},
-         {etna::Binding{4, sceneMgr->getIndirectCommandsBuf().genBinding()}}});
+        {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
+         etna::Binding{1, sceneMgr->getInstancesBuf().genBinding()},
+         etna::Binding{2, sceneMgr->getBboxesBuf().genBinding()},
+         etna::Binding{3, culledInstancesBuf.genBinding()},
+         etna::Binding{4, sceneMgr->getIndirectCommandsBuf().genBinding()},
+         etna::Binding{8, constants->get().genBinding()}});
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eCompute,
@@ -309,8 +309,6 @@ void WorldRenderer::renderWorld(
         {set.getVkSet()},
         {});
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, cullingPipeline.getVkPipeline());
-      cmd_buf.pushConstants<PushConstants>(
-        cullingPipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eCompute, 0, {pushConst});
 
       cmd_buf.dispatch(
         get_linear_wg_count(sceneMgr->getInstances().size(), BASE_WORK_GROUP_SIZE), 1, 1);
@@ -345,8 +343,9 @@ void WorldRenderer::renderWorld(
       auto set = etna::create_descriptor_set(
         programInfo.getDescriptorLayoutId(0),
         cmd_buf,
-        {{etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()}},
-         {etna::Binding{1, culledInstancesBuf.genBinding()}}});
+        {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
+         etna::Binding{1, culledInstancesBuf.genBinding()},
+         etna::Binding{8, constants->get().genBinding()}});
 
       etna::RenderTargetState renderTargets{
         cmd_buf,
@@ -371,12 +370,6 @@ void WorldRenderer::renderWorld(
       cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
       cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
 
-      cmd_buf.pushConstants<PushConstants>(
-        staticMeshPipeline.getVkPipelineLayout(),
-        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-        0,
-        {pushConst});
-
       cmd_buf.drawIndexedIndirect(
         sceneMgr->getIndirectCommandsBuf().get(),
         0,
@@ -391,7 +384,8 @@ void WorldRenderer::renderWorld(
       auto set = etna::create_descriptor_set(
         gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(0),
         cmd_buf,
-        {etna::Binding{1, lights->get().genBinding()}});
+        {etna::Binding{1, lights->get().genBinding()},
+         etna::Binding{8, constants->get().genBinding()}});
 
       auto gbufSet = etna::create_descriptor_set(
         gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(1),
@@ -414,14 +408,6 @@ void WorldRenderer::renderWorld(
         0,
         {set.getVkSet(), gbufSet.getVkSet()},
         {});
-
-      pushConstResolve.projView = worldViewProj;
-      pushConstResolve.view = worldView;
-      cmd_buf.pushConstants<PushConstantsResolve>(
-        gbufferResolver->pipelineLayout(),
-        vk::ShaderStageFlagBits::eFragment,
-        0,
-        {pushConstResolve});
 
       gbufferResolver->render(cmd_buf, target_image, target_image_view);
     }
