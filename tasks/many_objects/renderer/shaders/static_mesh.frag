@@ -5,16 +5,17 @@
 
 #include "materials.h"
 #include "quantization.h"
+#include "constants.h"
 
 
 layout(location = 0) out vec4 out_fragAlbedo;
 layout(location = 1) out vec3 out_fragMaterial;
 layout(location = 2) out vec3 out_fragNormal;
 
-layout(push_constant) uniform params_t
+layout(binding = 8, set = 0) uniform constants_t
 {
-  mat4 mProjView;
-} params;
+  Constants constants;
+};
 
 layout(binding = 0, set = 1) readonly buffer material_params_t
 {

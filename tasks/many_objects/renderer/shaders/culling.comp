@@ -4,14 +4,10 @@
 
 #include "draw.h"
 #include "geometry.h"
+#include "constants.h"
 
 
 layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
-
-layout(push_constant) uniform params_t
-{
-  mat4 mProjView;
-} params;
 
 
 // @TODO: 4x3
@@ -37,6 +33,11 @@ layout(binding = 4, set = 0) buffer commands_t
   IndirectCommand commands[];
 };
 
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
 bool point_is_in_frustum(vec3 p)
 {
   return p.x >= -1.f && p.x <= 1.f && p.y >= -1.f && p.y <= 1.f && p.z >= 0.f && p.z <= 1.f;
@@ -44,7 +45,7 @@ bool point_is_in_frustum(vec3 p)
 
 vec3 world_to_clip(vec4 v)
 {
-  const vec4 hom = params.mProjView * v;
+  const vec4 hom = constants.mProjView * v;
   return (hom / hom.w).xyz;
 }
 
