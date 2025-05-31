@@ -5,15 +5,11 @@
 #include "draw.h"
 #include "materials.h"
 #include "quantization.h"
+#include "constants.h"
 
 
 layout(location = 0) in vec4 vPosNorm;
 layout(location = 1) in vec4 vTexCoordAndTang;
-
-layout(push_constant) uniform params_t
-{
-  mat4 mProjView;
-} params;
 
 layout(binding = 0, set = 0) readonly buffer instance_matrices_t
 {
@@ -22,6 +18,11 @@ layout(binding = 0, set = 0) readonly buffer instance_matrices_t
 layout(binding = 1, set = 0) readonly buffer instances_t
 {
   DrawableInstance markedInstances[];
+};
+
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
 };
 
 layout (location = 0) out VS_OUT
@@ -50,5 +51,5 @@ void main(void)
   vOut.texCoord = vTexCoordAndTang.xy;
   vOut.matId    = matId;
 
-  gl_Position   = params.mProjView * vec4(vOut.wPos, 1.0);
+  gl_Position   = constants.mProjView * vec4(vOut.wPos, 1.0);
 }

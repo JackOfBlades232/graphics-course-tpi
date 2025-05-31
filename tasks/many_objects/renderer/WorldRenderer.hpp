@@ -59,22 +59,7 @@ private:
 
   const etna::GpuWorkCount& wc;
 
-  struct PushConstants
-  {
-    glm::mat4x4 projView;
-  } pushConst;
-
-  struct PushConstantsResolve
-  {
-    glm::mat4x4 projView;
-    glm::mat4x4 view;
-  } pushConstResolve;
-
-  // @TODO: what are guarantees for in-command buffer changes & move data here
   Constants constantsData = {};
-
-  glm::mat4x4 worldViewProj;
-  glm::mat4x4 worldView;
 
   float prevTime = -1.f;
   float dt = 0.f;

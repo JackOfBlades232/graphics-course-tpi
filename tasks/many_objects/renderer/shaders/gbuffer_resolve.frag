@@ -4,19 +4,19 @@
 
 #include "lights.h"
 #include "materials.h"
+#include "constants.h"
 
 
 layout(location = 0) out vec4 out_fragColor;
 
-layout(push_constant) uniform params_t
-{
-  mat4 mViewProj;
-  mat4 mView;
-} params;
-
 layout(binding = 1, set = 0) uniform light_data_t
 {
   UniformLights lights;
+};
+
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
 };
 
 layout(binding = 0, set = 1) uniform sampler2D gbufAlbedo;
@@ -33,7 +33,7 @@ layout(location = 0) in VS_OUT
 vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 {
   const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
-  const vec4 posHom = inverse(params.mViewProj) * cameraToScreen;
+  const vec4 posHom = inverse(constants.mProjView) * cameraToScreen;
   return posHom.xyz / posHom.w;
 }
 
@@ -150,7 +150,7 @@ void main(void)
     return;
   }
 
-  const mat4 invView = inverse(params.mView);
+  const mat4 invView = inverse(constants.mView);
   const vec3 camPos = invView[3].xyz / invView[3].w;
 
   const vec3 albedo = texture(gbufAlbedo, surf.texCoord).xyz;
