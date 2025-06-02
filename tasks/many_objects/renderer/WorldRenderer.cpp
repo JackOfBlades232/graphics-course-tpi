@@ -563,5 +563,13 @@ void WorldRenderer::drawGui()
 
       ImGui::End();
     }
+    {
+      ImGui::Begin("Scene");
+      // @TODO: not static
+      static bool useSatCulling = true;
+      ImGui::Checkbox("Use SAT culling", &useSatCulling);
+      constantsData.cullingMode = useSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
+      ImGui::End();
+    }
   }
 }
