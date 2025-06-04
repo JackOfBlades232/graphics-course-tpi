@@ -3,15 +3,21 @@
 #include <tracy/Tracy.hpp>
 
 #include <filesystem>
+#include <string>
+#include <charconv>
 
-App::App(const char* scene_name)
+
+App::App(const char* scene_name, std::span<const char* const> argv)
 {
+  if (!parseArgs(argv))
+    ETNA_PANIC("Invalid args");
+
   glm::uvec2 initialRes = {1280, 720};
   mainWindow = windowing.createWindow(OsWindow::CreateInfo{
     .resolution = initialRes,
   });
 
-  render.reset(new Renderer(initialRes));
+  render.reset(new Renderer{initialRes, cfg});
 
   auto instExts = windowing.getRequiredVulkanInstanceExtensions();
   render->initVulkan(instExts);
@@ -133,4 +139,82 @@ void App::rotateCam(Camera& cam, const Mouse& ms, float /*dt*/)
     cam.fov = 1.0f;
   if (cam.fov > 120.0f)
     cam.fov = 120.0f;
+}
+
+bool App::parseArgs(std::span<const char* const> argv)
+{
+  for (auto it = argv.begin(); it < argv.end(); ++it)
+  {
+    const std::string_view arg{*it};
+
+    if (arg == "-multiplexScene")
+    {
+      auto err = [] {
+        spdlog::error("Wrong -multiplexScene usage, correct: -multiplexScene "
+                      "[X](uint > 0) [Y](uint > 0) [Z](uint > 0) "
+                      "[X offset](float > 0) [Y offset](float > 0) [Z offset](float > 0)");
+      };
+      cfg.testMultiplexScene = true;
+      ++it;
+      int id = 0;
+      for (auto end = it + 6; it < end; ++it, ++id)
+      {
+        if (it == argv.end())
+        {
+          err();
+          return false;
+        }
+
+        const std::string_view valarg{*it};
+        const bool isDim = id < 3;
+        const size_t component = id % 3;
+
+        if (isDim)
+        {
+          unsigned dest = 0u;
+          auto [ptr, ec] = std::from_chars(valarg.data(), valarg.data() + valarg.size(), dest);
+          if (ec != std::errc{} || size_t(ptr - valarg.data()) != valarg.size() || dest == 0)
+          {
+            err();
+            return false;
+          }
+
+          cfg.testMultiplexing.dims[component] = dest;
+        }
+        else
+        {
+          float dest = 0.f;
+          auto [ptr, ec] = std::from_chars(valarg.data(), valarg.data() + valarg.size(), dest);
+          if (
+            ec != std::errc{} || size_t(ptr - valarg.data()) != valarg.size() ||
+            dest <= BIG_EPSILON)
+          {
+            err();
+            return false;
+          }
+
+          cfg.testMultiplexing.offsets[component] = dest;
+        }
+      }
+    }
+    else
+    {
+      spdlog::error("Unknown argument {}", arg);
+      return false;
+    }
+  }
+
+  if (cfg.testMultiplexScene)
+  {
+    spdlog::info(
+      "Scene multiplexing on: dims=<{}, {}, {}>, step=<{}, {}, {}>",
+      cfg.testMultiplexing.dims.x,
+      cfg.testMultiplexing.dims.y,
+      cfg.testMultiplexing.dims.z,
+      cfg.testMultiplexing.offsets.x,
+      cfg.testMultiplexing.offsets.y,
+      cfg.testMultiplexing.offsets.z);
+  }
+
+  return true;
 }

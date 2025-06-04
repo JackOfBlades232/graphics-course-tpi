@@ -17,12 +17,13 @@
 #include <wsi/Mouse.hpp>
 
 #include "FramePacket.hpp"
+#include "Config.hpp"
 
 
 class WorldRenderer
 {
 public:
-  explicit WorldRenderer(const etna::GpuWorkCount& wc);
+  WorldRenderer(const etna::GpuWorkCount& wc, const Config& config);
 
   void loadScene(std::filesystem::path path);
 
@@ -66,9 +67,10 @@ private:
   float dt = 0.f;
 
   glm::uvec2 resolution;
+  const Config& cfg;
 
   // @DEBUG
-  std::unique_ptr<BboxRenderer> bboxRenderer{}; 
+  std::unique_ptr<BboxRenderer> bboxRenderer{};
   bool settingsGuiEnabled = false;
   bool drawBboxes = false;
 };

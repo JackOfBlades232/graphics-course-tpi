@@ -1,6 +1,6 @@
 #include "App.hpp"
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
   if (argc < 2)
   {
@@ -9,7 +9,7 @@ int main(int argc, char **argv)
   }
 
   {
-    App app{argv[1]};
+    App app{argv[1], std::span<const char* const>{argv + 2, size_t(argc - 2)}};
     app.run();
   }
 
