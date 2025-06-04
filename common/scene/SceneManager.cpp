@@ -63,7 +63,8 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
   return model;
 }
 
-SceneManager::ProcessedInstances SceneManager::processInstances(const tinygltf::Model& model) const
+SceneManager::ProcessedInstances SceneManager::processInstances(
+  const tinygltf::Model& model, const SceneMultiplexing& multiplex) const
 {
   std::vector nodeTransforms(model.nodes.size(), glm::identity<glm::mat4x4>());
 
@@ -123,27 +124,57 @@ SceneManager::ProcessedInstances SceneManager::processInstances(const tinygltf::
 
   ProcessedInstances result;
 
+  size_t totalRelevantNodes = 0;
   {
-    size_t totalRelevantNodes = 0;
     for (size_t i = 0; i < model.nodes.size(); ++i)
     {
       if (model.nodes[i].mesh >= 0 || model.nodes[i].light >= 0)
         ++totalRelevantNodes;
     }
-    result.matrices.reserve(totalRelevantNodes);
-    result.meshes.reserve(totalRelevantNodes);
-    result.lights.reserve(totalRelevantNodes);
+    size_t multiplexedNodes =
+      totalRelevantNodes * multiplex.dims.x * multiplex.dims.y * multiplex.dims.z;
+    result.matrices.resize(multiplexedNodes);
+    result.meshes.resize(multiplexedNodes);
+    result.lights.resize(multiplexedNodes);
   }
 
+  size_t did = 0;
   for (size_t i = 0; i < model.nodes.size(); ++i)
   {
     if (model.nodes[i].mesh >= 0 || model.nodes[i].light >= 0)
     {
-      result.matrices.push_back(nodeTransforms[i]);
-      result.meshes.push_back(model.nodes[i].mesh);
-      result.lights.push_back(model.nodes[i].light);
+      for (unsigned x = 0; x < multiplex.dims.x; ++x)
+        for (unsigned y = 0; y < multiplex.dims.y; ++y)
+          for (unsigned z = 0; z < multiplex.dims.z; ++z)
+          {
+            size_t dest = x * totalRelevantNodes * multiplex.dims.y * multiplex.dims.z +
+              y * totalRelevantNodes * multiplex.dims.z + z * totalRelevantNodes + did;
+
+            ETNA_ASSERT(dest < result.matrices.size());
+            ETNA_ASSERT(dest < result.meshes.size());
+            ETNA_ASSERT(dest < result.lights.size());
+
+            const float xc = float(int(x) - int(multiplex.dims.x) / 2);
+            const float yc = float(int(y) - int(multiplex.dims.y) / 2);
+            const float zc = float(int(z) - int(multiplex.dims.z) / 2);
+
+            glm::vec3 translation = multiplex.offsets * glm::vec3{xc, yc, zc};
+
+            // @TODO: why does glm::translate not do this?
+            result.matrices[dest] = nodeTransforms[i];
+            result.matrices[dest][3][0] += translation[0];
+            result.matrices[dest][3][1] += translation[1];
+            result.matrices[dest][3][2] += translation[2];
+
+            result.meshes[dest] = model.nodes[i].mesh;
+            result.lights[dest] = model.nodes[i].light;
+          }
+
+      ++did;
     }
   }
+
+  ETNA_ASSERT(did == totalRelevantNodes);
 
   return result;
 }
@@ -510,7 +541,7 @@ void SceneManager::uploadData(
   transferHelper.uploadBuffer<Material>(*oneShotCommands, materialParamsBuf, 0, material_params);
 }
 
-void SceneManager::selectScene(std::filesystem::path path)
+void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexing& multiplex)
 {
   auto maybeModel = loadModel(path);
   if (!maybeModel.has_value())
@@ -737,7 +768,7 @@ void SceneManager::selectScene(std::filesystem::path path)
     }
   }
 
-  auto [instMats, instMeshes, instLights] = processInstances(model);
+  auto [instMats, instMeshes, instLights] = processInstances(model, multiplex);
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
 

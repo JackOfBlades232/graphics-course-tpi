@@ -16,9 +16,10 @@
 #include <memory>
 #include <vector>
 
-WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc)
+WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   : sceneMgr{std::make_unique<SceneManager>()}
   , wc{wc}
+  , cfg{config}
 {
 }
 
@@ -76,7 +77,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 {
   // @TODO: make recallable, i.e. implement cleanup
 
-  sceneMgr->selectScene(path);
+  sceneMgr->selectScene(path, cfg.testMultiplexScene ? cfg.testMultiplexing : SceneMultiplexing{});
 
   auto programInfo = etna::get_shader_program("static_mesh");
   materialParamsDset = etna::create_persistent_descriptor_set(
