@@ -9,11 +9,12 @@
 
 #include <constants.h>
 
-#include "render_utils/PostfxRenderer.hpp"
-#include "scene/SceneManager.hpp"
+#include <render_utils/PostfxRenderer.hpp>
+#include <render_utils/BboxRenderer.hpp>
+#include <scene/SceneManager.hpp>
 
-#include "wsi/Keyboard.hpp"
-#include "wsi/Mouse.hpp"
+#include <wsi/Keyboard.hpp>
+#include <wsi/Mouse.hpp>
 
 #include "FramePacket.hpp"
 
@@ -65,5 +66,9 @@ private:
   float dt = 0.f;
 
   glm::uvec2 resolution;
+
+  // @DEBUG
+  std::unique_ptr<BboxRenderer> bboxRenderer{}; 
   bool settingsGuiEnabled = false;
+  bool drawBboxes = false;
 };
