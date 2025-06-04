@@ -2,7 +2,9 @@
 
 #include <tracy/Tracy.hpp>
 
-App::App(const char *scene_name)
+#include <filesystem>
+
+App::App(const char* scene_name)
 {
   glm::uvec2 initialRes = {1280, 720};
   mainWindow = windowing.createWindow(OsWindow::CreateInfo{
@@ -22,8 +24,21 @@ App::App(const char *scene_name)
 
   mainCam.lookAt({0, 10, 10}, {0, 0, 0}, {0, 1, 0});
 
-  std::string scenePath = (GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/") + std::string{scene_name};
-  render->loadScene(scenePath.c_str());
+  // @TODO: how is this validated?
+  std::filesystem::path scenePath{
+    (GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/") + std::string{scene_name} + "/baked/"};
+  for (const auto& entry : std::filesystem::directory_iterator(scenePath))
+  {
+    // @TODO: do I have to support binary file separately? Don't remember
+    if (entry.is_regular_file() && entry.path().extension() == ".gltf")
+    {
+      spdlog::info("Loading scene from {}", entry.path().c_str());
+      render->loadScene(entry.path().c_str());
+      return;
+    }
+  }
+
+  ETNA_PANIC("A .gltf file was not found in {}", scenePath.c_str());
 }
 
 void App::run()

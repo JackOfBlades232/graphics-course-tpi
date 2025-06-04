@@ -1,5 +1,5 @@
 
-add_library(render_utils QuadRenderer.cpp PostfxRenderer.cpp)
+add_library(render_utils QuadRenderer.cpp BboxRenderer.cpp PostfxRenderer.cpp)
 
 target_include_directories(render_utils PUBLIC ..)
 
@@ -14,4 +14,6 @@ target_link_libraries(render_utils PUBLIC etna)
 target_add_shaders(render_utils
   shaders/quad.vert
   shaders/quad.frag
+  shaders/bbox.vert
+  shaders/bbox.frag
 )
