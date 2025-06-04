@@ -185,6 +185,9 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     RENDERER_SHADERS_ROOT "gbuffer_resolve.frag.spv",
     swapchain_format,
     {resolution.x, resolution.y}});
+
+  bboxRenderer = std::make_unique<BboxRenderer>(
+    BboxRenderer::CreateInfo{swapchain_format, {resolution.x, resolution.y}});
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -196,12 +199,22 @@ void WorldRenderer::update(const FramePacket& packet)
 {
   ZoneScoped;
 
+  const float aspect = float(resolution.x) / float(resolution.y);
+
   // calc camera matrix
   {
-    const float aspect = float(resolution.x) / float(resolution.y);
     const auto proj = packet.mainCam.projTm(aspect);
     constantsData.mView = packet.mainCam.viewTm();
     constantsData.mProjView = proj * constantsData.mView;
+  }
+
+  // pass frustum dimensions
+  {
+    constantsData.viewFrustum.nearY =
+      glm::tan(glm::radians(packet.mainCam.fov * 0.5f)) * packet.mainCam.zNear;
+    constantsData.viewFrustum.nearX = aspect * constantsData.viewFrustum.nearY;
+    constantsData.viewFrustum.nearZ = packet.mainCam.zNear;
+    constantsData.viewFrustum.farZ = packet.mainCam.zFar;
   }
 
   {
@@ -411,6 +424,23 @@ void WorldRenderer::renderWorld(
 
       gbufferResolver->render(cmd_buf, target_image, target_image_view);
     }
+
+    {
+      ETNA_PROFILE_GPU(cmd_buf, debugDrawing);
+
+      if (drawBboxes)
+      {
+        bboxRenderer->render(
+          cmd_buf,
+          target_image,
+          target_image_view,
+          sceneMgr->getInstanceMatricesBuf(),
+          sceneMgr->getInstancesBuf(),
+          sceneMgr->getBboxesBuf(),
+          constants->get(),
+          sceneMgr->getInstances().size());
+      }
+    }
   }
 }
 
@@ -565,10 +595,14 @@ void WorldRenderer::drawGui()
     }
     {
       ImGui::Begin("Scene");
+
       // @TODO: not static
       static bool useSatCulling = true;
       ImGui::Checkbox("Use SAT culling", &useSatCulling);
+      ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
+
       constantsData.cullingMode = useSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
+
       ImGui::End();
     }
   }
