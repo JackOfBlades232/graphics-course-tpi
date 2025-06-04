@@ -8,9 +8,10 @@
 #include <imgui.h>
 
 
-Renderer::Renderer(glm::uvec2 res)
-  : resolution{res}
-  , gpuWorkCount{2}
+Renderer::Renderer(glm::uvec2 res, const Config& config)
+  : gpuWorkCount{2}
+  , resolution{res}
+  , cfg{config}
 {
 }
 
@@ -64,7 +65,7 @@ void Renderer::initFrameDelivery(vk::UniqueSurfaceKHR a_surface, ResolutionProvi
 
   resolution = {w, h};
 
-  worldRenderer = std::make_unique<WorldRenderer>(gpuWorkCount);
+  worldRenderer = std::make_unique<WorldRenderer>(gpuWorkCount, cfg);
 
   worldRenderer->allocateResources(resolution);
   worldRenderer->loadShaders();

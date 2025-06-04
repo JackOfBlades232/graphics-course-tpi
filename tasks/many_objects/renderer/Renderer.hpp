@@ -19,7 +19,7 @@ using ResolutionProvider = fu2::unique_function<glm::uvec2() const>;
 class Renderer
 {
 public:
-  explicit Renderer(glm::uvec2 resolution);
+  Renderer(glm::uvec2 resolution, const Config& config);
   ~Renderer();
 
   void initVulkan(std::span<const char*> instance_extensions);
@@ -37,12 +37,14 @@ private:
   std::unique_ptr<etna::Window> window;
   std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
 
-  glm::uvec2 resolution;
-  // bool useVsync = true; // @TODO restore
-  bool useVsync = false;
-
   etna::GpuWorkCount gpuWorkCount;
 
   std::unique_ptr<ImGuiRenderer> guiRenderer;
   std::unique_ptr<WorldRenderer> worldRenderer;
+
+  glm::uvec2 resolution;
+  // bool useVsync = true; // @TODO restore
+  bool useVsync = false;
+
+  const Config& cfg;
 };

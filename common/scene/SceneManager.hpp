@@ -32,6 +32,12 @@ struct Mesh
   uint32_t relemCount;
 };
 
+struct SceneMultiplexing
+{
+  glm::uvec3 dims = {1u, 1u, 1u};
+  glm::vec3 offsets = {};
+};
+
 // @TODO: refactor baked/non baked choice
 
 class SceneManager
@@ -39,7 +45,7 @@ class SceneManager
 public:
   SceneManager();
 
-  void selectScene(std::filesystem::path path);
+  void selectScene(std::filesystem::path path, const SceneMultiplexing& multiplex = {});
 
   // @TODO: restore data getters if needed
   std::span<const IndirectCommand> getIndirectCommands() const { return sceneDrawCommands; }
@@ -79,7 +85,8 @@ private:
     std::vector<uint32_t> lights;
   };
 
-  ProcessedInstances processInstances(const tinygltf::Model& model) const;
+  ProcessedInstances processInstances(
+    const tinygltf::Model& model, const SceneMultiplexing& multiplex = {}) const;
 
   struct Vertex
   {
