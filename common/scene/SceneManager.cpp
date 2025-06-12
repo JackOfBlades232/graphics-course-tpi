@@ -810,7 +810,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
 
       etna::Image img = etna::get_context().createImage(etna::Image::CreateInfo{
         .extent = {(uint32_t)loadedImg.width, (uint32_t)loadedImg.height, 1},
-        .name = loadedImg.name,
+        .name = loadedImg.uri,
         .format = format,
         .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
           vk::ImageUsageFlagBits::eTransferDst});
