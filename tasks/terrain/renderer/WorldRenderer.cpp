@@ -71,6 +71,12 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   });
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
+
+  // @TODO: dup handling?
+  debugTextures.emplace("main_view_depth", &mainViewDepth);
+  debugTextures.emplace("gbuffer_albedo", &gbufAlbedo);
+  debugTextures.emplace("gbuffer_material", &gbufMaterial);
+  debugTextures.emplace("gbuffer_normal", &gbufNormal);
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -110,6 +116,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     const auto& tex = sceneMgr->getTextures()[i];
     texBindings.emplace_back(
       etna::Binding{0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal), uint32_t(i)});
+
+    // @TODO: dup handling?
+    debugTextures.emplace(
+      std::string{"bindless_tex_"} + std::to_string(i) + "[" + std::string{tex.getName()} + "]",
+      &tex);
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
   {
@@ -205,6 +216,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   bboxRenderer = std::make_unique<BboxRenderer>(
     BboxRenderer::CreateInfo{swapchain_format, {resolution.x, resolution.y}});
+  quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{swapchain_format});
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -457,6 +469,22 @@ void WorldRenderer::renderWorld(
           constants->get(),
           sceneMgr->getInstances().size());
       }
+
+      if (currentDebugTex)
+      {
+        // @TODO: mip levels
+        const auto* tex = debugTextures[*currentDebugTex];
+        ETNA_ASSERT(tex);
+        quadRenderer->render(
+          cmd_buf,
+          target_image,
+          target_image_view,
+          {{0, 0},
+           {(resolution.y / 2) * tex->getExtent().width / tex->getExtent().height,
+            resolution.y / 2}},
+          *tex,
+          defaultSampler);
+      }
     }
   }
 }
@@ -619,6 +647,32 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
 
       constantsData.cullingMode = useSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
+
+      // @TODO: text
+      if (ImGui::BeginCombo(
+            "Debug texture view", currentDebugTex ? currentDebugTex->c_str() : "none"))
+      {
+        {
+          bool selected = !currentDebugTex.has_value();
+          if (ImGui::Selectable("none", selected))
+            currentDebugTex.reset();
+          if (selected)
+            ImGui::SetItemDefaultFocus();
+        }
+        auto it = debugTextures.begin();
+        for (size_t i = 0; i < debugTextures.size(); i++)
+        {
+          bool selected = currentDebugTex.has_value() && *currentDebugTex == it->first;
+          if (ImGui::Selectable(it->first.c_str(), selected))
+            currentDebugTex = it->first;
+          if (selected)
+            ImGui::SetItemDefaultFocus();
+
+          ++it;
+        }
+
+        ImGui::EndCombo();
+      }
 
       ImGui::End();
     }

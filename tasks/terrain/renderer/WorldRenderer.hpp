@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
 #include <etna/Buffer.hpp>
@@ -11,6 +13,7 @@
 
 #include <render_utils/PostfxRenderer.hpp>
 #include <render_utils/BboxRenderer.hpp>
+#include <render_utils/QuadRenderer.hpp>
 #include <scene/SceneManager.hpp>
 
 #include <wsi/Keyboard.hpp>
@@ -74,6 +77,9 @@ private:
 
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};
+  std::unique_ptr<QuadRenderer> quadRenderer{};
+  std::map<std::string, const etna::Image *> debugTextures{};
+  std::optional<std::string> currentDebugTex{};
   bool settingsGuiEnabled = false;
   bool drawBboxes = false;
 };
