@@ -9,8 +9,6 @@
 
 QuadRenderer::QuadRenderer(CreateInfo info)
 {
-  rect = info.rect;
-
   programId = etna::get_program_id("quad_renderer");
 
   if (programId == etna::ShaderProgramId::Invalid)
@@ -33,6 +31,7 @@ void QuadRenderer::render(
   vk::CommandBuffer cmd_buf,
   vk::Image target_image,
   vk::ImageView target_image_view,
+  vk::Rect2D rect,
   const etna::Image& tex_to_draw,
   const etna::Sampler& sampler)
 {
