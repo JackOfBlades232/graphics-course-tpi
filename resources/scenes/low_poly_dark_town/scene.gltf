@@ -3380,7 +3380,8 @@
   ],
   "extensionsUsed": [
     "KHR_materials_pbrSpecularGlossiness",
-    "KHR_lights_punctual"
+    "KHR_lights_punctual",
+    "JB_terrain"
   ],
   "images": [
     {
@@ -3403,6 +3404,12 @@
     },
     {
       "uri": "textures/Clock_tower_diffuse.png"
+    },
+    {
+      "uri": "textures/RuggedTerrainwithRockyPeaks_terrain/terrain_hmap.png"
+    },
+    {
+      "uri": "textures/RuggedTerrainwithRockyPeaks_terrain/terrain_diffuse.png"
     }
   ],
   "materials": [
@@ -3878,6 +3885,22 @@
           "type": "point"
         }
       ]
+    },
+    "JB_terrain" : {
+      "heightmap" : {
+        "index" : 7
+      },
+      "heightmapRange" : [
+        0.0,
+        1.0
+      ],
+      "diffuse" : {
+        "index" : 8
+      },
+      "errosion" : {
+        "index" : 8
+      },
+      "errosionSeed" : 57179
     }
   },
   "meshes": [
@@ -4907,7 +4930,10 @@
         94,
         99
       ],
-      "name": "Root"
+      "name": "Root",
+      "extensions": {
+        "JB_terrain" : {}
+      }
     },
     {
       "children": [
@@ -6302,6 +6328,12 @@
       "minFilter": 9987,
       "wrapS": 10497,
       "wrapT": 10497
+    },
+    {
+      "magFilter": 9728,
+      "minFilter": 9984,
+      "wrapS": 33071,
+      "wrapT": 33071
     }
   ],
   "scene": 0,
@@ -6341,6 +6373,14 @@
     {
       "sampler": 0,
       "source": 6
+    },
+    {
+      "sampler": 1,
+      "source": 7
+    },
+    {
+      "sampler": 1,
+      "source": 8
     }
   ]
 }

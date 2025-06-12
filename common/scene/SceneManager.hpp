@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <array>
+#include <string>
 
 #include <glm/glm.hpp>
 #include <tiny_gltf.h>
@@ -17,6 +19,7 @@
 #include <materials.h>
 #include <geometry.h>
 #include <draw.h>
+#include <terrain.h>
 
 struct RenderElement
 {
@@ -72,8 +75,21 @@ public:
   const etna::Buffer& getInstancesBuf() const { return instancesBuf; }
   const etna::Buffer& getMaterialParamsBuf() const { return materialParamsBuf; }
 
+  bool hasTerrain() const { return terrainData.has_value(); }
+  const TerrainSourceData& getTerrainData() const
+  {
+    ETNA_ASSERT(hasTerrain());
+    return *terrainData;
+  }
+
   // For imgui, kinda hacky
   UniformLights& lightsRW() { return *lightsData; }
+
+  static constexpr std::array<std::string_view, 4> SUPPORTED_EXTENSIONS = {
+    "KHR_lights_punctual",
+    "KHR_materials_pbrSpecularGlossiness",
+    "KHR_mesh_quantization",
+    "JB_terrain"};
 
 private:
   std::optional<tinygltf::Model> loadModel(std::filesystem::path path);
@@ -83,6 +99,7 @@ private:
     std::vector<glm::mat4> matrices;
     std::vector<uint32_t> meshes;
     std::vector<uint32_t> lights;
+    glm::mat4 terrainMatrix;
   };
 
   ProcessedInstances processInstances(
@@ -144,6 +161,8 @@ private:
   std::vector<CullableInstance> allInstances;
 
   std::unique_ptr<UniformLights> lightsData{};
+
+  std::optional<TerrainSourceData> terrainData{};
 
   // @TODO: do we support reentrability in selectScene?
   std::vector<etna::Image> textures{};

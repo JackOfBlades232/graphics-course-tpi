@@ -77,7 +77,23 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 {
   // @TODO: make recallable, i.e. implement cleanup
 
+  auto& ctx = etna::get_context();
+
   sceneMgr->selectScene(path, cfg.testMultiplexScene ? cfg.testMultiplexing : SceneMultiplexing{});
+
+  if (sceneMgr->hasTerrain())
+  {
+    spdlog::info("JB_terrain: terrain loaded!");
+
+    terrainSource.emplace(ctx.createBuffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getTerrainData()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "terrain"}));
+    memcpy(terrainSource->map(), &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
+  }
+  else
+    spdlog::info("JB_terrain: terrain not present");
 
   auto programInfo = etna::get_shader_program("static_mesh");
   materialParamsDset = etna::create_persistent_descriptor_set(
@@ -106,7 +122,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   bindlessSamplersDset = etna::create_persistent_descriptor_set(
     programInfo.getDescriptorLayoutId(3), std::move(smpBindings));
 
-  culledInstancesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+  culledInstancesBuf = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
