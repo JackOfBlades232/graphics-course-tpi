@@ -51,6 +51,9 @@ private:
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
 
+  // @TODO: multiplexed & tweakable
+  std::optional<etna::Buffer> terrainSource;
+
   etna::Buffer culledInstancesBuf;
 
   // @TODO: unify with one in scene manager
