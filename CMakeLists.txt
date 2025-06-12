@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
 
-set(CMAKE_C_COMPILER clang-18)
-set(CMAKE_CXX_COMPILER clang++-18)
-
 set(CMAKE_CXX_STANDARD 20)
 
 project(graphics_course CXX)
@@ -36,5 +33,4 @@ include("cmake/thirdparty.cmake")
 include("cmake/shaders.cmake")
 
 add_subdirectory(common)
-add_subdirectory(samples)
 add_subdirectory(tasks)
