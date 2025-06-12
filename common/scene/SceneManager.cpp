@@ -7,6 +7,8 @@
 #include <stack>
 #include <unordered_map>
 
+#include <JB_terrain/JbTerrain.hpp>
+
 #include <spdlog/spdlog.h>
 #include <fmt/std.h>
 #include <glm/ext/matrix_transform.hpp>
@@ -56,9 +58,55 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
   if (!warning.empty())
     spdlog::warn("glTF: {}", warning);
 
+  if constexpr (SUPPORTED_EXTENSIONS.size() > 0)
+  {
+    std::string supportedExtsMsg{SUPPORTED_EXTENSIONS[0]};
+    for (const auto& ext : std::span{SUPPORTED_EXTENSIONS}.subspan(1))
+    {
+      supportedExtsMsg += ", ";
+      supportedExtsMsg += std::string{ext};
+    }
+    spdlog::info("glTF: supported extensions : {}", supportedExtsMsg);
+  }
+  else
+    spdlog::info("glTF: no extensions supported");
+
   if (
     !model.extensions.empty() || !model.extensionsRequired.empty() || !model.extensionsUsed.empty())
-    spdlog::warn("glTF: No glTF extensions are currently implemented!");
+  {
+    for (const auto& [ext, _] : model.extensions)
+    {
+      if (
+        std::find(model.extensionsUsed.begin(), model.extensionsUsed.end(), ext) ==
+        model.extensionsUsed.end())
+      {
+        spdlog::error(
+          "glTF: inconsistent model, extension \"{}\" is used but not included in extensionsUsed",
+          ext);
+        return std::nullopt;
+      }
+    }
+    for (const auto& ext : model.extensionsRequired)
+    {
+
+      if (
+        std::find(SUPPORTED_EXTENSIONS.begin(), SUPPORTED_EXTENSIONS.end(), ext) ==
+        SUPPORTED_EXTENSIONS.end())
+      {
+        spdlog::error("glTF: required extension \"{}\" is not supported", ext);
+        return std::nullopt;
+      }
+    }
+    for (const auto& ext : model.extensionsUsed)
+    {
+      if (
+        std::find(SUPPORTED_EXTENSIONS.begin(), SUPPORTED_EXTENSIONS.end(), ext) ==
+        SUPPORTED_EXTENSIONS.end())
+      {
+        spdlog::warn("glTF: used extension \"{}\" is not supported and will not be displayed", ext);
+      }
+    }
+  }
 
   return model;
 }
@@ -124,18 +172,36 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
 
   ProcessedInstances result;
 
+  ssize_t terrainNodeId = -1;
+
   size_t totalRelevantNodes = 0;
   {
     for (size_t i = 0; i < model.nodes.size(); ++i)
     {
       if (model.nodes[i].mesh >= 0 || model.nodes[i].light >= 0)
         ++totalRelevantNodes;
+
+      if (model.nodes[i].extensions.contains("JB_terrain"))
+      {
+        ETNA_ASSERTF(
+          terrainData, "JB_terrain is not intialized, but a node is used for a terrain instance");
+        ETNA_ASSERTF(model.nodes[i].mesh < 0, "JB_Terrain: terrain node can't have a mesh");
+        ETNA_ASSERTF(terrainNodeId == -1, "JB_terrain: can't have more than one terrain node");
+        terrainNodeId = i;
+      }
     }
     size_t multiplexedNodes =
       totalRelevantNodes * multiplex.dims.x * multiplex.dims.y * multiplex.dims.z;
     result.matrices.resize(multiplexedNodes);
     result.meshes.resize(multiplexedNodes);
     result.lights.resize(multiplexedNodes);
+  }
+
+  if (terrainData)
+  {
+    result.terrainMatrix =
+      terrainNodeId == -1 ? glm::identity<glm::mat4>() : nodeTransforms[terrainNodeId];
+    // @TODO: validate terrain transform
   }
 
   size_t did = 0;
@@ -327,10 +393,9 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
   return result;
 }
 
-// @TODO: do lights differently once we have instancing : matrices are already
-// stored in a global array. Instead of extracting it from the array on load,
-// store an index to a matrix for the light in the light itself. However,
-// this requires instancing so that these matrices are even on the gpu in bulk.
+// @TODO: dup light matrices for separate manipulation and instead put them
+// in the common instance array to be able to pack more lights into the cbuf.
+// Implement random object manipulation while at it
 SceneManager::ProcessedLights SceneManager::processLights(
   const tinygltf::Model& model,
   std::span<glm::mat4> instances,
@@ -552,11 +617,11 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
 
   auto model = std::move(*maybeModel);
 
-  // @TODO: only load referenced
+  // @TODO: prune unreferenced in baker
 
   // @TODO: pull out
   //
-  // @TODO: Maybe bake all this shit into bindata? Instances, everything. How fast it would be!
+  // @TODO: Maybe bake all this shit into bindata? Instances, everything. How fast it would be?
   std::vector<size_t> samplerRemapping{};
   {
     samplers.emplace_back(etna::Sampler::CreateInfo{
@@ -564,7 +629,6 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
       .addressMode = vk::SamplerAddressMode::eRepeat,
       .name = "<default sampler>"});
 
-    // @TODO: only load referenced
     auto hashGltfSampler = [](const tinygltf::Sampler& smp) {
       auto hasher = std::hash<int>{};
       return hasher(smp.minFilter) ^ (hasher(smp.wrapS) << 1);
@@ -605,110 +669,108 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     }
   }
 
+  auto idPairForTexture = [&](int id) {
+    if (id < 0)
+      return TexSmpIdPair::INVALID;
+    const auto& gtex = model.textures[id];
+    const uint32_t samplerId = gtex.sampler < 0 ? 0 : samplerRemapping[gtex.sampler];
+    // @TODO graceful
+    ETNA_ASSERT(gtex.source >= 0 && gtex.source <= 65535);
+    ETNA_ASSERT(samplerId >= 0 && samplerId <= 65535);
+    return pack_tex_smp_id_pair(TexId{uint16_t(gtex.source)}, SmpId{uint16_t(samplerId)});
+  };
+
   std::vector<Material> materialParams{};
   std::vector<MaterialId> materialRemapping{};
   std::vector<vk::Format> requiredImageFormats{};
   requiredImageFormats.resize(model.images.size(), vk::Format::eUndefined);
   {
-    // @TODO: only load referenced
-    auto translateMaterial =
-      [&model, &samplerRemapping, &requiredImageFormats](const tinygltf::Material& gmat) {
-        Material mat{};
+    auto translateMaterial = [&](const tinygltf::Material& gmat) {
+      Material mat{};
 
-        auto idPairForTexture = [&](int id) {
-          if (id < 0)
-            return TexSmpIdPair::INVALID;
-          const auto& gtex = model.textures[id];
-          const uint32_t samplerId = gtex.sampler < 0 ? 0 : samplerRemapping[gtex.sampler];
-          // @TODO graceful
-          ETNA_ASSERT(gtex.source >= 0 && gtex.source <= 65535);
-          ETNA_ASSERT(samplerId >= 0 && samplerId <= 65535);
-          return pack_tex_smp_id_pair(TexId{uint16_t(gtex.source)}, SmpId{uint16_t(samplerId)});
-        };
+      auto setTexFmt = [&](int id, vk::Format fmt) {
+        if (id < 0)
+          return;
+        if (requiredImageFormats[id] == fmt)
+          return;
 
-        auto setTexFmt = [&](int id, vk::Format fmt) {
-          if (id < 0)
-            return;
-          if (requiredImageFormats[id] == fmt)
-            return;
+        // @TODO: graceful
+        ETNA_ASSERT(requiredImageFormats[id] == vk::Format::eUndefined);
+        requiredImageFormats[id] = fmt;
+      };
 
-          // @TODO: graceful
-          ETNA_ASSERT(requiredImageFormats[id] == vk::Format::eUndefined);
-          requiredImageFormats[id] = fmt;
-        };
+      // @TODO: texcoord params from material textures
 
-        // @TODO: texcoord params from material textures
+      mat.normalTexSmp = idPairForTexture(gmat.normalTexture.index);
+      setTexFmt(gmat.normalTexture.index, vk::Format::eR8G8B8A8Unorm);
 
-        mat.normalTexSmp = idPairForTexture(gmat.normalTexture.index);
-        setTexFmt(gmat.normalTexture.index, vk::Format::eR8G8B8A8Unorm);
+      if (auto it = gmat.extensions.find("KHR_materials_pbrSpecularGlossiness");
+          it != gmat.extensions.end())
+      {
+        mat.mat = MaterialType::DIFFUSE;
+        const auto& params = it->second;
 
-        if (auto it = gmat.extensions.find("KHR_materials_pbrSpecularGlossiness");
-            it != gmat.extensions.end())
+        if (params.Has("diffuseFactor"))
         {
-          mat.mat = MaterialType::DIFFUSE;
-          const auto& params = it->second;
-
-          if (params.Has("diffuseFactor"))
-          {
-            const auto& factor = params.Get("diffuseFactor");
-            // @TODO: graceful
-            ETNA_ASSERT(factor.IsNumber() || (factor.IsArray() && factor.ArrayLen() == 4));
-            if (factor.IsNumber())
-              mat.diffuseColorFactor = quantizefcol(float(factor.GetNumberAsDouble()));
-            else
-            {
-              ETNA_ASSERT(
-                factor.Get(0).IsNumber() && factor.Get(1).IsNumber() && factor.Get(2).IsNumber() &&
-                factor.Get(3).IsNumber());
-
-              mat.diffuseColorFactor = quantize4fcol(
-                {float(factor.Get(0).GetNumberAsDouble()),
-                 float(factor.Get(1).GetNumberAsDouble()),
-                 float(factor.Get(2).GetNumberAsDouble()),
-                 float(factor.Get(3).GetNumberAsDouble())});
-            }
-          }
+          const auto& factor = params.Get("diffuseFactor");
+          // @TODO: graceful
+          ETNA_ASSERT(factor.IsNumber() || (factor.IsArray() && factor.ArrayLen() == 4));
+          if (factor.IsNumber())
+            mat.diffuseColorFactor = quantizefcol(float(factor.GetNumberAsDouble()));
           else
-            mat.diffuseColorFactor = 0xFFFFFFFF;
-
-          if (params.Has("diffuseTexture"))
           {
-            const auto& tex = params.Get("diffuseTexture");
-            // @TODO: graceful
-            ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
-            const auto& ind = tex.Get("index");
-            ETNA_ASSERT(ind.IsInt());
-            const int id = ind.GetNumberAsInt();
-            mat.diffuseTexSmp = idPairForTexture(id);
-            setTexFmt(id, vk::Format::eR8G8B8A8Srgb);
-          }
-          else
-            mat.diffuseTexSmp = TexSmpIdPair::INVALID;
+            ETNA_ASSERT(
+              factor.Get(0).IsNumber() && factor.Get(1).IsNumber() && factor.Get(2).IsNumber() &&
+              factor.Get(3).IsNumber());
 
-          // @TODO: spec/gloss
+            mat.diffuseColorFactor = quantize4fcol(
+              {float(factor.Get(0).GetNumberAsDouble()),
+               float(factor.Get(1).GetNumberAsDouble()),
+               float(factor.Get(2).GetNumberAsDouble()),
+               float(factor.Get(3).GetNumberAsDouble())});
+          }
         }
         else
+          mat.diffuseColorFactor = 0xFFFFFFFF;
+
+        if (params.Has("diffuseTexture"))
         {
-          mat.mat = MaterialType::PBR;
-
-          mat.baseColorFactor = quantize4fcol(
-            {float(gmat.pbrMetallicRoughness.baseColorFactor[0]),
-             float(gmat.pbrMetallicRoughness.baseColorFactor[1]),
-             float(gmat.pbrMetallicRoughness.baseColorFactor[2]),
-             float(gmat.pbrMetallicRoughness.baseColorFactor[3])});
-          mat.baseColorTexSmp = idPairForTexture(gmat.pbrMetallicRoughness.baseColorTexture.index);
-          mat.metalnessFactor = float(gmat.pbrMetallicRoughness.metallicFactor);
-          mat.roughnessFactor = float(gmat.pbrMetallicRoughness.roughnessFactor);
-          mat.metalnessRoughnessTexSmp =
-            idPairForTexture(gmat.pbrMetallicRoughness.metallicRoughnessTexture.index);
-
-          setTexFmt(gmat.pbrMetallicRoughness.baseColorTexture.index, vk::Format::eR8G8B8A8Srgb);
-          setTexFmt(
-            gmat.pbrMetallicRoughness.metallicRoughnessTexture.index, vk::Format::eR8G8B8A8Unorm);
+          const auto& tex = params.Get("diffuseTexture");
+          // @TODO: graceful
+          ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
+          const auto& ind = tex.Get("index");
+          ETNA_ASSERT(ind.IsInt());
+          const int id = ind.GetNumberAsInt();
+          mat.diffuseTexSmp = idPairForTexture(id);
+          setTexFmt(id, vk::Format::eR8G8B8A8Srgb);
         }
+        else
+          mat.diffuseTexSmp = TexSmpIdPair::INVALID;
 
-        return mat;
-      };
+        // @TODO: spec/gloss
+      }
+      else
+      {
+        mat.mat = MaterialType::PBR;
+
+        mat.baseColorFactor = quantize4fcol(
+          {float(gmat.pbrMetallicRoughness.baseColorFactor[0]),
+           float(gmat.pbrMetallicRoughness.baseColorFactor[1]),
+           float(gmat.pbrMetallicRoughness.baseColorFactor[2]),
+           float(gmat.pbrMetallicRoughness.baseColorFactor[3])});
+        mat.baseColorTexSmp = idPairForTexture(gmat.pbrMetallicRoughness.baseColorTexture.index);
+        mat.metalnessFactor = float(gmat.pbrMetallicRoughness.metallicFactor);
+        mat.roughnessFactor = float(gmat.pbrMetallicRoughness.roughnessFactor);
+        mat.metalnessRoughnessTexSmp =
+          idPairForTexture(gmat.pbrMetallicRoughness.metallicRoughnessTexture.index);
+
+        setTexFmt(gmat.pbrMetallicRoughness.baseColorTexture.index, vk::Format::eR8G8B8A8Srgb);
+        setTexFmt(
+          gmat.pbrMetallicRoughness.metallicRoughnessTexture.index, vk::Format::eR8G8B8A8Unorm);
+      }
+
+      return mat;
+    };
 
     // @TODO: more efficient dedup
     materialRemapping.reserve(model.materials.size());
@@ -754,6 +816,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
           vk::ImageUsageFlagBits::eTransferDst});
 
       // @TODO: gen mips
+      // @TODO: batch uploads, or make a streaming thread, this hangs hard on start
       transferHelper.uploadImage(
         *oneShotCommands,
         img,
@@ -768,9 +831,24 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     }
   }
 
-  auto [instMats, instMeshes, instLights] = processInstances(model, multiplex);
+  // @TODO: make terrain also use a material?
+  if (auto terrainExt = jb_terrain_parse_desc(model))
+  {
+    auto& data = terrainData.emplace();
+    data.heightmapTexSmp = idPairForTexture(terrainExt->heightmap);
+    data.diffuseTexSmp = idPairForTexture(terrainExt->diffuse);
+    data.errosionTexSmp = idPairForTexture(terrainExt->errosion);
+
+    data.errosionNoiseSeed = terrainExt->errosionSeed;
+    data.heightmapRange = {
+      float(terrainExt->heightmapRange[0]), float(terrainExt->heightmapRange[1])};
+  }
+
+  auto [instMats, instMeshes, instLights, terrainMat] = processInstances(model, multiplex);
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
+  if (terrainData)
+    terrainData->transform = terrainMat;
 
   lightsData = processLights(model, instanceMatrices, instLights);
 
