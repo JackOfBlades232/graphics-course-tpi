@@ -6,9 +6,6 @@
 
 struct TerrainSourceData
 {
-  shader_mat4 transform;
-  shader_mat4 inverseTransform;
-
   TexSmpIdPair heightmapTexSmp;
   TexSmpIdPair diffuseTexSmp;
   TexSmpIdPair errosionTexSmp;
@@ -27,5 +24,6 @@ struct TerrainSourceData
 // @TODO: tweakable
 #define CLIPMAP_RESOLUTION 1024
 #define CLIPMAP_EXTENT_STEP 10.f
+#define CLIPMAP_UPDATE_MIN_DPOS 1.f
 
 #endif // TERRAIN_H_INCLUDED

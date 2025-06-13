@@ -91,7 +91,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   {
     spdlog::info("JB_terrain: terrain loaded!");
 
-    terrain.emplace();
+    terrain.emplace(TerrainRenderingData{});
 
     memcpy(&terrain->sourceData, &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
     terrain->source = ctx.createBuffer(etna::Buffer::CreateInfo{
@@ -137,6 +137,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
     debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
     debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
+
+    terrain->lastToroidalUpdatePlayerWorldPos = {FLT_MIN, FLT_MIN, FLT_MIN};
   }
   else
     spdlog::info("JB_terrain: terrain not present");
@@ -173,13 +175,13 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     smpBindings.emplace_back(etna::Binding{0, smp.genBinding(), uint32_t(i)});
   }
 
-  bindlessTexturesDsetFrag = etna::create_persistent_descriptor_set(
-    fragProgInfo.getDescriptorLayoutId(2), texBindings);
+  bindlessTexturesDsetFrag =
+    etna::create_persistent_descriptor_set(fragProgInfo.getDescriptorLayoutId(2), texBindings);
   bindlessTexturesDsetComp = etna::create_persistent_descriptor_set(
     compProgInfo.getDescriptorLayoutId(2), std::move(texBindings));
 
-  bindlessSamplersDsetFrag = etna::create_persistent_descriptor_set(
-    fragProgInfo.getDescriptorLayoutId(3), smpBindings);
+  bindlessSamplersDsetFrag =
+    etna::create_persistent_descriptor_set(fragProgInfo.getDescriptorLayoutId(3), smpBindings);
   bindlessSamplersDsetComp = etna::create_persistent_descriptor_set(
     compProgInfo.getDescriptorLayoutId(3), std::move(smpBindings));
 
@@ -307,6 +309,17 @@ void WorldRenderer::update(const FramePacket& packet)
 
   {
     constantsData.playerWorldPos = packet.mainCam.position;
+    if (terrain)
+    {
+      constantsData.toroidalOffset =
+        constantsData.playerWorldPos - terrain->lastToroidalUpdatePlayerWorldPos;
+      const float xzDisp =
+        glm::length(glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z});
+      if (xzDisp >= CLIPMAP_UPDATE_MIN_DPOS)
+      {
+        terrain->needToroidalUpdate = true;
+      }
+    }
   }
 }
 
@@ -332,13 +345,14 @@ void WorldRenderer::renderWorld(
 
   // @TODO pack culling & draw back into a renderScene method (will need for shadow maps)
 
-  // draw final scene to screen
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
 
-    // @TODO: not every frame
-    if (terrain)
+    if (terrain && terrain->needToroidalUpdate)
     {
+      terrain->needToroidalUpdate = false;
+      terrain->lastToroidalUpdatePlayerWorldPos = constantsData.playerWorldPos;
+
       ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
 
       auto programInfo = etna::get_shader_program("clipmap_gen");
