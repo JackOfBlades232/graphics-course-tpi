@@ -33,14 +33,23 @@ void QuadRenderer::render(
   vk::ImageView target_image_view,
   vk::Rect2D rect,
   const etna::Image& tex_to_draw,
-  const etna::Sampler& sampler)
+  const etna::Sampler& sampler,
+  std::optional<uint32_t> layer,
+  std::optional<uint32_t> mip_level)
 {
   auto programInfo = etna::get_shader_program(programId);
   auto set = etna::create_descriptor_set(
     programInfo.getDescriptorLayoutId(0),
     cmd_buf,
     {etna::Binding{
-      0, tex_to_draw.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}});
+      0,
+      tex_to_draw.genBinding(
+        sampler.get(),
+        vk::ImageLayout::eShaderReadOnlyOptimal,
+        {.baseMip = mip_level ? *mip_level : 0,
+         .levelCount = mip_level ? 1 : vk::RemainingMipLevels,
+         .baseLayer = layer ? *layer : 0,
+         .layerCount = layer ? 1 : vk::RemainingArrayLayers})}});
 
   etna::RenderTargetState renderTargets(
     cmd_buf,

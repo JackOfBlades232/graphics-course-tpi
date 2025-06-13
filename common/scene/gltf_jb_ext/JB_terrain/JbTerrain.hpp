@@ -1,10 +1,13 @@
 #pragma once
 
 #include <tiny_gltf.h>
+#include <glm/glm.hpp>
 
 #include <vector>
 #include <optional>
 
+// @TODO: proper asset
+// @TODO: some other way to get color -- diffuse is dumb
 
 struct JbTerrainExtData
 {
@@ -12,7 +15,7 @@ struct JbTerrainExtData
   int diffuse{-1}; 
   int errosion{-1}; 
 
-  std::vector<double> heightmapRange{0.0, 1.0};
+  glm::vec3 rangeMin{-1.f, 0.f, -1.f}, rangeMax{1.f, 1.f, 1.f};
   int errosionSeed{0};
 
   // @TODO: more  

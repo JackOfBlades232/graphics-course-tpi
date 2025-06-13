@@ -36,6 +36,7 @@ using shader_bool = glm::uint;
 #define shader_int int
 #define shader_uint uint
 #define shader_uvec2 uvec2
+#define shader_uvec3 uvec3
 
 #define shader_float float
 #define shader_vec2 vec2

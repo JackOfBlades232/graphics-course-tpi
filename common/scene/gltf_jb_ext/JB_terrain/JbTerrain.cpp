@@ -61,17 +61,25 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
     data.errosionSeed = eseed.GetNumberAsInt();
   }
 
-  if (desc.Has("heightmapRange"))
+  if (desc.Has("range"))
   {
-    const auto& hrange = desc.Get("heightmapRange");
-#define HMAP_RNG_FORMAT_ERR "invalid format: \"heightmapRange\" must be an array of two doubles"
-    VERIFY(hrange.IsArray() && hrange.ArrayLen() == 2, HMAP_RNG_FORMAT_ERR);
+    const auto& hrange = desc.Get("range");
+#define HMAP_RNG_FORMAT_ERR "invalid format: \"range\" must be an array of 6 doubles"
+    VERIFY(hrange.IsArray() && hrange.ArrayLen() == 6, HMAP_RNG_FORMAT_ERR);
 
-    for (int i = 0; i < 2; ++i)
+    float* dst[] = {
+      &data.rangeMin.x,
+      &data.rangeMax.x,
+      &data.rangeMin.y,
+      &data.rangeMax.y,
+      &data.rangeMin.z,
+      &data.rangeMax.z};
+
+    for (int i = 0; i < 6; ++i)
     {
       const auto& elem = hrange.Get(i);
       VERIFY(elem.IsNumber(), HMAP_RNG_FORMAT_ERR);
-      data.heightmapRange[i] = elem.GetNumberAsDouble();
+      *dst[i] = float(elem.GetNumberAsDouble());
     }
 #undef HMAP_RNG_FORMAT_ERR
   }

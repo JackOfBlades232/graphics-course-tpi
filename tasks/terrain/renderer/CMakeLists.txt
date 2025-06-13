@@ -15,4 +15,5 @@ target_add_shaders(renderer
   shaders/static_mesh.vert
   shaders/culling.comp
   shaders/reset_indirect_commands.comp
+  shaders/clipmap_gen.comp
 )

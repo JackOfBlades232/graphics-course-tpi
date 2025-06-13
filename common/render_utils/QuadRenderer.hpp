@@ -19,13 +19,16 @@ public:
 
   explicit QuadRenderer(CreateInfo info);
 
+  // @TODO: tonemapping option for non-regular textures
   void render(
     vk::CommandBuffer cmd_buff,
     vk::Image target_image,
     vk::ImageView target_image_view,
     vk::Rect2D rect,
     const etna::Image& tex_to_draw,
-    const etna::Sampler& sampler);
+    const etna::Sampler& sampler,
+    std::optional<uint32_t> layer = std::nullopt,
+    std::optional<uint32_t> mip_level = std::nullopt);
 
 private:
   etna::GraphicsPipeline pipeline;

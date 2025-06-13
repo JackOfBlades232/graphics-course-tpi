@@ -840,15 +840,19 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     data.errosionTexSmp = idPairForTexture(terrainExt->errosion);
 
     data.errosionNoiseSeed = terrainExt->errosionSeed;
-    data.heightmapRange = {
-      float(terrainExt->heightmapRange[0]), float(terrainExt->heightmapRange[1])};
+    data.rangeMin = terrainExt->rangeMin;
+    data.rangeMax = terrainExt->rangeMax;
   }
 
   auto [instMats, instMeshes, instLights, terrainMat] = processInstances(model, multiplex);
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
+
   if (terrainData)
+  {
     terrainData->transform = terrainMat;
+    terrainData->inverseTransform = glm::inverse(terrainMat);
+  }
 
   lightsData = processLights(model, instanceMatrices, instLights);
 

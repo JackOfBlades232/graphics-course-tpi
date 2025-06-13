@@ -17,13 +17,6 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
-layout(binding = 0, set = 1) readonly buffer material_params_t
-{
-  Material materialParams[];
-};
-layout(binding = 0, set = 2) uniform texture2D bindlessTextures[];
-layout(binding = 0, set = 3) uniform sampler bindlessSamplers[];
-
 layout(location = 0) in VS_OUT
 {
   vec3 wPos;
@@ -33,18 +26,7 @@ layout(location = 0) in VS_OUT
   flat uint matId;
 } surf;
 
-vec4 sample_bindless_tex(TexSmpIdPair ids, vec2 uv)
-{
-  if (ids == NO_TEXTURE_ID)
-    return vec4(1.0f);
-
-  const uvec2 texSmpIds = unpack_tex_smp_id_pair(ids);
-  return texture(
-    sampler2D(
-      bindlessTextures[nonuniformEXT(texSmpIds.x)],
-      bindlessSamplers[nonuniformEXT(texSmpIds.y)]),
-    uv);
-}
+#include "bindless.frag.inc"
 
 void main(void)
 {
