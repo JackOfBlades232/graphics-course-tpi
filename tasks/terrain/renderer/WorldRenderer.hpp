@@ -57,13 +57,16 @@ private:
 
   struct TerrainRenderingData
   {
-    etna::Image geometryClipmap;
-    etna::Image albedoClipmap;
-    std::vector<etna::Binding> geometryLevelsBindings;
-    std::vector<etna::Binding> albedoLevelsBindings;
+    etna::Image geometryClipmap{};
+    etna::Image albedoClipmap{};
+    std::vector<etna::Binding> geometryLevelsBindings{};
+    std::vector<etna::Binding> albedoLevelsBindings{};
+    etna::Buffer source{};
 
-    etna::Buffer source;
-    TerrainSourceData sourceData;
+    TerrainSourceData sourceData{};
+
+    glm::vec3 lastToroidalUpdatePlayerWorldPos = {};
+    bool needToroidalUpdate = false;
   };
   std::optional<TerrainRenderingData> terrain{};
 

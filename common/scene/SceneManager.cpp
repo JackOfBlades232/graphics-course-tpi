@@ -172,36 +172,18 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
 
   ProcessedInstances result;
 
-  ssize_t terrainNodeId = -1;
-
   size_t totalRelevantNodes = 0;
   {
     for (size_t i = 0; i < model.nodes.size(); ++i)
     {
       if (model.nodes[i].mesh >= 0 || model.nodes[i].light >= 0)
         ++totalRelevantNodes;
-
-      if (model.nodes[i].extensions.contains("JB_terrain"))
-      {
-        ETNA_ASSERTF(
-          terrainData, "JB_terrain is not intialized, but a node is used for a terrain instance");
-        ETNA_ASSERTF(model.nodes[i].mesh < 0, "JB_Terrain: terrain node can't have a mesh");
-        ETNA_ASSERTF(terrainNodeId == -1, "JB_terrain: can't have more than one terrain node");
-        terrainNodeId = i;
-      }
     }
     size_t multiplexedNodes =
       totalRelevantNodes * multiplex.dims.x * multiplex.dims.y * multiplex.dims.z;
     result.matrices.resize(multiplexedNodes);
     result.meshes.resize(multiplexedNodes);
     result.lights.resize(multiplexedNodes);
-  }
-
-  if (terrainData)
-  {
-    result.terrainMatrix =
-      terrainNodeId == -1 ? glm::identity<glm::mat4>() : nodeTransforms[terrainNodeId];
-    // @TODO: validate terrain transform
   }
 
   size_t did = 0;
@@ -844,15 +826,9 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     data.rangeMax = terrainExt->rangeMax;
   }
 
-  auto [instMats, instMeshes, instLights, terrainMat] = processInstances(model, multiplex);
+  auto [instMats, instMeshes, instLights] = processInstances(model, multiplex);
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
-
-  if (terrainData)
-  {
-    terrainData->transform = terrainMat;
-    terrainData->inverseTransform = glm::inverse(terrainMat);
-  }
 
   lightsData = processLights(model, instanceMatrices, instLights);
 
