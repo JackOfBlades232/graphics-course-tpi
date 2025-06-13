@@ -13,6 +13,9 @@ struct Constants
   ViewFrustum viewFrustum;
   shader_vec3 playerWorldPos;
   CullingMode cullingMode;
+
+  shader_vec3 toroidalOffset;
+  shader_uint pad1_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

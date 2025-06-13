@@ -4931,10 +4931,7 @@
         94,
         99
       ],
-      "name": "Root",
-      "extensions": {
-        "JB_terrain" : {}
-      }
+      "name": "Root"
     },
     {
       "children": [

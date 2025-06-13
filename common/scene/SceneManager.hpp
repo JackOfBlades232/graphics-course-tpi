@@ -99,7 +99,6 @@ private:
     std::vector<glm::mat4> matrices;
     std::vector<uint32_t> meshes;
     std::vector<uint32_t> lights;
-    glm::mat4 terrainMatrix;
   };
 
   ProcessedInstances processInstances(

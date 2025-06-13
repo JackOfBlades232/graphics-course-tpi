@@ -55,10 +55,8 @@ void main(void)
 
   const vec3 terrainExtent = source.rangeMax - source.rangeMin;
 
-  const vec3 playerRelPos =
-    (source.inverseTransform * vec4(constants.playerWorldPos, 1.f)).xyz;
   const vec2 playerOverTerrainUv =
-    world_xz_to_terrain_uv(playerRelPos.xz, terrainExtent);
+    world_xz_to_terrain_uv(constants.playerWorldPos.xz, terrainExtent);
 
   const vec2 clipmapLevelExtent = vec2(
     float(1 << level) * CLIPMAP_EXTENT_STEP, float(1 << level) * CLIPMAP_EXTENT_STEP);
