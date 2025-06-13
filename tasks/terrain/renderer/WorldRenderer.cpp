@@ -91,19 +91,64 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   {
     spdlog::info("JB_terrain: terrain loaded!");
 
-    terrainSource.emplace(ctx.createBuffer(etna::Buffer::CreateInfo{
+    terrain.emplace();
+
+    memcpy(&terrain->sourceData, &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
+    terrain->source = ctx.createBuffer(etna::Buffer::CreateInfo{
       .size = sizeof(sceneMgr->getTerrainData()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "terrain"}));
-    memcpy(terrainSource->map(), &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
+      .name = "terrain"});
+
+    memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
+
+    terrain->geometryClipmap = ctx.createImage(etna::Image::CreateInfo{
+      .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+      .name = "geometry_clipmap",
+      .format = vk::Format::eR32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+      .layers = CLIPMAP_LEVEL_COUNT});
+    terrain->albedoClipmap = ctx.createImage(etna::Image::CreateInfo{
+      // @TODO: settable
+      .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+      .name = "albedo_clipmap",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+      .layers = CLIPMAP_LEVEL_COUNT});
+
+    terrain->geometryLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
+    terrain->albedoLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
+    for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
+    {
+      terrain->geometryLevelsBindings.emplace_back(
+        0,
+        terrain->geometryClipmap.genBinding(
+          {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
+    }
+    for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
+    {
+      terrain->albedoLevelsBindings.emplace_back(
+        1,
+        terrain->albedoClipmap.genBinding(
+          {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
+    }
+
+    debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
+    debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
   }
   else
     spdlog::info("JB_terrain: terrain not present");
 
-  auto programInfo = etna::get_shader_program("static_mesh");
-  materialParamsDset = etna::create_persistent_descriptor_set(
-    programInfo.getDescriptorLayoutId(1),
+  auto fragProgInfo = etna::get_shader_program("static_mesh");
+  auto compProgInfo = etna::get_shader_program("clipmap_gen");
+
+  materialParamsDsetFrag = etna::create_persistent_descriptor_set(
+    fragProgInfo.getDescriptorLayoutId(1),
+    {etna::Binding{0, sceneMgr->getMaterialParamsBuf().genBinding()}});
+  materialParamsDsetComp = etna::create_persistent_descriptor_set(
+    compProgInfo.getDescriptorLayoutId(1),
     {etna::Binding{0, sceneMgr->getMaterialParamsBuf().genBinding()}});
 
   // @TODO: pull out
@@ -128,10 +173,16 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     smpBindings.emplace_back(etna::Binding{0, smp.genBinding(), uint32_t(i)});
   }
 
-  bindlessTexturesDset = etna::create_persistent_descriptor_set(
-    programInfo.getDescriptorLayoutId(2), std::move(texBindings));
-  bindlessSamplersDset = etna::create_persistent_descriptor_set(
-    programInfo.getDescriptorLayoutId(3), std::move(smpBindings));
+  bindlessTexturesDsetFrag = etna::create_persistent_descriptor_set(
+    fragProgInfo.getDescriptorLayoutId(2), texBindings);
+  bindlessTexturesDsetComp = etna::create_persistent_descriptor_set(
+    compProgInfo.getDescriptorLayoutId(2), std::move(texBindings));
+
+  bindlessSamplersDsetFrag = etna::create_persistent_descriptor_set(
+    fragProgInfo.getDescriptorLayoutId(3), smpBindings);
+  bindlessSamplersDsetComp = etna::create_persistent_descriptor_set(
+    compProgInfo.getDescriptorLayoutId(3), std::move(smpBindings));
+
 
   culledInstancesBuf = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance),
@@ -149,6 +200,7 @@ void WorldRenderer::loadShaders()
   etna::create_program("culling", {RENDERER_SHADERS_ROOT "culling.comp.spv"});
   etna::create_program(
     "reset_indirect_commands", {RENDERER_SHADERS_ROOT "reset_indirect_commands.comp.spv"});
+  etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -208,6 +260,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   resetIndirectCommandsPipeline =
     pipelineManager.createComputePipeline("reset_indirect_commands", {});
 
+  generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
+
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
     RENDERER_SHADERS_ROOT "gbuffer_resolve.frag.spv",
@@ -250,6 +304,10 @@ void WorldRenderer::update(const FramePacket& packet)
     dt = prevTime >= 0.f ? (packet.currentTime - prevTime) : 0.f;
     prevTime = packet.currentTime;
   }
+
+  {
+    constantsData.playerWorldPos = packet.mainCam.position;
+  }
 }
 
 void WorldRenderer::renderWorld(
@@ -260,9 +318,12 @@ void WorldRenderer::renderWorld(
   // @TODO: unhack
   if (initialTransition)
   {
-    materialParamsDset.processBarriers(cmd_buf);
-    bindlessTexturesDset.processBarriers(cmd_buf);
-    bindlessSamplersDset.processBarriers(cmd_buf);
+    materialParamsDsetFrag.processBarriers(cmd_buf);
+    bindlessTexturesDsetFrag.processBarriers(cmd_buf);
+    bindlessSamplersDsetFrag.processBarriers(cmd_buf);
+    materialParamsDsetComp.processBarriers(cmd_buf);
+    bindlessTexturesDsetComp.processBarriers(cmd_buf);
+    bindlessSamplersDsetComp.processBarriers(cmd_buf);
     initialTransition = false;
   }
 
@@ -274,6 +335,43 @@ void WorldRenderer::renderWorld(
   // draw final scene to screen
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
+
+    // @TODO: not every frame
+    if (terrain)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
+
+      auto programInfo = etna::get_shader_program("clipmap_gen");
+      std::vector<etna::Binding> bindings{};
+      bindings.reserve(
+        terrain->geometryLevelsBindings.size() + terrain->albedoLevelsBindings.size() + 2);
+      for (const auto& b : terrain->geometryLevelsBindings)
+        bindings.push_back(b);
+      for (const auto& b : terrain->albedoLevelsBindings)
+        bindings.push_back(b);
+      bindings.emplace_back(7, terrain->source.genBinding());
+      bindings.emplace_back(8, constants->get().genBinding());
+
+      auto set =
+        etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eCompute,
+        generateClipmapPipeline.getVkPipelineLayout(),
+        0,
+        {set.getVkSet(),
+         materialParamsDsetComp.getVkSet(),
+         bindlessTexturesDsetComp.getVkSet(),
+         bindlessSamplersDsetComp.getVkSet()},
+        {});
+
+      cmd_buf.bindPipeline(
+        vk::PipelineBindPoint::eCompute, generateClipmapPipeline.getVkPipeline());
+
+      cmd_buf.dispatch(
+        get_linear_wg_count(CLIPMAP_RESOLUTION * CLIPMAP_RESOLUTION, BASE_WORK_GROUP_SIZE),
+        CLIPMAP_LEVEL_COUNT,
+        2); // 0 does geom clipmap, 1 does color
+    }
 
     std::array resetAndCulledBarriers = {vk::BufferMemoryBarrier2{
       .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
@@ -402,9 +500,9 @@ void WorldRenderer::renderWorld(
         staticMeshPipeline.getVkPipelineLayout(),
         0,
         {set.getVkSet(),
-         materialParamsDset.getVkSet(),
-         bindlessTexturesDset.getVkSet(),
-         bindlessSamplersDset.getVkSet()},
+         materialParamsDsetFrag.getVkSet(),
+         bindlessTexturesDsetFrag.getVkSet(),
+         bindlessSamplersDsetFrag.getVkSet()},
         {});
 
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
@@ -483,7 +581,9 @@ void WorldRenderer::renderWorld(
            {(resolution.y / 2) * tex->getExtent().width / tex->getExtent().height,
             resolution.y / 2}},
           *tex,
-          defaultSampler);
+          defaultSampler,
+          currentDebugTexLayer,
+          currentDebugTexMip);
       }
     }
   }
@@ -673,6 +773,9 @@ void WorldRenderer::drawGui()
 
         ImGui::EndCombo();
       }
+
+      ImGui::InputInt("Debug texture mip level", (int*)&currentDebugTexMip);
+      ImGui::InputInt("Debug texture layer", (int*)&currentDebugTexLayer);
 
       ImGui::End();
     }

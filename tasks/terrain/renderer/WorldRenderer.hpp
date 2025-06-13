@@ -47,6 +47,7 @@ private:
   etna::GraphicsPipeline staticMeshPipeline{};
   etna::ComputePipeline cullingPipeline{};
   etna::ComputePipeline resetIndirectCommandsPipeline{};
+  etna::ComputePipeline generateClipmapPipeline{};
 
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image mainViewDepth;
@@ -54,15 +55,28 @@ private:
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
 
-  // @TODO: multiplexed & tweakable
-  std::optional<etna::Buffer> terrainSource;
+  struct TerrainRenderingData
+  {
+    etna::Image geometryClipmap;
+    etna::Image albedoClipmap;
+    std::vector<etna::Binding> geometryLevelsBindings;
+    std::vector<etna::Binding> albedoLevelsBindings;
 
+    etna::Buffer source;
+    TerrainSourceData sourceData;
+  };
+  std::optional<TerrainRenderingData> terrain{};
+
+
+  // @TODO: tweakable
   etna::Buffer culledInstancesBuf;
 
   // @TODO: unify with one in scene manager
   etna::Sampler defaultSampler;
 
-  etna::PersistentDescriptorSet materialParamsDset, bindlessTexturesDset, bindlessSamplersDset;
+  etna::PersistentDescriptorSet
+    materialParamsDsetFrag, bindlessTexturesDsetFrag, bindlessSamplersDsetFrag,
+    materialParamsDsetComp, bindlessTexturesDsetComp, bindlessSamplersDsetComp;
   bool initialTransition = true; // @HACK
 
   const etna::GpuWorkCount& wc;
@@ -78,8 +92,10 @@ private:
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};
   std::unique_ptr<QuadRenderer> quadRenderer{};
-  std::map<std::string, const etna::Image *> debugTextures{};
+  std::map<std::string, const etna::Image*> debugTextures{};
   std::optional<std::string> currentDebugTex{};
+  uint32_t currentDebugTexMip = 0;
+  uint32_t currentDebugTexLayer = 0;
   bool settingsGuiEnabled = false;
   bool drawBboxes = false;
 };

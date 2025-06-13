@@ -3890,9 +3890,10 @@
       "heightmap" : {
         "index" : 7
       },
-      "heightmapRange" : [
-        0.0,
-        1.0
+      "range" : [
+        -1300.0, 1300.0,
+        10.0, 30.0,
+        -1300.0, 1300.0
       ],
       "diffuse" : {
         "index" : 8

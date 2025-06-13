@@ -11,11 +11,8 @@ struct Constants
   shader_mat4 mProjView;
   shader_mat4 mView;
   ViewFrustum viewFrustum;
+  shader_vec3 playerWorldPos;
   CullingMode cullingMode;
-
-  shader_uint pad1_;
-  shader_uint pad2_;
-  shader_uint pad3_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

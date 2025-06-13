@@ -1,0 +1,110 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "draw.h"
+#include "terrain.h"
+#include "materials.h"
+#include "constants.h"
+
+
+layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
+
+layout(binding = 0, set = 0, r32f) uniform writeonly image2D geom[CLIPMAP_LEVEL_COUNT];
+layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D albedo[CLIPMAP_LEVEL_COUNT];
+
+
+layout(binding = 7, set = 0) uniform terrain_source_t
+{
+  TerrainSourceData source;
+};
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
+#include "bindless.frag.inc"
+
+vec2 world_xz_to_terrain_uv(vec2 xz, vec3 ext)
+{
+  return (xz - source.rangeMin.xz) / ext.xz;
+}
+
+void get_coord_and_uv(
+  ivec2 dims, uint pixid, vec2 uv_base, vec2 uv_size,
+  out ivec2 coord, out vec2 uv)
+{
+  if (pixid >= dims.x * dims.y)
+    return;
+  
+  // @TODO: toroidal
+  coord = ivec2(pixid % dims.x, pixid / dims.x);
+  const vec2 localUv = vec2(
+    float(coord.x) / float(dims.x),
+    float(coord.y) / float(dims.y));
+
+  uv = uv_base + uv_size * localUv;
+}
+
+void main(void)
+{
+  const uint pix = gl_GlobalInvocationID.x;
+  const uint level = gl_GlobalInvocationID.y;
+  const bool isColor = gl_GlobalInvocationID.z > 0;
+
+  const vec3 terrainExtent = source.rangeMax - source.rangeMin;
+
+  const vec3 playerRelPos =
+    (source.inverseTransform * vec4(constants.playerWorldPos, 1.f)).xyz;
+  const vec2 playerOverTerrainUv =
+    world_xz_to_terrain_uv(playerRelPos.xz, terrainExtent);
+
+  const vec2 clipmapLevelExtent = vec2(
+    float(1 << level) * CLIPMAP_EXTENT_STEP, float(1 << level) * CLIPMAP_EXTENT_STEP);
+  const vec2 clipmapLevelUvExtent = clipmapLevelExtent / terrainExtent.xz;
+
+  const vec2 clipmapLevelUvBase = playerOverTerrainUv - clipmapLevelUvExtent;
+  const vec2 clipmapLevelUvSize = clipmapLevelUvExtent * 2.f;
+
+  if (isColor)
+  {
+    ivec2 coord;
+    vec2 uv;
+    get_coord_and_uv(
+      imageSize(albedo[level]), pix,
+      clipmapLevelUvBase, clipmapLevelUvSize,
+      coord, uv);
+
+    vec4 color = vec4(1.f, 0.f, 1.f, 1.f);
+    if (source.diffuseTexSmp != NO_TEXTURE_ID)
+      color = sample_bindless_tex_lod(source.diffuseTexSmp, uv, 0.f);
+
+    // @TODO: splatting instead
+    imageStore(albedo[level], coord, color);
+  }
+  else
+  {
+    ivec2 coord;
+    vec2 uv;
+    get_coord_and_uv(
+      imageSize(geom[level]), pix,
+      clipmapLevelUvBase, clipmapLevelUvSize,
+      coord, uv);
+
+    float relHeight = 0.f;
+    if (source.heightmapTexSmp != NO_TEXTURE_ID)
+    {
+      // @TODO: bicubic interpolation by hand
+      relHeight = sample_bindless_tex_lod(source.heightmapTexSmp, uv, 0.f).x;
+    }
+
+    if (source.errosionTexSmp != NO_TEXTURE_ID)
+    {
+      // @TODO: perturb on noise
+    }
+
+    const float absHeight = source.rangeMin.y + terrainExtent.y * relHeight;
+    imageStore(geom[level], coord, vec4(absHeight));
+  }
+}
