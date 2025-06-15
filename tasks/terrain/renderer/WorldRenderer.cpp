@@ -788,8 +788,18 @@ void WorldRenderer::drawGui()
         ImGui::EndCombo();
       }
 
-      ImGui::InputInt("Debug texture mip level", (int*)&currentDebugTexMip);
-      ImGui::InputInt("Debug texture layer", (int*)&currentDebugTexLayer);
+      if (currentDebugTex)
+      {
+        const auto* tex = debugTextures.at(*currentDebugTex);
+        ETNA_ASSERT(tex);
+        ImGui::InputInt("Debug texture mip level", (int*)&currentDebugTexMip);
+        ImGui::InputInt("Debug texture layer", (int*)&currentDebugTexLayer);
+
+        currentDebugTexMip =
+          glm::clamp(currentDebugTexMip, 0u, uint32_t(tex->getMipLevelCount() - 1));
+        currentDebugTexLayer =
+          glm::clamp(currentDebugTexLayer, 0u, uint32_t(tex->getLayerCount() - 1));
+      }
 
       ImGui::End();
     }

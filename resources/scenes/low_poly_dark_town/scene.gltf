@@ -3406,10 +3406,7 @@
       "uri": "textures/Clock_tower_diffuse.png"
     },
     {
-      "uri": "textures/RuggedTerrainwithRockyPeaks_terrain/terrain_hmap.png"
-    },
-    {
-      "uri": "textures/RuggedTerrainwithRockyPeaks_terrain/terrain_diffuse.png"
+      "uri": "textures/terrain/Heightmap.png"
     }
   ],
   "materials": [
@@ -3896,10 +3893,12 @@
         -1300.0, 1300.0
       ],
       "diffuse" : {
-        "index" : 8
+        "index" : 7,
+        "TODO: remove and reassign" : []
       },
       "errosion" : {
-        "index" : 8
+        "index" : 7,
+        "TODO: remove and reassign" : []
       },
       "errosionSeed" : 57179
     }
@@ -6375,10 +6374,6 @@
     {
       "sampler": 1,
       "source": 7
-    },
-    {
-      "sampler": 1,
-      "source": 8
     }
   ]
 }

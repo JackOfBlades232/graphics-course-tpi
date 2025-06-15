@@ -102,7 +102,6 @@ void main(void)
       // @TODO: perturb on noise
     }
 
-    const float absHeight = source.rangeMin.y + terrainExtent.y * relHeight;
-    imageStore(geom[level], coord, vec4(absHeight));
+    imageStore(geom[level], coord, vec4(relHeight));
   }
 }
