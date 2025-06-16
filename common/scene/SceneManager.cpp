@@ -818,6 +818,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
   {
     auto& data = terrainData.emplace();
     data.heightmapTexSmp = idPairForTexture(terrainExt->heightmap);
+    data.noiseSeed = terrainExt->noiseSeed;
     data.rangeMin = terrainExt->rangeMin;
     data.rangeMax = terrainExt->rangeMax;
   }

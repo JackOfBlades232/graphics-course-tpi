@@ -381,10 +381,19 @@ void WorldRenderer::renderWorld(
       cmd_buf.bindPipeline(
         vk::PipelineBindPoint::eCompute, generateClipmapPipeline.getVkPipeline());
 
-      cmd_buf.dispatch(
-        get_linear_wg_count(CLIPMAP_RESOLUTION * CLIPMAP_RESOLUTION, BASE_WORK_GROUP_SIZE),
-        CLIPMAP_LEVEL_COUNT,
-        2); // 0 does geom clipmap, 1 does color
+      const auto xzOffset =
+        glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z};
+      for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
+      {
+        const auto dims = calculate_toroidal_dims(xzOffset, shader_uint(i));
+        cmd_buf.pushConstants<shader_uint>(
+          generateClipmapPipeline.getVkPipelineLayout(),
+          vk::ShaderStageFlagBits::eCompute,
+          0,
+          shader_uint(i));
+        cmd_buf.dispatch(
+          calculate_wg_size_for_clipmap_update(dims), 2, 1); // 0 does geom clipmap, 1 does color
+      }
     }
 
     std::array resetAndCulledBarriers = {vk::BufferMemoryBarrier2{

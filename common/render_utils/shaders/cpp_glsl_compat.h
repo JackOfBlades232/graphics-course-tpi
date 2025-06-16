@@ -15,6 +15,8 @@
 // as GLSL words are guaranteed to be 32-bit,
 // while C++ unsigned int can be 16-bit.
 using shader_int = int;
+using shader_ivec2 = glm::ivec2;
+using shader_ivec3 = glm::ivec3;
 using shader_uint = glm::uint;
 using shader_uvec2 = glm::uvec2;
 using shader_uvec3 = glm::uvec3;
@@ -31,9 +33,13 @@ using shader_mat4 = glm::mat4x4;
 // than 32 bits, so a bool has to be 32 bits as well.
 using shader_bool = glm::uint;
 
+#define shader_inline inline
+
 #else
 
 #define shader_int int
+#define shader_ivec2 ivec2
+#define shader_ivec3 ivec3
 #define shader_uint uint
 #define shader_uvec2 uvec2
 #define shader_uvec3 uvec3
@@ -46,6 +52,8 @@ using shader_bool = glm::uint;
 #define shader_mat4 mat4
 
 #define shader_bool bool
+
+#define shader_inline
 
 #endif
 
