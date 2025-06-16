@@ -12,8 +12,9 @@
 struct JbTerrainExtData
 {
   int heightmap{-1}; 
-
   glm::vec3 rangeMin{-1.f, 0.f, -1.f}, rangeMax{1.f, 1.f, 1.f};
+
+  int noiseSeed{0};
 
   // @TODO: more -- errosion, mask, details
 };

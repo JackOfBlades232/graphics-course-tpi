@@ -14,6 +14,10 @@ layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 layout(binding = 0, set = 0, r32f) uniform writeonly image2D geom[CLIPMAP_LEVEL_COUNT];
 layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D albedo[CLIPMAP_LEVEL_COUNT];
 
+layout(push_constant) uniform params_t
+{
+  uint level;
+} params;
 
 layout(binding = 7, set = 0) uniform terrain_source_t
 {
@@ -50,16 +54,29 @@ void get_coord_and_uv(
 void main(void)
 {
   const uint pix = gl_GlobalInvocationID.x;
-  const uint level = gl_GlobalInvocationID.y;
-  const bool isColor = gl_GlobalInvocationID.z > 0;
+  const bool isColor = gl_GlobalInvocationID.y > 0;
+
+  const vec2 worldOffset = constants.toroidalOffset.xz;
+  const vec2 worldPos = constants.playerWorldPos.xz;
+
+  const vec2 clipmapLevelWorldExtent = vec2(
+    float(1 << params.level) * CLIPMAP_EXTENT_STEP,
+    float(1 << params.level) * CLIPMAP_EXTENT_STEP);
+
+  const vec2 gridUvPos = fract(worldPos / clipmapLevelWorldExtent); 
+  const vec2 clipmapUvPivot = fract(gridUvPos - 0.5f);
+
+
+
+  const ivec2 dims = calculate_toroidal_dims(worldOffset, params.level);
+
+   
 
   const vec3 terrainExtent = source.rangeMax - source.rangeMin;
 
   const vec2 playerOverTerrainUv =
     world_xz_to_terrain_uv(constants.playerWorldPos.xz, terrainExtent);
 
-  const vec2 clipmapLevelExtent = vec2(
-    float(1 << level) * CLIPMAP_EXTENT_STEP, float(1 << level) * CLIPMAP_EXTENT_STEP);
   const vec2 clipmapLevelUvExtent = clipmapLevelExtent / terrainExtent.xz;
 
   const vec2 clipmapLevelUvBase = playerOverTerrainUv - clipmapLevelUvExtent;
@@ -75,7 +92,7 @@ void main(void)
     vec2 uv;
     get_coord_and_uv(
       imageSize(geom[level]), pix,
-      clipmapLevelUvBase, clipmapLevelUvSize,
+       clipmapLevelUvBase, clipmapLevelUvSize,
       coord, uv);
 
     float relHeight = 0.f;
