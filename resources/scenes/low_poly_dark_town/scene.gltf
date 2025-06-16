@@ -3891,16 +3891,7 @@
         -1300.0, 1300.0,
         10.0, 30.0,
         -1300.0, 1300.0
-      ],
-      "diffuse" : {
-        "index" : 7,
-        "TODO: remove and reassign" : []
-      },
-      "errosion" : {
-        "index" : 7,
-        "TODO: remove and reassign" : []
-      },
-      "errosionSeed" : 57179
+      ]
     }
   },
   "meshes": [
