@@ -75,5 +75,13 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
 #undef HMAP_RNG_FORMAT_ERR
   }
 
+  if (desc.Has("noiseSeed"))
+  {
+    const auto& seed = desc.Get("noiseSeed");
+    VERIFY(seed.IsNumber(), "invalid format: \"noiseSeed\" must be an integer");
+
+    data.noiseSeed = seed.GetNumberAsInt();
+  }
+
   return data;
 }
