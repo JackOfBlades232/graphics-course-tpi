@@ -7,16 +7,14 @@
 struct TerrainSourceData
 {
   TexSmpIdPair heightmapTexSmp;
-  TexSmpIdPair diffuseTexSmp;
-  TexSmpIdPair errosionTexSmp;
 
-  shader_uint errosionNoiseSeed;
+  shader_uint pad1_, pad2_, pad3_;
 
   shader_vec3 rangeMin;
-  shader_uint pad1_;
+  shader_uint pad4_;
 
   shader_vec3 rangeMax;
-  shader_uint pad2_;
+  shader_uint pad5_;
 };
 
 #define CLIPMAP_LEVEL_COUNT 8

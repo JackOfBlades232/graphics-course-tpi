@@ -51,15 +51,6 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
   JbTerrainExtData data{};
 
   data.heightmap = get_mandatory_texture(desc, "heightmap");
-  data.diffuse = get_opt_texture(desc, "diffuse");
-  data.errosion = get_opt_texture(desc, "errosion");
-
-  if (desc.Has("errosionSeed"))
-  {
-    const auto& eseed = desc.Get("errosionSeed");
-    VERIFY(eseed.IsNumber(), "invalid format: \"errosionSeed\" must be an int");
-    data.errosionSeed = eseed.GetNumberAsInt();
-  }
 
   if (desc.Has("range"))
   {

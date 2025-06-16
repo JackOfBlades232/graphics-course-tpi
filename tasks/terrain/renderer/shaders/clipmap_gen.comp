@@ -67,19 +67,7 @@ void main(void)
 
   if (isColor)
   {
-    ivec2 coord;
-    vec2 uv;
-    get_coord_and_uv(
-      imageSize(albedo[level]), pix,
-      clipmapLevelUvBase, clipmapLevelUvSize,
-      coord, uv);
-
-    vec4 color = vec4(1.f, 0.f, 1.f, 1.f);
-    if (source.diffuseTexSmp != NO_TEXTURE_ID)
-      color = sample_bindless_tex_lod(source.diffuseTexSmp, uv, 0.f);
-
-    // @TODO: splatting instead
-    imageStore(albedo[level], coord, color);
+    // @TODO
   }
   else
   {
@@ -97,10 +85,7 @@ void main(void)
       relHeight = sample_bindless_tex_lod(source.heightmapTexSmp, uv, 0.f).x;
     }
 
-    if (source.errosionTexSmp != NO_TEXTURE_ID)
-    {
-      // @TODO: perturb on noise
-    }
+    // @TODO: perturb on noise
 
     imageStore(geom[level], coord, vec4(relHeight));
   }
