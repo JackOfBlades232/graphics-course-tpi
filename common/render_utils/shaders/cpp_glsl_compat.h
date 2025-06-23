@@ -35,6 +35,9 @@ using shader_bool = glm::uint;
 
 #define shader_inline inline
 
+#define shader_clamp glm::clamp
+#define shader_abs glm::abs
+
 #else
 
 #define shader_int int
@@ -54,6 +57,9 @@ using shader_bool = glm::uint;
 #define shader_bool bool
 
 #define shader_inline
+
+#define shader_clamp clamp
+#define shader_abs abs
 
 #endif
 

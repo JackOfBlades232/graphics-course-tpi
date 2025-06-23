@@ -30,57 +30,64 @@ layout(binding = 8, set = 0) uniform constants_t
 
 #include "bindless.frag.inc"
 
-vec2 world_xz_to_terrain_uv(vec2 xz, vec3 ext)
-{
-  return (xz - source.rangeMin.xz) / ext.xz;
-}
-
-void get_coord_and_uv(
-  ivec2 dims, uint pixid, vec2 uv_base, vec2 uv_size,
-  out ivec2 coord, out vec2 uv)
-{
-  if (pixid >= dims.x * dims.y)
-    return;
-  
-  // @TODO: toroidal
-  coord = ivec2(pixid % dims.x, pixid / dims.x);
-  const vec2 localUv = vec2(
-    float(coord.x) / float(dims.x),
-    float(coord.y) / float(dims.y));
-
-  uv = uv_base + uv_size * localUv;
-}
-
 void main(void)
 {
   const uint pix = gl_GlobalInvocationID.x;
   const bool isColor = gl_GlobalInvocationID.y > 0;
 
-  const vec2 worldOffset = constants.toroidalOffset.xz;
   const vec2 worldPos = constants.playerWorldPos.xz;
+  const vec2 worldOffset = constants.toroidalOffset.xz;
 
-  const vec2 clipmapLevelWorldExtent = vec2(
-    float(1 << params.level) * CLIPMAP_EXTENT_STEP,
-    float(1 << params.level) * CLIPMAP_EXTENT_STEP);
+  // @TODO: factor into formulas better
+  // (- cause if we went in positive direction, it's top corner)
+  ivec2 dims = -calculate_toroidal_dims(worldOffset, params.level);
 
-  const vec2 gridUvPos = fract(worldPos / clipmapLevelWorldExtent); 
-  const vec2 clipmapUvPivot = fract(gridUvPos - 0.5f);
+  uint minx = 0, miny = 0;
+  if (dims.x < 0)
+  {
+    minx = CLIPMAP_RESOLUTION + dims.x;
+    dims.x = -dims.x;
+  }
+  if (dims.y < 0)
+  {
+    miny = CLIPMAP_RESOLUTION + dims.y;
+    dims.y = -dims.y;
+  }
 
+  const int horizontalPatchSize = CLIPMAP_RESOLUTION * dims.y;
+  const int verticalPatchSize = (CLIPMAP_RESOLUTION - dims.y) * dims.x;
 
+  ivec2 flatImgCoord = ivec2(0);
+  if (pix < horizontalPatchSize)
+  {
+    flatImgCoord = ivec2(
+      pix % CLIPMAP_RESOLUTION,
+      miny + (pix / CLIPMAP_RESOLUTION));
+  }
+  else if (pix < horizontalPatchSize + verticalPatchSize)
+  {
+    const uint ppix = pix - horizontalPatchSize;  
+    flatImgCoord = ivec2(minx + (ppix % dims.x), ppix / dims.x);
+    if (miny == 0)
+      flatImgCoord.y += dims.y;
+  }
+  else
+  {
+    return;
+  }
 
-  const ivec2 dims = calculate_toroidal_dims(worldOffset, params.level);
+  const vec2 flatUv = vec2(flatImgCoord) / float(CLIPMAP_RESOLUTION);
 
-   
+  const float clipmapWorldExtent = float(1 << params.level) * CLIPMAP_EXTENT_STEP;
+  const float clipmapWorldSize = clipmapWorldExtent * 2.f;
 
-  const vec3 terrainExtent = source.rangeMax - source.rangeMin;
+  const vec2 worldCoord = worldPos + (flatUv - 0.5f) * clipmapWorldSize;
 
-  const vec2 playerOverTerrainUv =
-    world_xz_to_terrain_uv(constants.playerWorldPos.xz, terrainExtent);
+  const ivec2 toroidalScrolloff = 
+    ivec2((fract(worldPos / clipmapWorldSize) - 0.5f) * CLIPMAP_RESOLUTION);
 
-  const vec2 clipmapLevelUvExtent = clipmapLevelExtent / terrainExtent.xz;
-
-  const vec2 clipmapLevelUvBase = playerOverTerrainUv - clipmapLevelUvExtent;
-  const vec2 clipmapLevelUvSize = clipmapLevelUvExtent * 2.f;
+  const ivec2 destImageCoord = 
+    (flatImgCoord + toroidalScrolloff + CLIPMAP_RESOLUTION) % CLIPMAP_RESOLUTION;
 
   if (isColor)
   {
@@ -88,12 +95,8 @@ void main(void)
   }
   else
   {
-    ivec2 coord;
-    vec2 uv;
-    get_coord_and_uv(
-      imageSize(geom[level]), pix,
-       clipmapLevelUvBase, clipmapLevelUvSize,
-      coord, uv);
+    const vec3 terrainExtent = source.rangeMax - source.rangeMin;
+    const vec2 uv = (worldCoord - source.rangeMin.xz) / terrainExtent.xz;
 
     float relHeight = 0.f;
     if (source.heightmapTexSmp != NO_TEXTURE_ID)
@@ -104,6 +107,6 @@ void main(void)
 
     // @TODO: perturb on noise
 
-    imageStore(geom[level], coord, vec4(relHeight));
+    imageStore(geom[params.level], destImageCoord, vec4(relHeight));
   }
 }

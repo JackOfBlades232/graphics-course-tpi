@@ -138,7 +138,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
     debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
 
-    terrain->lastToroidalUpdatePlayerWorldPos = {FLT_MIN, FLT_MIN, FLT_MIN};
+    terrain->lastToroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   }
   else
     spdlog::info("JB_terrain: terrain not present");
@@ -392,7 +392,10 @@ void WorldRenderer::renderWorld(
           0,
           shader_uint(i));
         cmd_buf.dispatch(
-          calculate_wg_size_for_clipmap_update(dims), 2, 1); // 0 does geom clipmap, 1 does color
+          get_linear_wg_count(
+            calculate_thread_count_for_clipmap_update(dims), BASE_WORK_GROUP_SIZE),
+          2,
+          1); // 0 does geom clipmap, 1 does color
       }
     }
 

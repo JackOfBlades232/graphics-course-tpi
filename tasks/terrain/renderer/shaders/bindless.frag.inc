@@ -1,3 +1,6 @@
+#ifndef BINDLESS_H_INCLUDED
+#define BINDLESS_H_INCLUDED
+
 layout(binding = 0, set = 1) readonly buffer material_params_t
 {
   Material materialParams[];
@@ -30,3 +33,5 @@ vec4 sample_bindless_tex_lod(TexSmpIdPair ids, vec2 uv, float lod)
       bindlessSamplers[nonuniformEXT(texSmpIds.y)]),
     uv, lod);
 }
+
+#endif // BINDLESS_H_INCLUDED
