@@ -27,6 +27,9 @@ struct TerrainSourceData
 #define CLIPMAP_EXTENT_STEP 5.f
 #define CLIPMAP_UPDATE_MIN_DPOS 0.2f
 
+// @TODO: not only tweakable, but dependent on data
+#define NOISE_REL_HEIGHT_AMPLITUDE 0.025f
+
 // @TODO: sort out maths around toroidal, now it's kinda hacky
 
 shader_inline shader_ivec2 calculate_toroidal_dims(shader_vec2 w_offset, shader_uint level)
