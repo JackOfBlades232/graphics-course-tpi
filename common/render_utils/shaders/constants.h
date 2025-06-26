@@ -15,7 +15,7 @@ struct Constants
   CullingMode cullingMode;
 
   shader_vec3 toroidalOffset;
-  shader_float realToToroidalOffset;
+  shader_uint pad1_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

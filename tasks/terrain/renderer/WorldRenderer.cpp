@@ -138,7 +138,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
     debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
 
-    terrain->lastToroidalUpdatePlayerWorldPos = terrain->sourceData.rangeMin;
+    terrain->lastToroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   }
   else
     spdlog::info("JB_terrain: terrain not present");
@@ -311,18 +311,11 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.playerWorldPos = packet.mainCam.position;
     if (terrain)
     {
-      constexpr float TOROIDAL_STEP = 2.f * CLIPMAP_EXTENT_STEP / float(CLIPMAP_RESOLUTION);
-
-      const auto realOffset =
-        constantsData.playerWorldPos - terrain->lastToroidalUpdatePlayerWorldPos;
-      constantsData.toroidalOffset = round_to_zero(realOffset / TOROIDAL_STEP) * TOROIDAL_STEP;
-      constantsData.realToToroidalOffset = glm::length(realOffset) / glm::length(constantsData.toroidalOffset);
-
+      constantsData.toroidalOffset = constantsData.playerWorldPos - terrain->lastToroidalUpdatePlayerWorldPos;
       const float xzDisp =
         glm::length(glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z});
       if (xzDisp >= CLIPMAP_UPDATE_MIN_DPOS)
       {
-        assert(constantsData.realToToroidalOffset >= 1.f);
         terrain->needToroidalUpdate = true;
       }
     }
@@ -357,7 +350,7 @@ void WorldRenderer::renderWorld(
     if (terrain && terrain->needToroidalUpdate)
     {
       terrain->needToroidalUpdate = false;
-      terrain->lastToroidalUpdatePlayerWorldPos += constantsData.toroidalOffset;
+      terrain->lastToroidalUpdatePlayerWorldPos = constantsData.playerWorldPos;
 
       ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
 
