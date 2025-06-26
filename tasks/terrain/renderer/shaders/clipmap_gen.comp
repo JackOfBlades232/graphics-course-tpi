@@ -8,6 +8,8 @@
 #include "materials.h"
 #include "constants.h"
 
+#include "common.frag.inc"
+
 
 layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 
@@ -100,7 +102,12 @@ void main(void)
     if (source.heightmapTexSmp != NO_TEXTURE_ID)
       relHeight = sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, uv, 0.f).x;
 
-    // @TODO: perturb on noise
+    // @TEMP just scale back into [0, 1]
+    relHeight *= 1.f - 2.f * NOISE_REL_HEIGHT_AMPLITUDE;
+    relHeight += NOISE_REL_HEIGHT_AMPLITUDE;
+
+    // @TODO seed
+    relHeight += simplex_noise(uv * 2000.f) * NOISE_REL_HEIGHT_AMPLITUDE;
 
     imageStore(geom[params.level], destImageCoord, vec4(relHeight));
   }
