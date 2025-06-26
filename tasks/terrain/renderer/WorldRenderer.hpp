@@ -70,7 +70,6 @@ private:
   };
   std::optional<TerrainRenderingData> terrain{};
 
-
   // @TODO: tweakable
   etna::Buffer culledInstancesBuf;
 
