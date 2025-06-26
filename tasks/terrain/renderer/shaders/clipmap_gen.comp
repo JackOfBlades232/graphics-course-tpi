@@ -98,10 +98,7 @@ void main(void)
 
     float relHeight = 0.f;
     if (source.heightmapTexSmp != NO_TEXTURE_ID)
-    {
-      // @TODO: bicubic interpolation by hand
-      relHeight = sample_bindless_tex_lod(source.heightmapTexSmp, uv, 0.f).x;
-    }
+      relHeight = sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, uv, 0.f).x;
 
     // @TODO: perturb on noise
 
