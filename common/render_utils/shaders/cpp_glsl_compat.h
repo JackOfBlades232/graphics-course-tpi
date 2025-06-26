@@ -36,6 +36,10 @@ using shader_bool = glm::uint;
 #define shader_inline inline
 
 #define shader_clamp glm::clamp
+#define shader_floor glm::floor
+#define shader_ceil glm::ceil
+#define shader_round glm::round
+#define shader_sign glm::sign
 #define shader_abs glm::abs
 
 #else
@@ -59,9 +63,16 @@ using shader_bool = glm::uint;
 #define shader_inline
 
 #define shader_clamp clamp
+#define shader_floor floor
+#define shader_ceil ceil
+#define shader_round round
+#define shader_sign sign
 #define shader_abs abs
 
 #endif
+
+#define round_from_zero(x_) (shader_round((x_) + shader_sign(x_) * 0.5f))
+#define round_to_zero(x_) (shader_round((x_) - shader_sign(x_) * 0.5f))
 
 // NOLINTEND
 
