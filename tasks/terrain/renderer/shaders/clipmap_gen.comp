@@ -35,23 +35,22 @@ void main(void)
   const uint pix = gl_GlobalInvocationID.x;
   const bool isColor = gl_GlobalInvocationID.y > 0;
 
-  const vec2 worldPos = constants.playerWorldPos.xz;
   const vec2 worldOffset = constants.toroidalOffset.xz;
+  const vec2 wposAdjustment = worldOffset * (1.f - constants.realToToroidalOffset);
+  const vec2 worldPos = constants.playerWorldPos.xz + wposAdjustment;
 
-  // @TODO: factor into formulas better
-  // (- cause if we went in positive direction, it's top corner)
-  ivec2 dims = -calculate_toroidal_dims(worldOffset, params.level);
+  ivec2 dims = calculate_toroidal_dims(worldOffset, params.level);
 
   uint minx = 0, miny = 0;
   if (dims.x < 0)
   {
-    minx = CLIPMAP_RESOLUTION + dims.x;
     dims.x = -dims.x;
+    minx = CLIPMAP_RESOLUTION - dims.x;
   }
   if (dims.y < 0)
   {
-    miny = CLIPMAP_RESOLUTION + dims.y;
     dims.y = -dims.y;
+    miny = CLIPMAP_RESOLUTION - dims.y;
   }
 
   const int horizontalPatchSize = CLIPMAP_RESOLUTION * dims.y;

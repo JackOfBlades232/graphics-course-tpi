@@ -138,7 +138,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
     debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
 
-    terrain->lastToroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+    terrain->lastToroidalUpdatePlayerWorldPos = terrain->sourceData.rangeMin;
   }
   else
     spdlog::info("JB_terrain: terrain not present");
@@ -311,12 +311,18 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.playerWorldPos = packet.mainCam.position;
     if (terrain)
     {
-      constantsData.toroidalOffset =
+      constexpr float TOROIDAL_STEP = 2.f * CLIPMAP_EXTENT_STEP / float(CLIPMAP_RESOLUTION);
+
+      const auto realOffset =
         constantsData.playerWorldPos - terrain->lastToroidalUpdatePlayerWorldPos;
+      constantsData.toroidalOffset = round_to_zero(realOffset / TOROIDAL_STEP) * TOROIDAL_STEP;
+      constantsData.realToToroidalOffset = glm::length(realOffset) / glm::length(constantsData.toroidalOffset);
+
       const float xzDisp =
         glm::length(glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z});
       if (xzDisp >= CLIPMAP_UPDATE_MIN_DPOS)
       {
+        assert(constantsData.realToToroidalOffset >= 1.f);
         terrain->needToroidalUpdate = true;
       }
     }
@@ -351,7 +357,7 @@ void WorldRenderer::renderWorld(
     if (terrain && terrain->needToroidalUpdate)
     {
       terrain->needToroidalUpdate = false;
-      terrain->lastToroidalUpdatePlayerWorldPos = constantsData.playerWorldPos;
+      terrain->lastToroidalUpdatePlayerWorldPos += constantsData.toroidalOffset;
 
       ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
 
@@ -640,6 +646,24 @@ void WorldRenderer::drawGui()
   {
     ImGui::Begin("App");
     ImGui::Text("%.2fms (%dfps)", dt * 1e3f, int(1.f / dt));
+    ImGui::Text(
+      "Player pos: [%.3f, %.3f, %.3f]",
+      constantsData.playerWorldPos.x,
+      constantsData.playerWorldPos.y,
+      constantsData.playerWorldPos.z);
+    if (terrain)
+    {
+      ImGui::Text(
+        "Last toroidal update pos: [%.3f, %.3f, %.3f]",
+        terrain->lastToroidalUpdatePlayerWorldPos.x,
+        terrain->lastToroidalUpdatePlayerWorldPos.y,
+        terrain->lastToroidalUpdatePlayerWorldPos.z);
+      ImGui::Text(
+        "Toroidal offset: [%.3f, %.3f, %.3f]",
+        constantsData.toroidalOffset.x,
+        constantsData.toroidalOffset.y,
+        constantsData.toroidalOffset.z);
+    }
     ImGui::End();
   }
 
