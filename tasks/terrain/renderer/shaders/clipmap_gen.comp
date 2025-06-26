@@ -36,8 +36,7 @@ void main(void)
   const bool isColor = gl_GlobalInvocationID.y > 0;
 
   const vec2 worldOffset = constants.toroidalOffset.xz;
-  const vec2 wposAdjustment = worldOffset * (1.f - constants.realToToroidalOffset);
-  const vec2 worldPos = constants.playerWorldPos.xz + wposAdjustment;
+  const vec2 worldPos = constants.playerWorldPos.xz;
 
   ivec2 dims = calculate_toroidal_dims(worldOffset, params.level);
 
