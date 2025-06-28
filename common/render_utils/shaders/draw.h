@@ -7,6 +7,8 @@
 // @TODO: tweak, maybe move to another file?
 #define BASE_WORK_GROUP_SIZE 64
 
+#define TERRAIN_CHUNK_INSTANCE_FLAG 0x1
+
 struct IndirectCommand
 {
   shader_uint indexCount;
@@ -18,15 +20,17 @@ struct IndirectCommand
 
 struct CullableInstance
 {
-  shader_uint matrixId;                                                                                          
+  shader_uint instId;                                                                                          
   shader_uint materialId;
   shader_uint commandId;
+  shader_uint flags;
 };
 
 struct DrawableInstance
 {
-  shader_uint matrixId;                                                                                          
+  shader_uint instId;                                                                                          
   shader_uint materialId;
+  shader_uint flags;
 };
 
 #ifdef __cplusplus

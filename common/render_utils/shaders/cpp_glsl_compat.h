@@ -69,6 +69,14 @@ using shader_bool = glm::uint;
 #define shader_sign sign
 #define shader_abs abs
 
+// @TODO: route to glm::translate for cpp
+shader_mat4 translation(shader_vec3 offs)
+{
+  shader_mat4 m = shader_mat4(1.f);
+  m[3] = shader_vec4(offs, 1.f);
+  return m;
+}
+
 #endif
 
 #define round_from_zero(x_) (shader_round((x_) + shader_sign(x_) * 0.5f))

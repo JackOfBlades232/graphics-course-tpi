@@ -185,7 +185,6 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   bindlessSamplersDsetComp = etna::create_persistent_descriptor_set(
     compProgInfo.getDescriptorLayoutId(3), std::move(smpBindings));
 
-
   culledInstancesBuf = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
@@ -311,7 +310,8 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.playerWorldPos = packet.mainCam.position;
     if (terrain)
     {
-      constantsData.toroidalOffset = constantsData.playerWorldPos - terrain->lastToroidalUpdatePlayerWorldPos;
+      constantsData.toroidalOffset =
+        constantsData.playerWorldPos - terrain->lastToroidalUpdatePlayerWorldPos;
       const float xzDisp =
         glm::length(glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z});
       if (xzDisp >= CLIPMAP_UPDATE_MIN_DPOS)
@@ -327,6 +327,9 @@ void WorldRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
+  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
+  memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
+
   // @TODO: unhack
   if (initialTransition)
   {
@@ -336,11 +339,9 @@ void WorldRenderer::renderWorld(
     materialParamsDsetComp.processBarriers(cmd_buf);
     bindlessTexturesDsetComp.processBarriers(cmd_buf);
     bindlessSamplersDsetComp.processBarriers(cmd_buf);
+
     initialTransition = false;
   }
-
-  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
-  memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
 
   // @TODO pack culling & draw back into a renderScene method (will need for shadow maps)
 
@@ -393,8 +394,8 @@ void WorldRenderer::renderWorld(
         cmd_buf.dispatch(
           get_linear_wg_count(
             calculate_thread_count_for_clipmap_update(dims), BASE_WORK_GROUP_SIZE),
-          2,
-          1); // 0 does geom clipmap, 1 does color
+          2, // 0 does geom clipmap, 1 does color
+          1);
       }
     }
 
@@ -535,11 +536,10 @@ void WorldRenderer::renderWorld(
       cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
       cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
 
+      auto [offset, count] = sceneMgr->getSceneObjectsIndirectCommandsSubrange();
+
       cmd_buf.drawIndexedIndirect(
-        sceneMgr->getIndirectCommandsBuf().get(),
-        0,
-        sceneMgr->getIndirectCommands().size(),
-        sizeof(IndirectCommand));
+        sceneMgr->getIndirectCommandsBuf().get(), offset, count, sizeof(IndirectCommand));
     }
 
     // @TODO: should resolve be in renderer rather than in world renderer?
