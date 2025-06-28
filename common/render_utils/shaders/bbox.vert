@@ -7,18 +7,7 @@
 #include "constants.h"
 
 
-layout(binding = 0, set = 0) readonly buffer instance_matrices_t
-{
-  mat4 instanceMatrices[];
-};
-layout(binding = 1, set = 0) readonly buffer all_instances_t
-{
-  CullableInstance allInstances[];
-};
-layout(binding = 2, set = 0) readonly buffer bboxes_t
-{
-  BBox bboxes[];
-};
+#include "instancing.glsl.inc"
 
 layout(binding = 8, set = 0) uniform constants_t
 {
@@ -33,8 +22,8 @@ const uvec2 edges[] = {
 void main()
 {
   const CullableInstance inst = allInstances[gl_InstanceIndex];
-  const BBox bbox = bboxes[inst.commandId]; 
-  const mat4 instMat = instanceMatrices[inst.matrixId];
+  const mat4 instMat = get_inst_matrix(inst, constants.playerWorldPos);
+  const BBox bbox = get_inst_bbox(inst);
 
   const vec4 vs[8] = {
     bbox.min,

@@ -39,7 +39,7 @@ out gl_PerVertex { vec4 gl_Position; };
 void main(void)
 {
   const DrawableInstance inst = markedInstances[gl_InstanceIndex];
-  const mat4 modelMatrix = instanceMatrices[inst.matrixId];
+  const mat4 modelMatrix = instanceMatrices[inst.instId];
   const uint matId = inst.materialId;
 
   const vec4 wNorm = vec4(dequantize3fnorm(floatBitsToInt(vPosNorm.w)), 0.0f);

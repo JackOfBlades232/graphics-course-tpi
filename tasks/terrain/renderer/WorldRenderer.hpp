@@ -61,8 +61,8 @@ private:
     etna::Image albedoClipmap{};
     std::vector<etna::Binding> geometryLevelsBindings{};
     std::vector<etna::Binding> albedoLevelsBindings{};
-    etna::Buffer source{};
 
+    etna::Buffer source{};
     TerrainSourceData sourceData{};
 
     glm::vec3 lastToroidalUpdatePlayerWorldPos = {};
@@ -76,9 +76,9 @@ private:
   // @TODO: unify with one in scene manager
   etna::Sampler defaultSampler;
 
-  etna::PersistentDescriptorSet
-    materialParamsDsetFrag, bindlessTexturesDsetFrag, bindlessSamplersDsetFrag,
-    materialParamsDsetComp, bindlessTexturesDsetComp, bindlessSamplersDsetComp;
+  etna::PersistentDescriptorSet materialParamsDsetFrag, bindlessTexturesDsetFrag,
+    bindlessSamplersDsetFrag, materialParamsDsetComp, bindlessTexturesDsetComp,
+    bindlessSamplersDsetComp;
   bool initialTransition = true; // @HACK
 
   const etna::GpuWorkCount& wc;

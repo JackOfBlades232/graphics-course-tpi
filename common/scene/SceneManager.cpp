@@ -327,7 +327,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       for (size_t matrixId : matrixIds)
       {
         data.instances.push_back(
-          DrawableInstance{shader_uint(matrixId), shader_uint(relem.materialId)});
+          DrawableInstance{shader_uint(matrixId), shader_uint(relem.materialId), 0});
       }
 
       totalInstCount += matrixIds.size();
@@ -368,7 +368,94 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
     for (DrawableInstance inst : instances)
     {
       result.allInstances.push_back(CullableInstance{
-        inst.matrixId, inst.materialId, shader_uint(result.sceneDrawCommands.size() - 1)});
+        inst.instId, inst.materialId, shader_uint(result.sceneDrawCommands.size() - 1), 0});
+    }
+  }
+
+  // @NOTE: done here, if it is not added the span is just empty
+  result.firstTerrainCommand = result.sceneDrawCommands.size();
+
+  if (terrainData)
+  {
+    constexpr uint32_t CHUNKS_LEVEL_DIM = 4;
+    constexpr uint32_t FIRST_LEVEL_CHUNKS = CHUNKS_LEVEL_DIM * CHUNKS_LEVEL_DIM;
+    constexpr uint32_t OTHER_LEVELS_CHUNKS =
+      FIRST_LEVEL_CHUNKS - (CHUNKS_LEVEL_DIM * CHUNKS_LEVEL_DIM / 4);
+
+    const uint32_t totalChunkCount =
+      FIRST_LEVEL_CHUNKS + (CLIPMAP_LEVEL_COUNT - 1) * OTHER_LEVELS_CHUNKS;
+
+    result.bboxes.reserve(result.bboxes.size() + totalChunkCount);
+    result.allInstances.reserve(result.allInstances.size() + totalChunkCount);
+
+    auto& cmd = result.sceneDrawCommands.emplace_back();
+    cmd.indexCount = 4;
+    cmd.firstIndex = 0;
+    cmd.vertexOffset = 0;
+    cmd.instanceCount = 0;
+    cmd.firstInstance = shader_uint(result.allInstances.size());
+
+    for (size_t i = 0; i < totalChunkCount; ++i)
+    {
+      result.allInstances.push_back(CullableInstance{
+        shader_uint(i),
+        shader_uint(MaterialId::INVALID), // @TODO set in scene
+        shader_uint(result.sceneDrawCommands.size() - 1),
+        TERRAIN_CHUNK_INSTANCE_FLAG});
+
+      glm::vec3 chunkCoord = {};
+      glm::vec3 chunkExtent = {};
+
+      // @TODO: more accurate? This is very conservative just ot not calculate heights.
+      // This is also not 100% proof because bicubic interpolation in theory can cause
+      // high points to be extruded beyond BICUBIC_HMAP_TOLERANCE and lead to false
+      // negatives while culling.
+      constexpr float BICUBIC_HMAP_TOLERANCE = 0.1f;
+      const float totalTolerance = BICUBIC_HMAP_TOLERANCE + NOISE_REL_HEIGHT_AMPLITUDE;
+      const float baseRange = terrainData->rangeMax.y - terrainData->rangeMin.y;
+      const float rangeAdjustment = totalTolerance * baseRange;
+      chunkCoord.y = terrainData->rangeMin.y - rangeAdjustment;
+      chunkExtent.y = baseRange + 2.f * rangeAdjustment;
+
+      if (i < FIRST_LEVEL_CHUNKS)
+      {
+        chunkExtent.x = chunkExtent.z = CLIPMAP_EXTENT_STEP * 2.f / float(CHUNKS_LEVEL_DIM);
+        chunkCoord.x = float(i % CHUNKS_LEVEL_DIM) * chunkExtent.x - CLIPMAP_EXTENT_STEP;
+        chunkCoord.z = float(i / CHUNKS_LEVEL_DIM) * chunkExtent.z - CLIPMAP_EXTENT_STEP;
+      }
+      else
+      {
+        const uint32_t level = (i - FIRST_LEVEL_CHUNKS) / OTHER_LEVELS_CHUNKS + 1;
+        const float levelMult = float(1 << level);
+        chunkExtent.x = chunkExtent.z =
+          levelMult * CLIPMAP_EXTENT_STEP * 2.f / float(CHUNKS_LEVEL_DIM);
+
+        const uint32_t chunkId = (i - FIRST_LEVEL_CHUNKS) % OTHER_LEVELS_CHUNKS;
+        const float levelExtent = levelMult * CLIPMAP_EXTENT_STEP;
+
+        // @NOTE: this only works for one-wide trim
+        if (chunkId < CHUNKS_LEVEL_DIM)
+        {
+          chunkCoord.x = float(chunkId) * chunkExtent.x - levelExtent;
+          chunkCoord.z = -levelExtent;
+        }
+        else if (chunkId < OTHER_LEVELS_CHUNKS - CHUNKS_LEVEL_DIM)
+        {
+          const uint32_t yId = (chunkId - CHUNKS_LEVEL_DIM) >> 1;
+          const uint32_t xId = (chunkId - CHUNKS_LEVEL_DIM) & 1;
+          chunkCoord.z = chunkExtent.z * float(yId + 1) - levelExtent;
+          chunkCoord.x = xId ? (-levelExtent) : (levelExtent - chunkExtent.x);
+        }
+        else
+        {
+          chunkCoord.x =
+            float(chunkId - OTHER_LEVELS_CHUNKS + CHUNKS_LEVEL_DIM) * chunkExtent.x - levelExtent;
+          chunkCoord.z = levelExtent - chunkExtent.z;
+        }
+      }
+
+      result.bboxes.push_back(
+        BBox{shader_vec4{chunkCoord, 1.f}, shader_vec4{chunkCoord + chunkExtent, 1.f}});
     }
   }
 
@@ -829,13 +916,17 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
 
   lightsData = processLights(model, instanceMatrices, instLights);
 
-  auto [verts, inds, relems, meshs, commands, bboxs, insts] =
+  auto [verts, inds, relems, meshs, commands, bboxs, insts, firstTerrainCommand] =
     processMeshes(model, materialRemapping);
   renderElements = std::move(relems);
   meshes = std::move(meshs);
   sceneDrawCommands = std::move(commands);
   bboxes = std::move(bboxs);
   allInstances = std::move(insts);
+
+  sceneObjectsDrawCommands = std::span{sceneDrawCommands}.first(firstTerrainCommand);
+  terrainChunksDrawCommands = std::span{sceneDrawCommands}.subspan(firstTerrainCommand);
+
   uploadData(
     verts, inds, instanceMatrices, sceneDrawCommands, bboxes, allInstances, materialParams);
 }

@@ -41,8 +41,6 @@ struct SceneMultiplexing
   glm::vec3 offsets = {};
 };
 
-// @TODO: refactor baked/non baked choice
-
 class SceneManager
 {
 public:
@@ -53,6 +51,19 @@ public:
   // @TODO: restore data getters if needed
   std::span<const IndirectCommand> getIndirectCommands() const { return sceneDrawCommands; }
   std::span<const CullableInstance> getInstances() const { return allInstances; }
+
+  std::pair<uint32_t, uint32_t> getSceneObjectsIndirectCommandsSubrange() const
+  {
+    return {
+      uint32_t(sceneObjectsDrawCommands.data() - sceneDrawCommands.data()),
+      uint32_t(sceneObjectsDrawCommands.size())};
+  }
+  std::pair<uint32_t, uint32_t> getTerrainIndirectCommandsSubrange() const
+  {
+    return {
+      uint32_t(terrainChunksDrawCommands.data() - sceneDrawCommands.data()),
+      uint32_t(terrainChunksDrawCommands.size())};
+  }
 
   std::span<const glm::mat4> getInstanceMatrices() { return instanceMatrices; }
   std::span<const uint32_t> getInstanceMeshes() { return instanceMeshes; }
@@ -123,6 +134,7 @@ private:
     std::vector<IndirectCommand> sceneDrawCommands;
     std::vector<BBox> bboxes;
     std::vector<CullableInstance> allInstances;
+    size_t firstTerrainCommand;
   };
 
   using ProcessedLights = std::unique_ptr<UniformLights>;
@@ -158,6 +170,9 @@ private:
   std::vector<IndirectCommand> sceneDrawCommands;
   std::vector<BBox> bboxes;
   std::vector<CullableInstance> allInstances;
+
+  std::span<IndirectCommand> sceneObjectsDrawCommands;
+  std::span<IndirectCommand> terrainChunksDrawCommands;
 
   std::unique_ptr<UniformLights> lightsData{};
 

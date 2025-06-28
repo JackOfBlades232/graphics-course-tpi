@@ -9,20 +9,7 @@
 
 layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 
-
-// @TODO: 4x3
-layout(binding = 0, set = 0) readonly buffer instance_matrices_t
-{
-  mat4 instanceMatrices[];
-};
-layout(binding = 1, set = 0) readonly buffer all_instances_t
-{
-  CullableInstance allInstances[];
-};
-layout(binding = 2, set = 0) readonly buffer bboxes_t
-{
-  BBox bboxes[];
-};
+#include "instancing.glsl.inc"
 
 layout(binding = 3, set = 0) writeonly buffer instances_t
 {
@@ -258,8 +245,10 @@ void main(void)
   if (idx < allInstances.length())
   {
     const CullableInstance inst = allInstances[idx];
-    const BBox bbox = bboxes[inst.commandId]; 
-    const mat4 instMat = instanceMatrices[inst.matrixId];
+
+    // @TODO: make all the 'player' stuff view stuff instead
+    const mat4 instMat = get_inst_matrix(inst, constants.playerWorldPos);
+    const BBox bbox = get_inst_bbox(inst);
 
     if (instance_is_in_view(bbox, instMat, constants.cullingMode))
     {
@@ -267,8 +256,9 @@ void main(void)
         commands[inst.commandId].firstInstance +
         atomicAdd(commands[inst.commandId].instanceCount, 1);
 
-      markedInstances[destId].matrixId = inst.matrixId;
+      markedInstances[destId].instId = inst.instId;
       markedInstances[destId].materialId = inst.materialId;
+      markedInstances[destId].flags = inst.flags;
     }
   }
 }
