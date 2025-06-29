@@ -27,8 +27,14 @@ struct TerrainSourceData
 #define CLIPMAP_EXTENT_STEP 5.f
 #define CLIPMAP_UPDATE_MIN_DPOS 0.2f
 
+// @TODO: tweakable?
+#define TERRAIN_CHUNKS_LEVEL_DIM 4
+#define TERRAIN_FIRST_LEVEL_CHUNKS (TERRAIN_CHUNKS_LEVEL_DIM * TERRAIN_CHUNKS_LEVEL_DIM)
+#define TERRAIN_OTHER_LEVELS_CHUNKS (TERRAIN_FIRST_LEVEL_CHUNKS - (TERRAIN_FIRST_LEVEL_CHUNKS / 4))
+
 // @TODO: not only tweakable, but dependent on data
-#define NOISE_REL_HEIGHT_AMPLITUDE 0.025f
+#define TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE 0.005f
+#define TERRAIN_CHUNK_TESSELLATION_FACTOR 128
 
 // @TODO: sort out maths around toroidal, now it's kinda hacky
 

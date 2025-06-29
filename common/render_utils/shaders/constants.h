@@ -16,6 +16,8 @@ struct Constants
 
   shader_vec3 toroidalOffset;
   shader_uint pad1_;
+  shader_vec3 lastToroidalUpdatePlayerWorldPos;
+  shader_uint pad2_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

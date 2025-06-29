@@ -25,7 +25,7 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
-layout (location = 0) out VS_OUT
+layout(location = 0) out VS_OUT
 {
   vec3 wPos;
   vec3 wNorm;
