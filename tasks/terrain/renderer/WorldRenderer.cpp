@@ -116,6 +116,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
       .layers = CLIPMAP_LEVEL_COUNT});
 
+    terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
+      .filter = vk::Filter::eLinear,
+      .addressMode = vk::SamplerAddressMode::eRepeat,
+      .name = "terrain_clipmap_sampler"});
+
     terrain->geometryLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
     terrain->albedoLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
@@ -125,6 +130,13 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         terrain->geometryClipmap.genBinding(
           {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
         uint32_t(i));
+      terrain->geometryLevelsSamplerBindings.emplace_back(
+        2,
+        terrain->geometryClipmap.genBinding(
+          terrain->clipmapSampler.get(),
+          vk::ImageLayout::eShaderReadOnlyOptimal,
+          {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
     }
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
@@ -133,12 +145,19 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         terrain->albedoClipmap.genBinding(
           {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
         uint32_t(i));
+      terrain->albedoLevelsSamplerBindings.emplace_back(
+        3,
+        terrain->albedoClipmap.genBinding(
+          terrain->clipmapSampler.get(),
+          vk::ImageLayout::eShaderReadOnlyOptimal,
+          {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
     }
 
     debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
     debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
 
-    terrain->lastToroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+    constantsData.lastToroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   }
   else
     spdlog::info("JB_terrain: terrain not present");
@@ -198,6 +217,12 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "static_mesh",
     {RENDERER_SHADERS_ROOT "static_mesh.frag.spv", RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+  etna::create_program(
+    "terrain_mesh",
+    {RENDERER_SHADERS_ROOT "terrain_mesh.frag.spv",
+     RENDERER_SHADERS_ROOT "terrain_mesh.vert.spv",
+     RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
+     RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
   etna::create_program("culling", {RENDERER_SHADERS_ROOT "culling.comp.spv"});
   etna::create_program(
     "reset_indirect_commands", {RENDERER_SHADERS_ROOT "reset_indirect_commands.comp.spv"});
@@ -254,9 +279,53 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
           .depthAttachmentFormat = vk::Format::eD32Sfloat,
         },
     };
+  auto terrainPipelineCreateInfo =
+    etna::GraphicsPipeline::CreateInfo{
+      .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::ePatchList},
+      .tessellationConfig = {.patchControlPoints = 4},
+      .rasterizationConfig =
+        vk::PipelineRasterizationStateCreateInfo{
+          .polygonMode = vk::PolygonMode::eFill,
+          .cullMode = vk::CullModeFlagBits::eBack,
+          .frontFace = vk::FrontFace::eCounterClockwise,
+          .lineWidth = 1.f,
+        },
+      .blendingConfig =
+        {.attachments =
+           {
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+           },
+         .logicOp = vk::LogicOp::eSet},
+      .fragmentShaderOutput =
+        {
+          .colorAttachmentFormats = // @TODO: save these into vars
+          {vk::Format::eR32G32B32A32Sfloat,
+           vk::Format::eR32G32B32A32Sfloat,
+           vk::Format::eR32G32B32A32Sfloat},
+          .depthAttachmentFormat = vk::Format::eD32Sfloat,
+        },
+
+    };
 
   staticMeshPipeline =
     pipelineManager.createGraphicsPipeline("static_mesh", meshPipelineCreateInfo);
+  terrainMeshPipeline =
+    pipelineManager.createGraphicsPipeline("terrain_mesh", terrainPipelineCreateInfo);
+
   cullingPipeline = pipelineManager.createComputePipeline("culling", {});
   resetIndirectCommandsPipeline =
     pipelineManager.createComputePipeline("reset_indirect_commands", {});
@@ -311,7 +380,7 @@ void WorldRenderer::update(const FramePacket& packet)
     if (terrain)
     {
       constantsData.toroidalOffset =
-        constantsData.playerWorldPos - terrain->lastToroidalUpdatePlayerWorldPos;
+        constantsData.playerWorldPos - constantsData.lastToroidalUpdatePlayerWorldPos;
       const float xzDisp =
         glm::length(glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z});
       if (xzDisp >= CLIPMAP_UPDATE_MIN_DPOS)
@@ -327,9 +396,6 @@ void WorldRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
-  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
-  memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
-
   // @TODO: unhack
   if (initialTransition)
   {
@@ -343,16 +409,25 @@ void WorldRenderer::renderWorld(
     initialTransition = false;
   }
 
+  // @NOTE done here to make it to the gpu frame. A bit hacky.
+  bool updateClipmap = false;
+  if (terrain && terrain->needToroidalUpdate)
+  {
+    updateClipmap = true;
+    terrain->needToroidalUpdate = false;
+    constantsData.lastToroidalUpdatePlayerWorldPos = constantsData.playerWorldPos;
+  }
+
+  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
+  memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
+
   // @TODO pack culling & draw back into a renderScene method (will need for shadow maps)
 
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
 
-    if (terrain && terrain->needToroidalUpdate)
+    if (updateClipmap)
     {
-      terrain->needToroidalUpdate = false;
-      terrain->lastToroidalUpdatePlayerWorldPos = constantsData.playerWorldPos;
-
       ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
 
       auto programInfo = etna::get_shader_program("clipmap_gen");
@@ -505,14 +580,6 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
 
-      auto programInfo = etna::get_shader_program("static_mesh");
-      auto set = etna::create_descriptor_set(
-        programInfo.getDescriptorLayoutId(0),
-        cmd_buf,
-        {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
-         etna::Binding{1, culledInstancesBuf.genBinding()},
-         etna::Binding{8, constants->get().genBinding()}});
-
       etna::RenderTargetState renderTargets{
         cmd_buf,
         {{0, 0}, {resolution.x, resolution.y}},
@@ -521,25 +588,79 @@ void WorldRenderer::renderWorld(
          {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
         {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}};
 
-      cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
-        staticMeshPipeline.getVkPipelineLayout(),
-        0,
-        {set.getVkSet(),
-         materialParamsDsetFrag.getVkSet(),
-         bindlessTexturesDsetFrag.getVkSet(),
-         bindlessSamplersDsetFrag.getVkSet()},
-        {});
+      {
+        ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
 
-      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
+        auto programInfo = etna::get_shader_program("static_mesh");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
+           etna::Binding{1, culledInstancesBuf.genBinding()},
+           etna::Binding{8, constants->get().genBinding()}});
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics,
+          staticMeshPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet(),
+           materialParamsDsetFrag.getVkSet(),
+           bindlessTexturesDsetFrag.getVkSet(),
+           bindlessSamplersDsetFrag.getVkSet()},
+          {});
 
-      cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
-      cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
 
-      auto [offset, count] = sceneMgr->getSceneObjectsIndirectCommandsSubrange();
+        cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
+        cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
 
-      cmd_buf.drawIndexedIndirect(
-        sceneMgr->getIndirectCommandsBuf().get(), offset, count, sizeof(IndirectCommand));
+        auto [offset, count] = sceneMgr->getSceneObjectsIndirectCommandsSubrange();
+
+        cmd_buf.drawIndexedIndirect(
+          sceneMgr->getIndirectCommandsBuf().get(), offset, count, sizeof(IndirectCommand));
+      }
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, terrain);
+
+        auto programInfo = etna::get_shader_program("terrain_mesh");
+        std::vector<etna::Binding> bindings{};
+        bindings.reserve(
+          terrain->geometryLevelsBindings.size() + terrain->albedoLevelsBindings.size() + 4);
+        bindings.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
+        bindings.emplace_back(1, culledInstancesBuf.genBinding());
+        for (const auto& b : terrain->geometryLevelsSamplerBindings)
+          bindings.push_back(b);
+        for (const auto& b : terrain->albedoLevelsSamplerBindings)
+          bindings.push_back(b);
+        bindings.emplace_back(7, terrain->source.genBinding());
+        bindings.emplace_back(8, constants->get().genBinding());
+
+        auto set =
+          etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics,
+          terrainMeshPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainMeshPipeline.getVkPipeline());
+
+        auto [offset, count] = sceneMgr->getTerrainIndirectCommandsSubrange();
+
+        cmd_buf.pushConstants<shader_uint>(
+          terrainMeshPipeline.getVkPipelineLayout(),
+          vk::ShaderStageFlagBits::eVertex,
+          0,
+          shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance));
+
+        cmd_buf.drawIndexedIndirect(
+          sceneMgr->getIndirectCommandsBuf().get(),
+          offset * sizeof(IndirectCommand),
+          count,
+          sizeof(IndirectCommand));
+      }
     }
 
     // @TODO: should resolve be in renderer rather than in world renderer?
@@ -648,9 +769,9 @@ void WorldRenderer::drawGui()
     {
       ImGui::Text(
         "Last toroidal update pos: [%.3f, %.3f, %.3f]",
-        terrain->lastToroidalUpdatePlayerWorldPos.x,
-        terrain->lastToroidalUpdatePlayerWorldPos.y,
-        terrain->lastToroidalUpdatePlayerWorldPos.z);
+        constantsData.lastToroidalUpdatePlayerWorldPos.x,
+        constantsData.lastToroidalUpdatePlayerWorldPos.y,
+        constantsData.lastToroidalUpdatePlayerWorldPos.z);
       ImGui::Text(
         "Toroidal offset: [%.3f, %.3f, %.3f]",
         constantsData.toroidalOffset.x,

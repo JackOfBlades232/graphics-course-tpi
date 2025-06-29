@@ -17,9 +17,8 @@ layout(binding = 2, set = 0) readonly buffer bboxes_t
 
 BBox get_inst_bbox(const CullableInstance inst)
 {
-  // @TODO: more robust -- if we have many chunk types, commandId will not be a proper base
   if ((inst.flags & TERRAIN_CHUNK_INSTANCE_FLAG) != 0)
-    return bboxes[inst.commandId + inst.instId];
+    return bboxes[inst.instId];
   else
     return bboxes[inst.commandId];
 }
