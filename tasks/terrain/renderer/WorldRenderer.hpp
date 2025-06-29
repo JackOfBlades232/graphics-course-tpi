@@ -45,6 +45,7 @@ private:
 
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
   etna::GraphicsPipeline staticMeshPipeline{};
+  etna::GraphicsPipeline terrainMeshPipeline{};
   etna::ComputePipeline cullingPipeline{};
   etna::ComputePipeline resetIndirectCommandsPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
@@ -61,11 +62,14 @@ private:
     etna::Image albedoClipmap{};
     std::vector<etna::Binding> geometryLevelsBindings{};
     std::vector<etna::Binding> albedoLevelsBindings{};
+    std::vector<etna::Binding> geometryLevelsSamplerBindings{};
+    std::vector<etna::Binding> albedoLevelsSamplerBindings{};
 
     etna::Buffer source{};
     TerrainSourceData sourceData{};
 
-    glm::vec3 lastToroidalUpdatePlayerWorldPos = {};
+    etna::Sampler clipmapSampler{};
+
     bool needToroidalUpdate = false;
   };
   std::optional<TerrainRenderingData> terrain{};
@@ -77,7 +81,8 @@ private:
   etna::Sampler defaultSampler;
 
   etna::PersistentDescriptorSet materialParamsDsetFrag, bindlessTexturesDsetFrag,
-    bindlessSamplersDsetFrag, materialParamsDsetComp, bindlessTexturesDsetComp,
+    bindlessSamplersDsetFrag;
+  etna::PersistentDescriptorSet materialParamsDsetComp, bindlessTexturesDsetComp,
     bindlessSamplersDsetComp;
   bool initialTransition = true; // @HACK
 

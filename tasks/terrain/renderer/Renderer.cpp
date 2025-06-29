@@ -40,7 +40,10 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
     .features =
       vk::PhysicalDeviceFeatures2{
         .pNext = &featuresDescIndexing,
-        .features = {.multiDrawIndirect = true, .drawIndirectFirstInstance = true}},
+        .features =
+          {.tessellationShader = true,
+           .multiDrawIndirect = true,
+           .drawIndirectFirstInstance = true}},
     .physicalDeviceIndexOverride = {},
     .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),
   });
