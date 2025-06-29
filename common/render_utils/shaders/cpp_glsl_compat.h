@@ -82,6 +82,8 @@ shader_mat4 translation(shader_vec3 offs)
 #define round_from_zero(x_) (shader_round((x_) + shader_sign(x_) * 0.5f))
 #define round_to_zero(x_) (shader_round((x_) - shader_sign(x_) * 0.5f))
 
+#define SHADER_EPSILON 0.00001f
+
 // NOLINTEND
 
 #endif // SHADER_COMMON_H_INCLUDED

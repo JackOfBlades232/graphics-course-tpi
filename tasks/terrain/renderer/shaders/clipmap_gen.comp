@@ -103,11 +103,11 @@ void main(void)
       relHeight = sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, uv, 0.f).x;
 
     // @TEMP just scale back into [0, 1]
-    relHeight *= 1.f - 2.f * NOISE_REL_HEIGHT_AMPLITUDE;
-    relHeight += NOISE_REL_HEIGHT_AMPLITUDE;
+    relHeight *= 1.f - 2.f * TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
+    relHeight += TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
 
     // @TODO seed
-    relHeight += simplex_noise(uv * 2000.f) * NOISE_REL_HEIGHT_AMPLITUDE;
+    relHeight += simplex_noise(uv * 2000.f) * TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
 
     imageStore(geom[params.level], destImageCoord, vec4(relHeight));
   }

@@ -11,9 +11,13 @@ target_link_libraries(renderer
 
 target_add_shaders(renderer
   shaders/gbuffer_resolve.frag
-  shaders/static_mesh.frag
-  shaders/static_mesh.vert
   shaders/culling.comp
   shaders/reset_indirect_commands.comp
   shaders/clipmap_gen.comp
+  shaders/static_mesh.vert
+  shaders/static_mesh.frag
+  shaders/terrain_mesh.vert
+  shaders/terrain_mesh.tesc
+  shaders/terrain_mesh.tese
+  shaders/terrain_mesh.frag
 )

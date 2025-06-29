@@ -1,0 +1,51 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_ARB_separate_shader_objects : enable
+
+#include "materials.h"
+#include "terrain.h"
+#include "constants.h"
+
+
+// @TODO: find an appropriate way to unify with static_mesh
+
+layout(location = 0) out vec4 out_fragAlbedo;
+layout(location = 1) out vec3 out_fragMaterial;
+layout(location = 2) out vec3 out_fragNormal;
+
+layout(binding = 3, set = 0) uniform sampler2D albedoClipmap[CLIPMAP_LEVEL_COUNT];
+
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
+layout(location = 0) in TE_OUT
+{
+  vec3 wPos;
+  vec3 wNorm;
+  vec4 wTangent;
+  vec2 texCoord;
+  flat uint matId; // @TODO: remove? We sample clipmap and do this differently anyway
+} surf;
+
+void main(void)
+{
+  vec3 surfaceColor;
+  vec3 materialData;
+  vec3 normal;
+
+  // @TODO: albedo from clipmap
+  // @TODO: separate material for terrain, or just do diffuse with normal
+  // @TODO: normal from clipmap
+
+  surfaceColor = vec3(0.f);
+  materialData = vec3(float(surf.matId), 0.0f, 0.0f);
+  normal = surf.wNorm;
+
+  out_fragAlbedo = vec4(surfaceColor, 1.f);
+  out_fragMaterial = materialData;
+  out_fragNormal = normal;
+}
+
