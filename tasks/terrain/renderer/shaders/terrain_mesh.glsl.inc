@@ -19,7 +19,7 @@ void get_mip_info(
 {
   const float relOffs =
     max(abs(w_rel_point.x), abs(w_rel_point.y)) / CLIPMAP_EXTENT_STEP;
-  const float levelExact = max(log2(relOffs + 1.f), 0.f);
+  const float levelExact = max(log2(relOffs + 0.99f), 0.f);
   base_level = uint(floor(levelExact));
   next_level = base_level + 1;
   coeff = levelExact - float(base_level);
@@ -35,7 +35,7 @@ vec2 get_toroidal_uv(vec2 w_rel_point, uint level)
   const vec2 toroidalScrolloff =
     fract(constants.lastToroidalUpdatePlayerWorldPos.xz / size) - 0.5f;
 
-  return fract(uvFlat + toroidalScrolloff + 1.f);
+  return fract(uvFlat + toroidalScrolloff);
 }
 
 float sample_geom_clipmap_level(vec2 w_rel_point, uint level)
@@ -63,14 +63,12 @@ float sample_geom_clipmap(vec2 w_rel_point)
   get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
 
   float val = sample_geom_clipmap_level(w_rel_point, baseLevel);
-  /*
   if (nextLevel < CLIPMAP_LEVEL_COUNT)
   {
     float nextSample = sample_geom_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
     val += coeff * nextSample;
   }
-  */
 
   return val;
 }
@@ -89,14 +87,12 @@ vec3 sample_normal_clipmap(vec2 w_rel_point)
   get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
 
   vec3 val = sample_normal_clipmap_level(w_rel_point, baseLevel);
-  /*
   if (nextLevel < CLIPMAP_LEVEL_COUNT)
   {
     vec3 nextSample = sample_normal_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
     val += coeff * nextSample;
   }
-  */
 
   return normalize(val);
 }
