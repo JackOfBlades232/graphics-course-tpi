@@ -41,11 +41,51 @@ public:
     vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
 
 private:
+  struct MeshPipeline
+  {
+    etna::GraphicsPipeline mainPipeline;
+    etna::GraphicsPipeline wireframePipeline;
+
+    MeshPipeline(
+      etna::PipelineManager& pipeman,
+      const char* prog_name,
+      const etna::GraphicsPipeline::CreateInfo& ci);
+
+    MeshPipeline() = default;
+    MeshPipeline(MeshPipeline&&) = default;
+    MeshPipeline& operator=(MeshPipeline&&) = default;
+
+    const etna::GraphicsPipeline& get(bool wf) const
+    {
+      return wf ? wireframePipeline : mainPipeline;
+    }
+  };
+
+  struct TerrainRenderingData
+  {
+    etna::Image geometryClipmap{};
+    etna::Image normalClipmap{};
+    etna::Image albedoClipmap{};
+    std::vector<etna::Binding> geometryLevelsBindings{};
+    std::vector<etna::Binding> normalLevelsBindings{};
+    std::vector<etna::Binding> albedoLevelsBindings{};
+    std::vector<etna::Binding> geometryLevelsSamplerBindings{};
+    std::vector<etna::Binding> normalLevelsSamplerBindings{};
+    std::vector<etna::Binding> albedoLevelsSamplerBindings{};
+
+    etna::Buffer source{};
+    TerrainSourceData sourceData{};
+
+    etna::Sampler clipmapSampler{};
+
+    bool needToroidalUpdate = false;
+  };
+
   std::unique_ptr<SceneManager> sceneMgr;
 
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
-  etna::GraphicsPipeline staticMeshPipeline{};
-  etna::GraphicsPipeline terrainMeshPipeline{};
+  MeshPipeline staticMeshPipeline{};
+  MeshPipeline terrainMeshPipeline{};
   etna::ComputePipeline cullingPipeline{};
   etna::ComputePipeline resetIndirectCommandsPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
@@ -56,22 +96,6 @@ private:
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
 
-  struct TerrainRenderingData
-  {
-    etna::Image geometryClipmap{};
-    etna::Image albedoClipmap{};
-    std::vector<etna::Binding> geometryLevelsBindings{};
-    std::vector<etna::Binding> albedoLevelsBindings{};
-    std::vector<etna::Binding> geometryLevelsSamplerBindings{};
-    std::vector<etna::Binding> albedoLevelsSamplerBindings{};
-
-    etna::Buffer source{};
-    TerrainSourceData sourceData{};
-
-    etna::Sampler clipmapSampler{};
-
-    bool needToroidalUpdate = false;
-  };
   std::optional<TerrainRenderingData> terrain{};
 
   // @TODO: tweakable
@@ -105,4 +129,5 @@ private:
   uint32_t currentDebugTexLayer = 0;
   bool settingsGuiEnabled = false;
   bool drawBboxes = false;
+  bool wireframe = false;
 };
