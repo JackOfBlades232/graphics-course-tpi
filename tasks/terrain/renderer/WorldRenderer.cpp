@@ -16,6 +16,17 @@
 #include <memory>
 #include <vector>
 
+WorldRenderer::MeshPipeline::MeshPipeline(
+  etna::PipelineManager& pipeman,
+  const char* prog_name,
+  const etna::GraphicsPipeline::CreateInfo& ci)
+  : mainPipeline{pipeman.createGraphicsPipeline(prog_name, ci)}
+{
+  auto wci = ci;
+  wci.rasterizationConfig.polygonMode = vk::PolygonMode::eLine;
+  wireframePipeline = pipeman.createGraphicsPipeline(prog_name, wci);
+}
+
 WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   : sceneMgr{std::make_unique<SceneManager>()}
   , wc{wc}
@@ -108,6 +119,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .format = vk::Format::eR32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
       .layers = CLIPMAP_LEVEL_COUNT});
+    terrain->normalClipmap = ctx.createImage(etna::Image::CreateInfo{
+      .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+      .name = "normal_clipmap",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+      .layers = CLIPMAP_LEVEL_COUNT});
     terrain->albedoClipmap = ctx.createImage(etna::Image::CreateInfo{
       // @TODO: settable
       .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
@@ -118,10 +135,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
     terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
       .filter = vk::Filter::eLinear,
-      .addressMode = vk::SamplerAddressMode::eRepeat,
+      .addressMode = vk::SamplerAddressMode::eClampToEdge,
       .name = "terrain_clipmap_sampler"});
 
     terrain->geometryLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
+    terrain->normalLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
     terrain->albedoLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
@@ -140,13 +158,28 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     }
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
-      terrain->albedoLevelsBindings.emplace_back(
+      terrain->normalLevelsBindings.emplace_back(
         1,
+        terrain->normalClipmap.genBinding(
+          {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
+      terrain->normalLevelsSamplerBindings.emplace_back(
+        3,
+        terrain->normalClipmap.genBinding(
+          terrain->clipmapSampler.get(),
+          vk::ImageLayout::eShaderReadOnlyOptimal,
+          {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
+    }
+    for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
+    {
+      terrain->albedoLevelsBindings.emplace_back(
+        2,
         terrain->albedoClipmap.genBinding(
           {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
         uint32_t(i));
       terrain->albedoLevelsSamplerBindings.emplace_back(
-        3,
+        4,
         terrain->albedoClipmap.genBinding(
           terrain->clipmapSampler.get(),
           vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -155,6 +188,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     }
 
     debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
+    debugTextures.emplace("normal_clipmap", &terrain->normalClipmap);
     debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
 
     constantsData.lastToroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
@@ -321,10 +355,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
     };
 
-  staticMeshPipeline =
-    pipelineManager.createGraphicsPipeline("static_mesh", meshPipelineCreateInfo);
-  terrainMeshPipeline =
-    pipelineManager.createGraphicsPipeline("terrain_mesh", terrainPipelineCreateInfo);
+  staticMeshPipeline = MeshPipeline{pipelineManager, "static_mesh", meshPipelineCreateInfo};
+  terrainMeshPipeline = MeshPipeline{pipelineManager, "terrain_mesh", terrainPipelineCreateInfo};
 
   cullingPipeline = pipelineManager.createComputePipeline("culling", {});
   resetIndirectCommandsPipeline =
@@ -433,8 +465,11 @@ void WorldRenderer::renderWorld(
       auto programInfo = etna::get_shader_program("clipmap_gen");
       std::vector<etna::Binding> bindings{};
       bindings.reserve(
-        terrain->geometryLevelsBindings.size() + terrain->albedoLevelsBindings.size() + 2);
+        terrain->geometryLevelsBindings.size() + terrain->normalLevelsBindings.size() +
+        terrain->albedoLevelsBindings.size() + 2);
       for (const auto& b : terrain->geometryLevelsBindings)
+        bindings.push_back(b);
+      for (const auto& b : terrain->normalLevelsBindings)
         bindings.push_back(b);
       for (const auto& b : terrain->albedoLevelsBindings)
         bindings.push_back(b);
@@ -592,6 +627,8 @@ void WorldRenderer::renderWorld(
         ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
 
         auto programInfo = etna::get_shader_program("static_mesh");
+        const auto& pipe = staticMeshPipeline.get(wireframe);
+
         auto set = etna::create_descriptor_set(
           programInfo.getDescriptorLayoutId(0),
           cmd_buf,
@@ -600,7 +637,7 @@ void WorldRenderer::renderWorld(
            etna::Binding{8, constants->get().genBinding()}});
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics,
-          staticMeshPipeline.getVkPipelineLayout(),
+          pipe.getVkPipelineLayout(),
           0,
           {set.getVkSet(),
            materialParamsDsetFrag.getVkSet(),
@@ -608,7 +645,7 @@ void WorldRenderer::renderWorld(
            bindlessSamplersDsetFrag.getVkSet()},
           {});
 
-        cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, staticMeshPipeline.getVkPipeline());
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
 
         cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
         cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
@@ -623,12 +660,18 @@ void WorldRenderer::renderWorld(
         ETNA_PROFILE_GPU(cmd_buf, terrain);
 
         auto programInfo = etna::get_shader_program("terrain_mesh");
+        const auto& pipe = terrainMeshPipeline.get(wireframe);
+
         std::vector<etna::Binding> bindings{};
         bindings.reserve(
-          terrain->geometryLevelsBindings.size() + terrain->albedoLevelsBindings.size() + 4);
+          terrain->geometryLevelsSamplerBindings.size() +
+          terrain->normalLevelsSamplerBindings.size() +
+          terrain->albedoLevelsSamplerBindings.size() + 4);
         bindings.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
         bindings.emplace_back(1, culledInstancesBuf.genBinding());
         for (const auto& b : terrain->geometryLevelsSamplerBindings)
+          bindings.push_back(b);
+        for (const auto& b : terrain->normalLevelsSamplerBindings)
           bindings.push_back(b);
         for (const auto& b : terrain->albedoLevelsSamplerBindings)
           bindings.push_back(b);
@@ -639,18 +682,14 @@ void WorldRenderer::renderWorld(
           etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
 
         cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics,
-          terrainMeshPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet()},
-          {});
+          vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, {set.getVkSet()}, {});
 
-        cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainMeshPipeline.getVkPipeline());
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
 
         auto [offset, count] = sceneMgr->getTerrainIndirectCommandsSubrange();
 
         cmd_buf.pushConstants<shader_uint>(
-          terrainMeshPipeline.getVkPipelineLayout(),
+          pipe.getVkPipelineLayout(),
           vk::ShaderStageFlagBits::eVertex,
           0,
           shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance));
@@ -909,6 +948,7 @@ void WorldRenderer::drawGui()
       static bool useSatCulling = true;
       ImGui::Checkbox("Use SAT culling", &useSatCulling);
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
+      ImGui::Checkbox("Wireframe", &wireframe);
 
       constantsData.cullingMode = useSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
 

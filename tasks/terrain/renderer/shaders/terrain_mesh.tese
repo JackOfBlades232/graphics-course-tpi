@@ -10,6 +10,7 @@
 layout(quads, equal_spacing, ccw) in;
 
 layout(binding = 2, set = 0) uniform sampler2D geomClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 3, set = 0) uniform sampler2D normalClipmap[CLIPMAP_LEVEL_COUNT];
 
 layout(binding = 7, set = 0) uniform terrain_source_t
 {
@@ -28,21 +29,21 @@ layout(location = 0) out TE_OUT
   vec2 texCoord;
 } teOut;
 
-const float OFFSET_FOR_NORMAL_EVAL = 0.1f;
+const float OFFSET_FOR_NORMAL_EVAL = 0.01f;
 
-// @TODO: pull out
-vec4 sample_clipmap(vec2 w_rel_point)
+void get_mip_info(
+  vec2 w_rel_point, out uint base_level, out uint next_level, out float coeff)
 {
-  // @TODO: calculate lod from player pos? Doesn't seem better atm, and will
-  // have to deal somehow with edges if we are out of the inner level
+  const float relOffs =
+    max(abs(w_rel_point.x), abs(w_rel_point.y)) / CLIPMAP_EXTENT_STEP;
+  const float levelExact = max(log2(relOffs + 1.f), 0.f);
+  base_level = uint(floor(levelExact));
+  next_level = base_level + 1;
+  coeff = levelExact - float(base_level);
+}
 
-  // @TODO: Sample multiple levels and mix + sample higher levels when
-  // z diff is big
-
-  const uint level = clamp(
-    uint(floor(log2(max(w_rel_point.x, w_rel_point.y) / CLIPMAP_EXTENT_STEP))),
-    0, CLIPMAP_LEVEL_COUNT - 1);
-
+vec2 get_toroidal_uv(vec2 w_rel_point, uint level)
+{
   const vec2 extent = float(1 << level) * vec2(CLIPMAP_EXTENT_STEP);
   const vec2 size = 2.f * extent;
   const vec2 relToCorner = w_rel_point + extent;
@@ -51,32 +52,66 @@ vec4 sample_clipmap(vec2 w_rel_point)
   const vec2 toroidalScrolloff =
     fract(constants.lastToroidalUpdatePlayerWorldPos.xz / size) - 0.5f;
 
-  const vec2 toroidalUv = fract(uvFlat + toroidalScrolloff);
-
-  return textureLod(geomClipmap[level], toroidalUv, 0);
+  return fract(uvFlat + toroidalScrolloff + 1.f);
 }
 
-float get_abs_height(vec2 w_rel_point)
+float sample_geom_clipmap_level(vec2 w_rel_point, uint level)
 {
-  const float relH = sample_clipmap(w_rel_point).x;
-  const float absH = terrainSource.rangeMin.y +
-    relH * (terrainSource.rangeMax.y - terrainSource.rangeMin.y);
-  return absH;
+  return textureLod(geomClipmap[level], get_toroidal_uv(w_rel_point, level), 0).x;
 }
 
-vec3 evaluate_normal(vec2 w_rel_point)
+vec3 sample_normal_clipmap_level(vec2 w_rel_point, uint level)
 {
-  const vec2 xl2 = w_rel_point - vec2(OFFSET_FOR_NORMAL_EVAL, 0.f);
-  const vec2 xg2 = w_rel_point + vec2(OFFSET_FOR_NORMAL_EVAL, 0.f);
-  const vec2 zl2 = w_rel_point - vec2(0.f, OFFSET_FOR_NORMAL_EVAL);
-  const vec2 zg2 = w_rel_point + vec2(0.f, OFFSET_FOR_NORMAL_EVAL);
+  return textureLod(normalClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyz;
+}
 
-  const vec3 xl = vec3(xl2.x, get_abs_height(xl2), xl2.y);
-  const vec3 xg = vec3(xg2.x, get_abs_height(xg2), xg2.y);
-  const vec3 zl = vec3(zl2.x, get_abs_height(zl2), zl2.y);
-  const vec3 zg = vec3(zg2.x, get_abs_height(zg2), zg2.y);
+// @TODO: pull out
+float sample_geom_clipmap(vec2 w_rel_point)
+{
+  // @TODO: calculate lod from player pos? Doesn't seem better atm, and will
+  // have to deal somehow with edges if we are out of the inner level
 
-  return normalize(cross(xg - xl, zg - zl));
+  // @TODO: proper mip coeff/level choice -- ddx ddy (check how it works)
+  // @TODO: Factor player z in
+
+  uint baseLevel;
+  uint nextLevel;
+  float coeff;
+  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+
+  float val = sample_geom_clipmap_level(w_rel_point, baseLevel);
+  if (nextLevel < CLIPMAP_LEVEL_COUNT)
+  {
+    float nextSample = sample_geom_clipmap_level(w_rel_point, nextLevel);
+    val *= 1.f - coeff;
+    val += coeff * nextSample;
+  }
+
+  return val;
+}
+
+vec3 sample_normal_clipmap(vec2 w_rel_point)
+{
+  // @TODO: calculate lod from player pos? Doesn't seem better atm, and will
+  // have to deal somehow with edges if we are out of the inner level
+
+  // @TODO: proper mip coeff/level choice -- ddx ddy (check how it works)
+  // @TODO: Factor player z in
+
+  uint baseLevel;
+  uint nextLevel;
+  float coeff;
+  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+
+  vec3 val = sample_normal_clipmap_level(w_rel_point, baseLevel);
+  if (nextLevel < CLIPMAP_LEVEL_COUNT)
+  {
+    vec3 nextSample = sample_normal_clipmap_level(w_rel_point, nextLevel);
+    val *= 1.f - coeff;
+    val += coeff * nextSample;
+  }
+
+  return normalize(val);
 }
 
 void main(void)
@@ -89,8 +124,8 @@ void main(void)
   const vec2 wOffsetFromClipmapCenter =
     pointXZ - constants.lastToroidalUpdatePlayerWorldPos.xz;
 
-  teOut.wPos = vec3(pointXZ.x, get_abs_height(wOffsetFromClipmapCenter), pointXZ.y);
-  teOut.wNorm = evaluate_normal(wOffsetFromClipmapCenter);
+  teOut.wPos = vec3(pointXZ.x, sample_geom_clipmap(wOffsetFromClipmapCenter), pointXZ.y);
+  teOut.wNorm = sample_normal_clipmap(wOffsetFromClipmapCenter);
 
   teOut.wTangent = vec4(0.f); // @TODO: gen
   teOut.texCoord = wOffsetFromClipmapCenter; // Special for clipmap sampling
