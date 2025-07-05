@@ -33,7 +33,7 @@ struct TerrainSourceData
 #define TERRAIN_OTHER_LEVELS_CHUNKS (TERRAIN_FIRST_LEVEL_CHUNKS - (TERRAIN_FIRST_LEVEL_CHUNKS / 4))
 
 // @TODO: not only tweakable, but dependent on data
-#define TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE 0.005f
+#define TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE 0.01f
 #define TERRAIN_CHUNK_TESSELLATION_FACTOR 128
 
 // @TODO: sort out maths around toroidal, now it's kinda hacky
