@@ -4,6 +4,7 @@
 #include <etna/GraphicsPipeline.hpp>
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
+#include "shaders/cpp_glsl_compat.h"
 
 
 /**
@@ -28,7 +29,12 @@ public:
     const etna::Image& tex_to_draw,
     const etna::Sampler& sampler,
     std::optional<uint32_t> layer = std::nullopt,
-    std::optional<uint32_t> mip_level = std::nullopt);
+    std::optional<uint32_t> mip_level = std::nullopt,
+    shader_vec2 color_range = {0.f, 1.f},
+    bool showR = true,
+    bool showG = true,
+    bool showB = true,
+    bool showA = true);
 
 private:
   etna::GraphicsPipeline pipeline;
