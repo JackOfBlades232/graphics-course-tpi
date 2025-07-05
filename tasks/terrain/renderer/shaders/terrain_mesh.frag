@@ -14,18 +14,16 @@ layout(location = 0) out vec4 out_fragAlbedo;
 layout(location = 1) out vec3 out_fragMaterial;
 layout(location = 2) out vec3 out_fragNormal;
 
-layout(binding = 4, set = 0) uniform sampler2D albedoClipmap[CLIPMAP_LEVEL_COUNT];
-
 layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
 };
 
+#include "terrain_mesh.glsl.inc"
+
 layout(location = 0) in TE_OUT
 {
   vec3 wPos;
-  vec3 wNorm;
-  vec4 wTangent;
   vec2 texCoord;
 } surf;
 
@@ -40,7 +38,7 @@ void main(void)
 
   surfaceColor = vec3(0.5f, 0.9f, 0.4f);
   materialData = vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
-  normal = surf.wNorm;
+  normal = sample_normal_clipmap(surf.texCoord);
 
   // @TEST
   // surfaceColor *= 1000.f / length(surf.wPos - constants.playerWorldPos);
