@@ -127,6 +127,11 @@ private:
   std::optional<std::string> currentDebugTex{};
   uint32_t currentDebugTexMip = 0;
   uint32_t currentDebugTexLayer = 0;
+  glm::vec2 currentDebugTexColorRange = {0.f, 1.f};
+  bool currentDebugTexShowR = true;
+  bool currentDebugTexShowG = true;
+  bool currentDebugTexShowB = true;
+  bool currentDebugTexShowA = true;
   bool settingsGuiEnabled = false;
   bool drawBboxes = false;
   bool wireframe = false;

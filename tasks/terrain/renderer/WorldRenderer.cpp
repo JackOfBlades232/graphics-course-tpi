@@ -768,7 +768,12 @@ void WorldRenderer::renderWorld(
           *tex,
           defaultSampler,
           currentDebugTexLayer,
-          currentDebugTexMip);
+          currentDebugTexMip,
+          currentDebugTexColorRange,
+          currentDebugTexShowR,
+          currentDebugTexShowG,
+          currentDebugTexShowB,
+          currentDebugTexShowA);
       }
     }
   }
@@ -984,6 +989,17 @@ void WorldRenderer::drawGui()
         ETNA_ASSERT(tex);
         ImGui::InputInt("Debug texture mip level", (int*)&currentDebugTexMip);
         ImGui::InputInt("Debug texture layer", (int*)&currentDebugTexLayer);
+        ImGui::InputFloat2("Debug texture color range", &currentDebugTexColorRange.x);
+        ImGui::Checkbox("R", &currentDebugTexShowR);
+        ImGui::SameLine();
+        ImGui::Checkbox("G", &currentDebugTexShowG);
+        ImGui::SameLine();
+        ImGui::Checkbox("B", &currentDebugTexShowB);
+        ImGui::SameLine();
+        ImGui::Checkbox("A", &currentDebugTexShowA);
+
+        currentDebugTexColorRange.y =
+          std::max(currentDebugTexColorRange.x, currentDebugTexColorRange.y);
 
         currentDebugTexMip =
           glm::clamp(currentDebugTexMip, 0u, uint32_t(tex->getMipLevelCount() - 1));

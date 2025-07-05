@@ -35,7 +35,12 @@ void QuadRenderer::render(
   const etna::Image& tex_to_draw,
   const etna::Sampler& sampler,
   std::optional<uint32_t> layer,
-  std::optional<uint32_t> mip_level)
+  std::optional<uint32_t> mip_level,
+  shader_vec2 color_range,
+  bool showR,
+  bool showG,
+  bool showB,
+  bool showA)
 {
   auto programInfo = etna::get_shader_program(programId);
   auto set = etna::create_descriptor_set(
@@ -60,6 +65,19 @@ void QuadRenderer::render(
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.getVkPipeline());
   cmd_buf.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics, pipeline.getVkPipelineLayout(), 0, {set.getVkSet()}, {});
+
+  struct PushParams
+  {
+    shader_vec2 colorRange;
+    shader_uint colorMask;
+    shader_uint pad1_;
+  } params{};
+
+  params.colorRange = color_range;
+  params.colorMask = (showR ? 1 : 0) | (showG ? 2 : 0) | (showB ? 4 : 0) | (showA ? 8 : 0);
+
+  cmd_buf.pushConstants<PushParams>(
+    pipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eFragment, 0, params);
 
   cmd_buf.draw(3, 1, 0, 0);
 }
