@@ -14,7 +14,8 @@
 layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 
 layout(binding = 0, set = 0, r32f) uniform writeonly image2D geom[CLIPMAP_LEVEL_COUNT];
-layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D albedo[CLIPMAP_LEVEL_COUNT];
+layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D normal[CLIPMAP_LEVEL_COUNT];
+layout(binding = 2, set = 0, rgba32f) uniform writeonly image2D albedo[CLIPMAP_LEVEL_COUNT];
 
 layout(push_constant) uniform params_t
 {
@@ -32,10 +33,70 @@ layout(binding = 8, set = 0) uniform constants_t
 
 #include "bindless.frag.inc"
 
+float to_abs_height(float h)
+{
+  return source.rangeMin.y + h * (source.rangeMax.y - source.rangeMin.y);
+}
+
+float sample_height(vec2 worldCoord)
+{
+  const vec3 terrainExtent = source.rangeMax - source.rangeMin;
+  const vec2 uv = (worldCoord - source.rangeMin.xz) / terrainExtent.xz;
+
+  float relHeight = 0.f;
+  if (source.heightmapTexSmp != NO_TEXTURE_ID)
+    relHeight = sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, uv, 0.f).x;
+
+  // @TEMP just scale back into [0, 1]
+  relHeight *= 1.f - 2.f * TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
+  relHeight += TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
+
+  // @TODO seed
+  relHeight += simplex_noise(uv * 2000.f) * TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
+
+  return to_abs_height(relHeight);
+}
+
+vec3 generate_normal(vec2 worldCoord, float jitter)
+{
+  const vec3 terrainExtent = source.rangeMax - source.rangeMin;
+  const vec2 uv = (worldCoord - source.rangeMin.xz) / terrainExtent.xz;
+  const vec2 offs = jitter * terrainExtent.xz;
+
+  const vec2 xl2 = worldCoord - vec2(offs.x, 0.f);
+  const vec2 xg2 = worldCoord + vec2(offs.x, 0.f);
+  const vec2 zl2 = worldCoord - vec2(0.f, offs.y);
+  const vec2 zg2 = worldCoord + vec2(0.f, offs.y);
+
+  const vec2 xluv = uv - vec2(jitter, 0.f);
+  const vec2 xguv = uv + vec2(jitter, 0.f);
+  const vec2 zluv = uv - vec2(0.f, jitter);
+  const vec2 zguv = uv + vec2(0.f, jitter);
+
+  const vec3 xl = vec3(
+    xl2.x,
+    to_abs_height(sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, xluv, 0.f).x),
+    xl2.y);
+  const vec3 xg = vec3(
+    xg2.x,
+    to_abs_height(sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, xguv, 0.f).x),
+    xg2.y);
+  const vec3 zl = vec3(
+    zl2.x,
+    to_abs_height(sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, zluv, 0.f).x),
+    zl2.y);
+  const vec3 zg = vec3(
+    zg2.x,
+    to_abs_height(sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, zguv, 0.f).x),
+    zg2.y);
+
+  return normalize(cross(zg - zl, xg - xl));
+}
+
 void main(void)
 {
   const uint pix = gl_GlobalInvocationID.x;
-  const bool isColor = gl_GlobalInvocationID.y > 0;
+  const bool isColor = gl_GlobalInvocationID.y == 1;
 
   const vec2 worldOffset = constants.toroidalOffset.xz;
   const vec2 worldPos = constants.playerWorldPos.xz;
@@ -95,20 +156,11 @@ void main(void)
   }
   else
   {
-    const vec3 terrainExtent = source.rangeMax - source.rangeMin;
-    const vec2 uv = (worldCoord - source.rangeMin.xz) / terrainExtent.xz;
+    // @TODO: split normal & h?
+    const float h = sample_height(worldCoord);
+    const vec3 n = generate_normal(worldCoord, 0.001f);
 
-    float relHeight = 0.f;
-    if (source.heightmapTexSmp != NO_TEXTURE_ID)
-      relHeight = sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, uv, 0.f).x;
-
-    // @TEMP just scale back into [0, 1]
-    relHeight *= 1.f - 2.f * TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
-    relHeight += TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
-
-    // @TODO seed
-    relHeight += simplex_noise(uv * 2000.f) * TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
-
-    imageStore(geom[params.level], destImageCoord, vec4(relHeight));
+    imageStore(geom[params.level], destImageCoord, vec4(h));
+    imageStore(normal[params.level], destImageCoord, vec4(n, 1.f));
   }
 }
