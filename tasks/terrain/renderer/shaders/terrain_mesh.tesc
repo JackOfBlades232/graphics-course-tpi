@@ -18,6 +18,15 @@ layout(location = 0) in VS_OUT
   flat uint chunkId;
 } surf[];
 
+// @TEST
+layout(location = 0) patch out TC_OUT
+{
+  uint isTop;
+  uint isBottom;
+  uint isLeft;
+  uint isRight;
+} tcOut;
+
 bool chunk_is_on_top_edge(const uint chunkId)
 {
   if (chunkId < TERRAIN_FIRST_LEVEL_CHUNKS)
@@ -56,7 +65,7 @@ bool chunk_is_on_left_edge(const uint chunkId)
     if (relId < TERRAIN_CHUNKS_LEVEL_DIM || relId >= TERRAIN_OTHER_LEVELS_CHUNKS - TERRAIN_CHUNKS_LEVEL_DIM)
       return relId % TERRAIN_CHUNKS_LEVEL_DIM == 0;
     else
-      return relId % 2 == 0;
+      return relId % 2 == 1;
   }
 }
 
@@ -72,7 +81,7 @@ bool chunk_is_on_right_edge(const uint chunkId)
     if (relId < TERRAIN_CHUNKS_LEVEL_DIM || relId >= TERRAIN_OTHER_LEVELS_CHUNKS - TERRAIN_CHUNKS_LEVEL_DIM)
       return relId % TERRAIN_CHUNKS_LEVEL_DIM == TERRAIN_CHUNKS_LEVEL_DIM - 1;
     else
-      return relId % 2 == 1;
+      return relId % 2 == 0;
   }
 }
 
@@ -87,22 +96,28 @@ void main(void)
     // @TODO: might be good to try larger space for outer tris
     gl_TessLevelOuter[0] =
       chunk_is_on_left_edge(chunkId) ?
-      TERRAIN_CHUNK_TESSELLATION_FACTOR / 2 :
-      TERRAIN_CHUNK_TESSELLATION_FACTOR;
+      float(TERRAIN_CHUNK_TESSELLATION_FACTOR / 2) :
+      float(TERRAIN_CHUNK_TESSELLATION_FACTOR);
     gl_TessLevelOuter[1] =
-      chunk_is_on_bottom_edge(chunkId) ?
-      TERRAIN_CHUNK_TESSELLATION_FACTOR / 2 :
-      TERRAIN_CHUNK_TESSELLATION_FACTOR;
+      chunk_is_on_top_edge(chunkId) ?
+      float(TERRAIN_CHUNK_TESSELLATION_FACTOR / 2) :
+      float(TERRAIN_CHUNK_TESSELLATION_FACTOR);
     gl_TessLevelOuter[2] =
       chunk_is_on_right_edge(chunkId) ?
-      TERRAIN_CHUNK_TESSELLATION_FACTOR / 2 :
-      TERRAIN_CHUNK_TESSELLATION_FACTOR;
+      float(TERRAIN_CHUNK_TESSELLATION_FACTOR / 2) :
+      float(TERRAIN_CHUNK_TESSELLATION_FACTOR);
     gl_TessLevelOuter[3] =
-      chunk_is_on_top_edge(chunkId) ?
-      TERRAIN_CHUNK_TESSELLATION_FACTOR / 2 :
-      TERRAIN_CHUNK_TESSELLATION_FACTOR;
+      chunk_is_on_bottom_edge(chunkId) ?
+      float(TERRAIN_CHUNK_TESSELLATION_FACTOR / 2) :
+      float(TERRAIN_CHUNK_TESSELLATION_FACTOR);
 
     gl_TessLevelInner[0] = TERRAIN_CHUNK_TESSELLATION_FACTOR;
     gl_TessLevelInner[1] = TERRAIN_CHUNK_TESSELLATION_FACTOR;
+
+    // @TEST
+    tcOut.isTop = chunk_is_on_top_edge(chunkId) ? 1 : 0;
+    tcOut.isBottom = chunk_is_on_bottom_edge(chunkId) ? 1 : 0;
+    tcOut.isLeft = chunk_is_on_left_edge(chunkId) ? 1 : 0;
+    tcOut.isRight = chunk_is_on_right_edge(chunkId) ? 1 : 0;
   }
 }

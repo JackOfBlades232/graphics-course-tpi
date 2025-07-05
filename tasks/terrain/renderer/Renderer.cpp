@@ -43,7 +43,8 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
         .features =
           {.tessellationShader = true,
            .multiDrawIndirect = true,
-           .drawIndirectFirstInstance = true}},
+           .drawIndirectFirstInstance = true,
+           .fillModeNonSolid = true}},
     .physicalDeviceIndexOverride = {},
     .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),
   });
