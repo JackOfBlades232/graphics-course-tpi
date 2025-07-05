@@ -171,7 +171,7 @@ void main(void)
   // Calculate lighting
   
   // @TODO: parametrize
-  const float ambient = 0.01f;
+  const float ambient = 0.001f;
 
   vec3 color = ambient * albedo;
 
