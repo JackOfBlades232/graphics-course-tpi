@@ -623,6 +623,7 @@ void WorldRenderer::renderWorld(
          {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
         {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}};
 
+      if (drawScene)
       {
         ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
 
@@ -656,6 +657,7 @@ void WorldRenderer::renderWorld(
           sceneMgr->getIndirectCommandsBuf().get(), offset, count, sizeof(IndirectCommand));
       }
 
+      if (drawTerrain)
       {
         ETNA_PROFILE_GPU(cmd_buf, terrain);
 
@@ -951,6 +953,8 @@ void WorldRenderer::drawGui()
 
       // @TODO: not static
       static bool useSatCulling = true;
+      ImGui::Checkbox("Draw scene", &drawScene);
+      ImGui::Checkbox("Draw terrain", &drawTerrain);
       ImGui::Checkbox("Use SAT culling", &useSatCulling);
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);

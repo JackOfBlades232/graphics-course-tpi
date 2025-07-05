@@ -50,7 +50,8 @@ float sample_height_uv(vec2 uv, vec2 worldUv)
 
   // @TODO seed
   relHeight +=
-    simplex_noise(worldUv * 1.f) * TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
+    simplex_noise(worldUv * TERRAIN_NOISE_PERIOD) *
+    TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
 
   return to_abs_height(relHeight);
 }

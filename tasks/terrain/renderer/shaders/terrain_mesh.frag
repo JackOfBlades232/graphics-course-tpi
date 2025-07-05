@@ -25,6 +25,9 @@ layout(location = 0) in TE_OUT
 {
   vec3 wPos;
   vec2 texCoord;
+
+  // @TEST
+  vec4 vcol;
 } surf;
 
 void main(void)
@@ -36,12 +39,9 @@ void main(void)
   // @TODO: albedo from clipmap
   // @TODO: normal from clipmap
 
-  surfaceColor = vec3(0.5f, 0.9f, 0.4f);
+  surfaceColor = surf.vcol.xyz;
   materialData = vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
   normal = sample_normal_clipmap(surf.texCoord);
-
-  // @TEST
-  // surfaceColor *= 1000.f / length(surf.wPos - constants.playerWorldPos);
 
   out_fragAlbedo = vec4(surfaceColor, 1.f);
   out_fragMaterial = materialData;

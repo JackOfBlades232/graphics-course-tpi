@@ -135,4 +135,6 @@ private:
   bool settingsGuiEnabled = false;
   bool drawBboxes = false;
   bool wireframe = false;
+  bool drawScene = true;
+  bool drawTerrain = true;
 };
