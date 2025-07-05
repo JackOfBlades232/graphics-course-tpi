@@ -80,12 +80,14 @@ float sample_geom_clipmap(vec2 w_rel_point)
   get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
 
   float val = sample_geom_clipmap_level(w_rel_point, baseLevel);
+  /*
   if (nextLevel < CLIPMAP_LEVEL_COUNT)
   {
     float nextSample = sample_geom_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
     val += coeff * nextSample;
   }
+  */
 
   return val;
 }
@@ -104,12 +106,14 @@ vec3 sample_normal_clipmap(vec2 w_rel_point)
   get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
 
   vec3 val = sample_normal_clipmap_level(w_rel_point, baseLevel);
+  /*
   if (nextLevel < CLIPMAP_LEVEL_COUNT)
   {
     vec3 nextSample = sample_normal_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
     val += coeff * nextSample;
   }
+  */
 
   return normalize(val);
 }
