@@ -14,29 +14,43 @@ layout(binding = 7, set = 0) uniform terrain_source_t
 
 const float OFFSET_FOR_NORMAL_EVAL = 0.01f;
 
+// @TODO: proper mip coeff/level choice -- ddx ddy, cuz now we aliasing hard on farther chunks
+
 void get_mip_info(
   vec2 w_rel_point, out uint base_level, out uint next_level, out float coeff)
 {
   const float relOffs =
     max(abs(w_rel_point.x), abs(w_rel_point.y)) / CLIPMAP_EXTENT_STEP;
-  // @TODO why the fuck 2x worked?
-  const float levelExact = max(log2(2.f * relOffs - SHADER_EPSILON), 0.f);
-  base_level = uint(floor(levelExact));
+  const float levelExact = log2(relOffs);
+  base_level = min(uint(ceil(levelExact + 0.01f)), CLIPMAP_LEVEL_COUNT - 1);
   next_level = base_level + 1;
-  coeff = levelExact - float(base_level);
+
+  const float baseLevelInnerBorder =
+    base_level == 0 ? 0.f : (float(1 << (base_level - 1)) * CLIPMAP_EXTENT_STEP);
+  const float baseLevelOuterBorder =
+    base_level == 0 ? 1.f : (2.f * baseLevelInnerBorder);
+  const float rawCoeff =
+    (relOffs - baseLevelInnerBorder) / (baseLevelOuterBorder - baseLevelInnerBorder);
+  coeff = clamp(rawCoeff, 0.f, 1.f);
 }
 
 vec2 get_toroidal_uv(vec2 w_rel_point, uint level)
 {
   const vec2 extent = float(1 << level) * vec2(CLIPMAP_EXTENT_STEP);
   const vec2 size = 2.f * extent;
-  const vec2 relToCorner = w_rel_point + extent;
-  const vec2 uvFlat = relToCorner / size;
+
+  vec2 wRel = w_rel_point;
+  if (level == CLIPMAP_LEVEL_COUNT - 1)
+    wRel = clamp(wRel, -extent * 0.99f, extent * 0.99f);
+
+  const vec2 uvToCenter = wRel / size;
+  const vec2 uvFlat = uvToCenter + 0.5f;
+  const vec2 uvClamped = clamp(fract(uvFlat), 0.0001f, 0.9999f);
 
   const vec2 toroidalScrolloff =
     fract(constants.toroidalUpdatePlayerWorldPos.xz / size) - 0.5f;
 
-  return fract(uvFlat + toroidalScrolloff);
+  return fract(uvClamped + toroidalScrolloff);
 }
 
 float sample_geom_clipmap_level(vec2 w_rel_point, uint level)
@@ -49,13 +63,11 @@ vec3 sample_normal_clipmap_level(vec2 w_rel_point, uint level)
   return textureLod(normalClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyz;
 }
 
-// @TODO: pull out
 float sample_geom_clipmap(vec2 w_rel_point)
 {
   // @TODO: calculate lod from player pos? Doesn't seem better atm, and will
   // have to deal somehow with edges if we are out of the inner level
 
-  // @TODO: proper mip coeff/level choice -- ddx ddy (check how it works)
   // @TODO: Factor player z in
 
   uint baseLevel;

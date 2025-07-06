@@ -144,7 +144,7 @@ void main(void)
 {
   // Unpack gbuffer
   const float depth = texture(gbufDepth, surf.texCoord).x;
-  if (depth > 0.999999f)
+  if (depth > 0.9999999f)
   {
     out_fragColor = vec4(vec3(0.f), 1.f);
     return;

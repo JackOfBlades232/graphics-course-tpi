@@ -135,7 +135,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
     terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
       .filter = vk::Filter::eLinear,
-      .addressMode = vk::SamplerAddressMode::eClampToEdge,
+      .addressMode = vk::SamplerAddressMode::eRepeat,
       .name = "terrain_clipmap_sampler"});
 
     terrain->geometryLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
