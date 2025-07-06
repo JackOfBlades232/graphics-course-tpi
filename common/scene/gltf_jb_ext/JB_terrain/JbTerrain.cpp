@@ -51,6 +51,7 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
   JbTerrainExtData data{};
 
   data.heightmap = get_mandatory_texture(desc, "heightmap");
+  data.splattingMask = get_opt_texture(desc, "splattingMaskTexture");
 
   if (desc.Has("range"))
   {
@@ -83,5 +84,91 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
     data.noiseSeed = seed.GetNumberAsInt();
   }
 
+  if (desc.Has("details"))
+  {
+    const auto& dets = desc.Get("details");
+    VERIFY(dets.IsArray(), "invalid format: \"details\" must be an array");
+    for (size_t i = 0; i < dets.ArrayLen(); ++i)
+    {
+      const auto& elem = dets.Get(i);
+      VERIFY(elem.IsObject(), "invalid format: \"details\" element is not an object");
+
+      auto& dst = data.details.emplace_back();
+
+      {
+        VERIFY(elem.Has("material"), "invalid format: detail must have a \"material\" field");
+        const auto& mat = elem.Get("material");
+        VERIFY(
+          mat.IsNumber() && mat.GetNumberAsInt() >= 0,
+          "invalid format: detail \"material\" field must be a non-negative integer "
+          "index");
+        dst.material = mat.GetNumberAsInt();
+      }
+
+      if (elem.Has("name"))
+      {
+        const auto& name = elem.Get("name");
+        VERIFY(name.IsString(), "invalid format: detail \"name\" must be a string");
+        dst.name = name.Get<std::string>();
+      }
+
+      if (elem.Has("scale"))
+      {
+#define SCALE_RNG_FORMAT_ERR                                                                       \
+  "invalid format: detail \"scale\" must be a 2-element double array in [0, inf] range"
+        const auto& sc = elem.Get("scale");
+        VERIFY(sc.IsArray() && sc.ArrayLen() == 2, SCALE_RNG_FORMAT_ERR);
+
+        const auto& x = sc.Get(0);
+        const auto& y = sc.Get(1);
+        VERIFY(x.IsNumber() && y.IsNumber(), SCALE_RNG_FORMAT_ERR);
+
+        const double xv = x.GetNumberAsDouble();
+        const double yv = y.GetNumberAsDouble();
+        VERIFY(xv >= 0.0 && yv >= 0.0, SCALE_RNG_FORMAT_ERR);
+
+        dst.uvScale = {xv, yv};
+#undef SCALE_RNG_FORMAT_ERR
+      }
+
+      if (elem.Has("relHeightRange"))
+      {
+#define REL_H_RNG_FORMAT_ERR                                                                       \
+  "invalid format: detail \"relHeightRange\" must be a 2-element double array, with [0] < [1] "    \
+  "and both in [0, 1] range"
+        const auto& rng = elem.Get("relHeightRange");
+        VERIFY(rng.IsArray() && rng.ArrayLen() == 2, REL_H_RNG_FORMAT_ERR);
+
+        const auto& x = rng.Get(0);
+        const auto& y = rng.Get(1);
+        VERIFY(x.IsNumber() && y.IsNumber(), REL_H_RNG_FORMAT_ERR);
+
+        const double xv = x.GetNumberAsDouble();
+        const double yv = y.GetNumberAsDouble();
+        VERIFY(
+          (xv >= 0.0 && xv <= 1.0) && (yv >= 0.0 && yv <= 1.0) && xv < yv, REL_H_RNG_FORMAT_ERR);
+
+        dst.relHeightRange = {xv, yv};
+        dst.useRelHeightRange = true;
+#undef REL_H_RNG_FORMAT_ERR
+      }
+
+      // @TODO: syntax for splatting mask components mapping
+    }
+  }
+
+  return data;
+}
+
+std::optional<JbTerrainExtMaterial> jb_terrain_parse_material_desc(const tinygltf::Material& mat)
+{
+  if (!mat.extensions.contains("JB_terrain"))
+    return std::nullopt;
+
+  const auto& desc = mat.extensions.at("JB_terrain");
+
+  JbTerrainExtMaterial data{};
+
+  data.displacement = get_mandatory_texture(desc, "displacementTexture");
   return data;
 }
