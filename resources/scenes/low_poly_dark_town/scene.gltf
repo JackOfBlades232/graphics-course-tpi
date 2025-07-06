@@ -3407,6 +3407,18 @@
     },
     {
       "uri": "textures/terrain/Heightmap.png"
+    },
+    {
+      "uri": "textures/terrain/grass/wispy-grass-meadow_albedo.png"
+    },
+    {
+      "uri": "textures/terrain/grass/wispy-grass-meadow_normal-ogl.png"
+    },
+    {
+      "uri": "textures/terrain/grass/wispy-grass-meadow_roughness.png"
+    },
+    {
+      "uri": "textures/terrain/grass/wispy-grass-meadow_height.png"
     }
   ],
   "materials": [
@@ -3823,6 +3835,30 @@
         }
       },
       "name": "Main.002"
+    },
+    {
+      "doubleSided": false,
+      "name": "terrain_grass_detail",
+      "normalTexture": {
+        "index": 9
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 8
+        },
+        "metallicRoughnessTexture": {
+          "index": 10
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 1.0
+      },
+      "extensions": {
+        "JB_terrain": {
+          "displacementTexture": {
+            "index": 11
+          }
+        }
+      }
     }
   ],
   "extensions": {
@@ -3891,6 +3927,14 @@
         -1300.0, 1300.0,
         -39.0, 81.0,
         -1300.0, 1300.0
+      ],
+      "details" : [
+        {
+          "name": "grass",
+          "relHeightRange": [0.0, 1.0],
+          "material": 19,
+          "scale": [1.0, 1.0]
+        }
       ]
     }
   },
@@ -6365,6 +6409,22 @@
     {
       "sampler": 1,
       "source": 7
+    },
+    {
+      "sampler": 0,
+      "source": 8
+    },
+    {
+      "sampler": 0,
+      "source": 9
+    },
+    {
+      "sampler": 0,
+      "source": 10
+    },
+    {
+      "sampler": 0,
+      "source": 11
     }
   ]
 }

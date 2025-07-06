@@ -86,6 +86,8 @@ struct Material
   //float glossinessFactor;
   TexSmpIdPair diffuseTexSmp; 
   //TexSmpIdPair specularGlossinessTexSmp; 
+
+  TexSmpIdPair heightDisplacementTexSmp;
 };
 
 #endif // MATERIALS_H_INCLUDED
