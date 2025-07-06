@@ -66,12 +66,15 @@ private:
     etna::Image geometryClipmap{};
     etna::Image normalClipmap{};
     etna::Image albedoClipmap{};
+    etna::Image matdataClipmap{};
     std::vector<etna::Binding> geometryLevelsBindings{};
     std::vector<etna::Binding> normalLevelsBindings{};
     std::vector<etna::Binding> albedoLevelsBindings{};
+    std::vector<etna::Binding> matdataLevelsBindings{};
     std::vector<etna::Binding> geometryLevelsSamplerBindings{};
     std::vector<etna::Binding> normalLevelsSamplerBindings{};
     std::vector<etna::Binding> albedoLevelsSamplerBindings{};
+    std::vector<etna::Binding> matdataLevelsSamplerBindings{};
 
     etna::Buffer source{};
     TerrainSourceData sourceData{};

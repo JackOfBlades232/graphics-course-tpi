@@ -20,7 +20,6 @@ layout(location = 0) out TE_OUT
 {
   vec3 wPos;
   vec2 texCoord;
-  vec4 vcol;
 } teOut;
 
 void main(void)
@@ -35,10 +34,6 @@ void main(void)
 
   teOut.wPos = vec3(pointXZ.x, sample_geom_clipmap(wOffsetFromClipmapCenter), pointXZ.y);
   teOut.texCoord = wOffsetFromClipmapCenter; // Special for clipmap sampling
-
-  // @TODO: albedo
-  vec3 col = vec3(0.5f, 0.9f, 0.4f);
-  teOut.vcol = vec4(col, 1.f);
 
   gl_Position = constants.mProjView * vec4(teOut.wPos, 1.f);
 }

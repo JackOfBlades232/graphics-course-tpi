@@ -132,6 +132,13 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
       .layers = CLIPMAP_LEVEL_COUNT});
+    terrain->matdataClipmap = ctx.createImage(etna::Image::CreateInfo{
+      // @TODO: settable
+      .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+      .name = "matdata_clipmap",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+      .layers = CLIPMAP_LEVEL_COUNT});
 
     terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
       .filter = vk::Filter::eLinear,
@@ -148,20 +155,27 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         terrain->geometryClipmap.genBinding(
           {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
         uint32_t(i));
+      terrain->normalLevelsBindings.emplace_back(
+        1,
+        terrain->normalClipmap.genBinding(
+          {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
+      terrain->albedoLevelsBindings.emplace_back(
+        2,
+        terrain->albedoClipmap.genBinding(
+          {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
+      terrain->matdataLevelsBindings.emplace_back(
+        3,
+        terrain->matdataClipmap.genBinding(
+          {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
       terrain->geometryLevelsSamplerBindings.emplace_back(
         2,
         terrain->geometryClipmap.genBinding(
           terrain->clipmapSampler.get(),
           vk::ImageLayout::eShaderReadOnlyOptimal,
           {.baseLayer = uint32_t(i), .layerCount = 1}),
-        uint32_t(i));
-    }
-    for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
-    {
-      terrain->normalLevelsBindings.emplace_back(
-        1,
-        terrain->normalClipmap.genBinding(
-          {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
         uint32_t(i));
       terrain->normalLevelsSamplerBindings.emplace_back(
         3,
@@ -170,17 +184,16 @@ void WorldRenderer::loadScene(std::filesystem::path path)
           vk::ImageLayout::eShaderReadOnlyOptimal,
           {.baseLayer = uint32_t(i), .layerCount = 1}),
         uint32_t(i));
-    }
-    for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
-    {
-      terrain->albedoLevelsBindings.emplace_back(
-        2,
-        terrain->albedoClipmap.genBinding(
-          {}, vk::ImageLayout::eGeneral, {.baseLayer = uint32_t(i), .layerCount = 1}),
-        uint32_t(i));
       terrain->albedoLevelsSamplerBindings.emplace_back(
         4,
         terrain->albedoClipmap.genBinding(
+          terrain->clipmapSampler.get(),
+          vk::ImageLayout::eShaderReadOnlyOptimal,
+          {.baseLayer = uint32_t(i), .layerCount = 1}),
+        uint32_t(i));
+      terrain->matdataLevelsSamplerBindings.emplace_back(
+        5,
+        terrain->matdataClipmap.genBinding(
           terrain->clipmapSampler.get(),
           vk::ImageLayout::eShaderReadOnlyOptimal,
           {.baseLayer = uint32_t(i), .layerCount = 1}),
@@ -190,6 +203,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
     debugTextures.emplace("normal_clipmap", &terrain->normalClipmap);
     debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
+    debugTextures.emplace("matdata_clipmap", &terrain->matdataClipmap);
 
     constantsData.toroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   }
@@ -466,12 +480,14 @@ void WorldRenderer::renderWorld(
       std::vector<etna::Binding> bindings{};
       bindings.reserve(
         terrain->geometryLevelsBindings.size() + terrain->normalLevelsBindings.size() +
-        terrain->albedoLevelsBindings.size() + 2);
+        terrain->albedoLevelsBindings.size() + terrain->matdataLevelsBindings.size() + 2);
       for (const auto& b : terrain->geometryLevelsBindings)
         bindings.push_back(b);
       for (const auto& b : terrain->normalLevelsBindings)
         bindings.push_back(b);
       for (const auto& b : terrain->albedoLevelsBindings)
+        bindings.push_back(b);
+      for (const auto& b : terrain->matdataLevelsBindings)
         bindings.push_back(b);
       bindings.emplace_back(7, terrain->source.genBinding());
       bindings.emplace_back(8, constants->get().genBinding());
@@ -504,7 +520,7 @@ void WorldRenderer::renderWorld(
         cmd_buf.dispatch(
           get_linear_wg_count(
             calculate_thread_count_for_clipmap_update(dims), BASE_WORK_GROUP_SIZE),
-          2, // 0 does geom clipmap, 1 does color
+          1,
           1);
       }
     }
@@ -668,7 +684,8 @@ void WorldRenderer::renderWorld(
         bindings.reserve(
           terrain->geometryLevelsSamplerBindings.size() +
           terrain->normalLevelsSamplerBindings.size() +
-          terrain->albedoLevelsSamplerBindings.size() + 4);
+          terrain->albedoLevelsSamplerBindings.size() +
+          terrain->matdataLevelsSamplerBindings.size() + 4);
         bindings.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
         bindings.emplace_back(1, culledInstancesBuf.genBinding());
         for (const auto& b : terrain->geometryLevelsSamplerBindings)
@@ -676,6 +693,8 @@ void WorldRenderer::renderWorld(
         for (const auto& b : terrain->normalLevelsSamplerBindings)
           bindings.push_back(b);
         for (const auto& b : terrain->albedoLevelsSamplerBindings)
+          bindings.push_back(b);
+        for (const auto& b : terrain->matdataLevelsSamplerBindings)
           bindings.push_back(b);
         bindings.emplace_back(7, terrain->source.genBinding());
         bindings.emplace_back(8, constants->get().genBinding());

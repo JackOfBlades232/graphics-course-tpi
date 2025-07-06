@@ -837,7 +837,10 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
       }
 
       if (auto jbExtMaybe = jb_terrain_parse_material_desc(gmat))
+      {
         mat.heightDisplacementTexSmp = idPairForTexture(jbExtMaybe->displacement);
+        mat.displacementCoeff = jbExtMaybe->displacementCoeff;
+      }
 
       return mat;
     };
@@ -915,6 +918,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     data.detailCount = terrainExt->details.size();
 
     int did = 0;
+    std::optional<MaterialType> detailMat{};
     for (const auto& det : terrainExt->details)
     {
       auto& dst = data.details[did++];
@@ -927,6 +931,14 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
         shader_uint(det.material == -1 ? MaterialId::INVALID : materialRemapping[det.material]);
       dst.flags = (det.useSplattingMask ? TERRAIN_DETAIL_USE_MASK_FLAG : 0) |
         (det.useRelHeightRange ? TERRAIN_DETAIL_USE_RH_RANGE_FLAG : 0);
+
+      if (MaterialId(dst.matId) != MaterialId::INVALID)
+      {
+        if (detailMat)
+          ETNA_ASSERT(*detailMat == materialParams[dst.matId].mat);
+        else
+          detailMat.emplace(materialParams[dst.matId].mat);
+      }
     }
   }
 

@@ -39,6 +39,7 @@ struct JbTerrainExtData
 struct JbTerrainExtMaterial
 {
   int displacement{-1};
+  float displacementCoeff{1.f};
 };
 
 std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& model);

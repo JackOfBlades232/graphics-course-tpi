@@ -5,7 +5,6 @@
 
 #include "draw.h"
 #include "terrain.h"
-#include "materials.h"
 #include "constants.h"
 
 #include "common.frag.inc"
@@ -16,6 +15,7 @@ layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 layout(binding = 0, set = 0, r32f) uniform writeonly image2D geom[CLIPMAP_LEVEL_COUNT];
 layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D normal[CLIPMAP_LEVEL_COUNT];
 layout(binding = 2, set = 0, rgba32f) uniform writeonly image2D albedo[CLIPMAP_LEVEL_COUNT];
+layout(binding = 3, set = 0, rgba32f) uniform writeonly image2D matdata[CLIPMAP_LEVEL_COUNT];
 
 layout(push_constant) uniform params_t
 {
@@ -31,14 +31,14 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
-#include "bindless.frag.inc"
+#include "material_mesh.glsl.inc"
 
 float to_abs_height(float h)
 {
   return source.rangeMin.y + h * (source.rangeMax.y - source.rangeMin.y);
 }
 
-float sample_height_uv(vec2 uv, vec2 worldUv)
+float sample_rel_height_uv(vec2 uv, vec2 worldUv)
 {
   float relHeight = 0.f;
   if (source.heightmapTexSmp != NO_TEXTURE_ID)
@@ -53,14 +53,24 @@ float sample_height_uv(vec2 uv, vec2 worldUv)
     simplex_noise(worldUv * TERRAIN_NOISE_PERIOD) *
     TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
 
-  return to_abs_height(relHeight);
+  return relHeight;
+}
+
+float sample_height_uv(vec2 uv, vec2 worldUv)
+{
+  return to_abs_height(sample_rel_height_uv(uv, worldUv));
+}
+
+float sample_rel_height(vec2 worldCoord)
+{
+  const vec3 terrainExtent = source.rangeMax - source.rangeMin;
+  const vec2 uv = (worldCoord - source.rangeMin.xz) / terrainExtent.xz;
+  return sample_rel_height_uv(uv, uv * terrainExtent.xz);
 }
 
 float sample_height(vec2 worldCoord)
 {
-  const vec3 terrainExtent = source.rangeMax - source.rangeMin;
-  const vec2 uv = (worldCoord - source.rangeMin.xz) / terrainExtent.xz;
-  return sample_height_uv(uv, uv * terrainExtent.xz);
+  return to_abs_height(sample_rel_height(worldCoord));
 }
 
 vec3 generate_normal(vec2 worldCoord, float jitter)
@@ -94,7 +104,6 @@ vec3 generate_normal(vec2 worldCoord, float jitter)
 void main(void)
 {
   const uint pix = gl_GlobalInvocationID.x;
-  const bool isColor = gl_GlobalInvocationID.y == 1;
 
   const vec2 worldOffset = constants.toroidalOffset.xz;
   const vec2 worldPos = constants.toroidalUpdatePlayerWorldPos.xz;
@@ -147,18 +156,91 @@ void main(void)
   const ivec2 destImageCoord = 
     (flatImgCoord + toroidalScrolloff + CLIPMAP_RESOLUTION) % CLIPMAP_RESOLUTION;
 
-  if (isColor)
+  float h = 0.f;
+  vec3 n = vec3(0.f);
+  vec3 color = vec3(0.f);
+  vec3 matData = vec3(0.f); // Ok to interpolate, cuz mat type is verified to be the same
+
   {
-    // @TODO
-  }
-  else
-  {
-    // @TODO: split normal & h?
-    const float h = sample_height(worldCoord);
-    const vec3 n = generate_normal(
+    float rh = sample_rel_height(worldCoord);
+
+    // @TODO: on one hand, displacement should participate in normal gen.
+    // On the other hand, it means doing the detail loop for each of the 4
+    // pixels. Either way, rn disp looks like shit
+    const vec3 baseN = generate_normal(
       worldCoord, TERRAIN_NORMAL_SAMPLING_PIXEL_OFFS / float(CLIPMAP_RESOLUTION));
 
-    imageStore(geom[params.level], destImageCoord, vec4(h));
-    imageStore(normal[params.level], destImageCoord, vec4(n, 1.f));
+    // U gradient is vec2(1, 0) => take tang as the projection of vec(1,0)
+    // onto the orthogonal plane to the normal
+    const vec3 grad = vec3(1.f, 0.f, 0.f);
+    const vec3 gnproj = baseN * dot(grad, baseN);
+    const vec4 tang = vec4(normalize(grad - gnproj), 1.f); // @TODO: is this correct?
+
+    float disp = 0.f;
+    float totw = 0.f;
+
+    for (uint i = 0; i < source.detailCount; ++i)
+    {
+      const vec2 scale = source.details[i].uvScale; 
+      const vec2 uv = worldCoord / scale; 
+
+      float w = 0.f; 
+
+      if ((source.details[i].flags & TERRAIN_DETAIL_USE_MASK_FLAG) != 0)
+      {
+        // @TODO
+      }
+      if ((source.details[i].flags & TERRAIN_DETAIL_USE_RH_RANGE_FLAG) != 0)
+      {
+        const float falloffScale = TERRAIN_DETAIL_LEVEL_FALLOFF_TO_SCALE_X * scale.x;
+
+        float ld = max(source.details[i].heightRange.x - rh, 0.f);
+        float hd = max(rh - source.details[i].heightRange.y, 0.f);
+
+        // @TODO: correct when there can be another source of w (splatting)
+        float lw = 1.f - min(ld / falloffScale, 1.f);
+        float hw = 1.f - min(hd / falloffScale, 1.f);
+
+        w = min(lw, hw);
+      }
+
+      if (w > SHADER_EPSILON)
+      {
+        // @TODO: bring this back into one call
+        const vec3 detCol = get_pixel_albedo_lod(source.details[i].matId, uv, 0.f).xyz;
+        const vec3 detMatdata = get_pixel_matdata_lod(source.details[i].matId, uv, 0.f);
+        const vec3 detNorm = get_pixel_normal_lod(source.details[i].matId, baseN, tang, uv, 0.f);
+
+        {
+          const uint matId = source.details[i].matId;
+          if (matId != NO_MATERIAL)
+          {
+            const TexSmpIdPair dispTexId = materialParams[matId].heightDisplacementTexSmp;
+            const float dispCoeff = materialParams[matId].displacementCoeff;
+
+            if (dispTexId != NO_TEXTURE_ID && abs(dispCoeff) > SHADER_EPSILON)
+            {
+              disp += sample_bindless_tex_lod(dispTexId, uv, 0.f).x * dispCoeff;
+            }
+          }
+        }
+
+        color += detCol;
+        matData += detMatdata;
+        n += detNorm;
+        totw += w;
+      }
+    }
+
+    rh += disp / totw;
+    h = to_abs_height(rh);
+    color /= totw;
+    matData /= totw;
+    n = normalize(n / totw);
   }
+
+  imageStore(geom[params.level], destImageCoord, vec4(h));
+  imageStore(normal[params.level], destImageCoord, vec4(n, 1.f));
+  imageStore(albedo[params.level], destImageCoord, vec4(color, 1.f));
+  imageStore(matdata[params.level], destImageCoord, vec4(matData, 1.f));
 }
