@@ -39,7 +39,7 @@ struct TerrainSourceData
 #define CLIPMAP_LEVEL_COUNT 8
 
 // @TODO: tweakable
-#define CLIPMAP_RESOLUTION 4096
+#define CLIPMAP_RESOLUTION 2048
 #define CLIPMAP_HALF_RESOLUTION (CLIPMAP_RESOLUTION / 2)
 #define CLIPMAP_EXTENT_STEP 5.f
 #define CLIPMAP_UPDATE_MIN_DPOS 0.1f
@@ -54,6 +54,8 @@ struct TerrainSourceData
 #define TERRAIN_NOISE_PERIOD 0.25f
 #define TERRAIN_CHUNK_TESSELLATION_FACTOR 64
 #define TERRAIN_NORMAL_SAMPLING_PIXEL_OFFS 0.01f
+
+#define TERRAIN_DETAIL_LEVEL_FALLOFF_TO_SCALE_X 0.5f
 
 // @TODO: sort out maths around toroidal, now it's kinda hacky
 

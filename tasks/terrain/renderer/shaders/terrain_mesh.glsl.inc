@@ -6,6 +6,7 @@
 layout(binding = 2, set = 0) uniform sampler2D geomClipmap[CLIPMAP_LEVEL_COUNT];
 layout(binding = 3, set = 0) uniform sampler2D normalClipmap[CLIPMAP_LEVEL_COUNT];
 layout(binding = 4, set = 0) uniform sampler2D albedoClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 5, set = 0) uniform sampler2D matdataClipmap[CLIPMAP_LEVEL_COUNT];
 
 layout(binding = 7, set = 0) uniform terrain_source_t
 {
@@ -63,11 +64,22 @@ vec3 sample_normal_clipmap_level(vec2 w_rel_point, uint level)
   return textureLod(normalClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyz;
 }
 
+vec4 sample_albedo_clipmap_level(vec2 w_rel_point, uint level)
+{
+  return textureLod(albedoClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyzw;
+}
+
+vec3 sample_matdata_clipmap_level(vec2 w_rel_point, uint level)
+{
+  return textureLod(matdataClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyz;
+}
+
 float sample_geom_clipmap(vec2 w_rel_point)
 {
   // @TODO: calculate lod from player pos? Doesn't seem better atm, and will
   // have to deal somehow with edges if we are out of the inner level
 
+  // @TODO: proper mip coeff/level choice -- ddx ddy (check how it works)
   // @TODO: Factor player z in
 
   uint baseLevel;
@@ -88,12 +100,6 @@ float sample_geom_clipmap(vec2 w_rel_point)
 
 vec3 sample_normal_clipmap(vec2 w_rel_point)
 {
-  // @TODO: calculate lod from player pos? Doesn't seem better atm, and will
-  // have to deal somehow with edges if we are out of the inner level
-
-  // @TODO: proper mip coeff/level choice -- ddx ddy (check how it works)
-  // @TODO: Factor player z in
-
   uint baseLevel;
   uint nextLevel;
   float coeff;
@@ -108,4 +114,40 @@ vec3 sample_normal_clipmap(vec2 w_rel_point)
   }
 
   return normalize(val);
+}
+
+vec4 sample_albedo_clipmap(vec2 w_rel_point)
+{
+  uint baseLevel;
+  uint nextLevel;
+  float coeff;
+  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+
+  vec4 val = sample_albedo_clipmap_level(w_rel_point, baseLevel);
+  if (nextLevel < CLIPMAP_LEVEL_COUNT)
+  {
+    vec4 nextSample = sample_albedo_clipmap_level(w_rel_point, nextLevel);
+    val *= 1.f - coeff;
+    val += coeff * nextSample;
+  }
+
+  return val;
+}
+
+vec3 sample_matdata_clipmap(vec2 w_rel_point)
+{
+  uint baseLevel;
+  uint nextLevel;
+  float coeff;
+  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+
+  vec3 val = sample_matdata_clipmap_level(w_rel_point, baseLevel);
+  if (nextLevel < CLIPMAP_LEVEL_COUNT)
+  {
+    vec3 nextSample = sample_matdata_clipmap_level(w_rel_point, nextLevel);
+    val *= 1.f - coeff;
+    val += coeff * nextSample;
+  }
+
+  return val;
 }

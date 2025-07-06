@@ -170,5 +170,14 @@ std::optional<JbTerrainExtMaterial> jb_terrain_parse_material_desc(const tinyglt
   JbTerrainExtMaterial data{};
 
   data.displacement = get_mandatory_texture(desc, "displacementTexture");
+
+  if (desc.Has("displacementCoeff"))
+  {
+    const auto& coeff = desc.Get("displacementCoeff");
+    VERIFY(coeff.IsNumber(), "invalid format: \"displacementCoeff\" must be a double");
+
+    data.displacementCoeff = coeff.GetNumberAsDouble();
+  }
+
   return data;
 }
