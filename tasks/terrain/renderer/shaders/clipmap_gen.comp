@@ -97,7 +97,7 @@ void main(void)
   const bool isColor = gl_GlobalInvocationID.y == 1;
 
   const vec2 worldOffset = constants.toroidalOffset.xz;
-  const vec2 worldPos = constants.playerWorldPos.xz;
+  const vec2 worldPos = constants.toroidalUpdatePlayerWorldPos.xz;
 
   ivec2 dims = calculate_toroidal_dims(worldOffset, params.level);
 
@@ -127,8 +127,7 @@ void main(void)
   {
     const uint ppix = pix - horizontalPatchSize;  
     flatImgCoord = ivec2(minx + (ppix % dims.x), ppix / dims.x);
-    if (miny == 0)
-      flatImgCoord.y += dims.y;
+    if (miny == 0) flatImgCoord.y += dims.y;
   }
   else
   {
