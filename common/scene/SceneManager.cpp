@@ -836,6 +836,9 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
           gmat.pbrMetallicRoughness.metallicRoughnessTexture.index, vk::Format::eR8G8B8A8Unorm);
       }
 
+      if (auto jbExtMaybe = jb_terrain_parse_material_desc(gmat))
+        mat.heightDisplacementTexSmp = idPairForTexture(jbExtMaybe->displacement);
+
       return mat;
     };
 
@@ -903,9 +906,28 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
   {
     auto& data = terrainData.emplace();
     data.heightmapTexSmp = idPairForTexture(terrainExt->heightmap);
+    data.splattingMaskTexSmp = idPairForTexture(terrainExt->splattingMask);
     data.noiseSeed = terrainExt->noiseSeed;
     data.rangeMin = terrainExt->rangeMin;
     data.rangeMax = terrainExt->rangeMax;
+
+    ETNA_ASSERT(terrainExt->details.size() <= TERRAIN_MAX_DETAILS);
+    data.detailCount = terrainExt->details.size();
+
+    int did = 0;
+    for (const auto& det : terrainExt->details)
+    {
+      auto& dst = data.details[did++];
+
+      dst.uvScale = det.uvScale;
+      dst.heightRange = det.relHeightRange;
+      dst.splattingCompId = shader_uint(det.splattingCompId);
+      dst.splattingCompMask = shader_uint(det.splattingCompMask);
+      dst.matId =
+        shader_uint(det.material == -1 ? MaterialId::INVALID : materialRemapping[det.material]);
+      dst.flags = (det.useSplattingMask ? TERRAIN_DETAIL_USE_MASK_FLAG : 0) |
+        (det.useRelHeightRange ? TERRAIN_DETAIL_USE_RH_RANGE_FLAG : 0);
+    }
   }
 
   auto [instMats, instMeshes, instLights] = processInstances(model, multiplex);

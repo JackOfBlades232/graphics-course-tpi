@@ -4,19 +4,36 @@
 #include "materials.h"
 #include "cpp_glsl_compat.h"
 
+#define TERRAIN_MAX_DETAILS 8
+
+#define TERRAIN_DETAIL_USE_MASK_FLAG (1)
+#define TERRAIN_DETAIL_USE_RH_RANGE_FLAG (1 << 1)
+
+struct TerrainDetailRule
+{
+  shader_vec2 uvScale;
+  shader_vec2 heightRange;
+  shader_uint splattingCompId;
+  shader_uint splattingCompMask;
+  shader_uint matId;
+  shader_uint flags;
+};
+
 struct TerrainSourceData
 {
   TexSmpIdPair heightmapTexSmp;
+  TexSmpIdPair splattingMaskTexSmp;
 
   shader_uint noiseSeed;
-
-  shader_uint pad1_, pad2_;
+  shader_uint detailCount;
 
   shader_vec3 rangeMin;
-  shader_uint pad3_;
+  shader_uint pad1_;
 
   shader_vec3 rangeMax;
-  shader_uint pad4_;
+  shader_uint pad2_;
+
+  TerrainDetailRule details[TERRAIN_MAX_DETAILS];
 };
 
 #define CLIPMAP_LEVEL_COUNT 8
