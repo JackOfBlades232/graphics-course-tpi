@@ -49,6 +49,7 @@ void main(void)
 
   // @TEST
   vec3 col = vec3(0.5f, 0.9f, 0.4f) * 0.5f;
+  /*
   float cnt = 1.f;
   if (surf.isTop == 1)
   {
@@ -71,11 +72,9 @@ void main(void)
     cnt += 1.f;
   }
   col /= cnt;
+  */
 
   teOut.vcol = vec4(col, 1.f);
-
-  teOut.vcol = vec4((teOut.wPos.y + 10.f) / 15.f, 0.f, 0.f, 1.f);
-  teOut.wPos.y = 0.f;
 
   gl_Position = constants.mProjView * vec4(teOut.wPos, 1.0);
 }
