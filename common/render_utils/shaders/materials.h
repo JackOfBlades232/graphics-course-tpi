@@ -88,6 +88,7 @@ struct Material
   //TexSmpIdPair specularGlossinessTexSmp; 
 
   TexSmpIdPair heightDisplacementTexSmp;
+  float displacementCoeff;
 };
 
 #endif // MATERIALS_H_INCLUDED

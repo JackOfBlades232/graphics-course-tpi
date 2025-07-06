@@ -25,25 +25,19 @@ layout(location = 0) in TE_OUT
 {
   vec3 wPos;
   vec2 texCoord;
-
-  // @TEST
-  vec4 vcol;
 } surf;
 
 void main(void)
 {
-  vec3 surfaceColor;
+  vec4 surfaceColor;
   vec3 materialData;
   vec3 normal;
 
-  // @TODO: albedo from clipmap
-  // @TODO: normal from clipmap
-
-  surfaceColor = surf.vcol.xyz;
-  materialData = vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
+  surfaceColor = sample_albedo_clipmap(surf.texCoord);
+  materialData = sample_matdata_clipmap(surf.texCoord);
   normal = sample_normal_clipmap(surf.texCoord);
 
-  out_fragAlbedo = vec4(surfaceColor, 1.f);
+  out_fragAlbedo = surfaceColor;
   out_fragMaterial = materialData;
   out_fragNormal = normal;
 }
