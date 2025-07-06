@@ -191,7 +191,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     debugTextures.emplace("normal_clipmap", &terrain->normalClipmap);
     debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
 
-    constantsData.lastToroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+    constantsData.toroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   }
   else
     spdlog::info("JB_terrain: terrain not present");
@@ -412,7 +412,7 @@ void WorldRenderer::update(const FramePacket& packet)
     if (terrain)
     {
       constantsData.toroidalOffset =
-        constantsData.playerWorldPos - constantsData.lastToroidalUpdatePlayerWorldPos;
+        constantsData.playerWorldPos - constantsData.toroidalUpdatePlayerWorldPos;
       const float xzDisp =
         glm::length(glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z});
       if (xzDisp >= CLIPMAP_UPDATE_MIN_DPOS)
@@ -447,7 +447,7 @@ void WorldRenderer::renderWorld(
   {
     updateClipmap = true;
     terrain->needToroidalUpdate = false;
-    constantsData.lastToroidalUpdatePlayerWorldPos = constantsData.playerWorldPos;
+    constantsData.toroidalUpdatePlayerWorldPos = constantsData.playerWorldPos;
   }
 
   memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
@@ -815,9 +815,9 @@ void WorldRenderer::drawGui()
     {
       ImGui::Text(
         "Last toroidal update pos: [%.3f, %.3f, %.3f]",
-        constantsData.lastToroidalUpdatePlayerWorldPos.x,
-        constantsData.lastToroidalUpdatePlayerWorldPos.y,
-        constantsData.lastToroidalUpdatePlayerWorldPos.z);
+        constantsData.toroidalUpdatePlayerWorldPos.x,
+        constantsData.toroidalUpdatePlayerWorldPos.y,
+        constantsData.toroidalUpdatePlayerWorldPos.z);
       ImGui::Text(
         "Toroidal offset: [%.3f, %.3f, %.3f]",
         constantsData.toroidalOffset.x,
