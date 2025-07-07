@@ -176,7 +176,7 @@ std::optional<JbTerrainExtMaterial> jb_terrain_parse_material_desc(const tinyglt
     const auto& coeff = desc.Get("displacementCoeff");
     VERIFY(coeff.IsNumber(), "invalid format: \"displacementCoeff\" must be a double");
 
-    data.displacementCoeff = coeff.GetNumberAsDouble();
+    data.displacementCoeff = float(coeff.GetNumberAsDouble());
   }
 
   return data;

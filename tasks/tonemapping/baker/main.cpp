@@ -39,7 +39,7 @@ uint32_t best_fit_quantize_normal(glm::vec3 normal)
   // @TODO: tune parameters once there is lighted data
   constexpr float LENGTH_STEP = 0.1f;
   constexpr float LENGTH_BASE = 0.1f;
-  constexpr size_t STEPS_COUNT = 64; 
+  constexpr size_t STEPS_COUNT = 64;
 
   std::array<float, STEPS_COUNT> errors{};
   std::fill(errors.begin(), errors.end(), 0.f);
@@ -89,7 +89,7 @@ int main(int argc, char** argv)
   std::string warning;
   bool success = false;
 
-  LOG("Processing model from '{}' ...", path.c_str());
+  LOG("Processing model from '{}' ...", (const char*)path.c_str());
 
   if (path.extension() == ".gltf")
     success = api.LoadASCIIFromFile(&model, &error, &warning, path.string());
@@ -407,7 +407,7 @@ int main(int argc, char** argv)
 
   bool res =
     api.WriteGltfSceneToFile(&model, path.string(), embedImages, embedBuffers, true, false);
-  VERIFY(res, "Failed to write baked scene to {}", path.string().c_str());
+  VERIFY(res, "Failed to write baked scene to {}", (const char*)path.string().c_str());
 
   return 0;
 }

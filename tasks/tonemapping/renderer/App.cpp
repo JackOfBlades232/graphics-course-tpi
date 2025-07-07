@@ -38,13 +38,13 @@ App::App(const char* scene_name, std::span<const char* const> argv)
     // @TODO: do I have to support binary file separately? Don't remember
     if (entry.is_regular_file() && entry.path().extension() == ".gltf")
     {
-      spdlog::info("Loading scene from {}", entry.path().c_str());
+      spdlog::info("Loading scene from {}", (const char*)entry.path().c_str());
       render->loadScene(entry.path().c_str());
       return;
     }
   }
 
-  ETNA_PANIC("A .gltf file was not found in {}", scenePath.c_str());
+  ETNA_PANIC("A .gltf file was not found in {}", (const char*)scenePath.c_str());
 }
 
 void App::run()
@@ -179,7 +179,7 @@ bool App::parseArgs(std::span<const char* const> argv)
             return false;
           }
 
-          cfg.testMultiplexing.dims[component] = dest;
+          ((glm::uint*)&cfg.testMultiplexing.dims)[component] = dest;
         }
         else
         {
@@ -193,7 +193,7 @@ bool App::parseArgs(std::span<const char* const> argv)
             return false;
           }
 
-          cfg.testMultiplexing.offsets[component] = dest;
+          ((float*)&cfg.testMultiplexing.offsets)[component] = dest;
         }
       }
     }

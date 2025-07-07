@@ -152,7 +152,7 @@ private:
     std::span<const uint32_t> indices,
     std::span<const glm::mat4> instance_matrices,
     std::span<const IndirectCommand> draw_commands,
-    std::span<const BBox> bboxes,
+    std::span<const BBox> boxes,
     std::span<const CullableInstance> instances,
     std::span<const Material> material_params);
 
