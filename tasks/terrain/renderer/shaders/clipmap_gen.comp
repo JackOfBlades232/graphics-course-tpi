@@ -192,14 +192,12 @@ void main(void)
       }
       if ((source.details[i].flags & TERRAIN_DETAIL_USE_RH_RANGE_FLAG) != 0)
       {
-        const float falloffScale = TERRAIN_DETAIL_LEVEL_FALLOFF_TO_SCALE_X * scale.x;
-
         float ld = max(source.details[i].heightRange.x - rh, 0.f);
         float hd = max(rh - source.details[i].heightRange.y, 0.f);
 
         // @TODO: correct when there can be another source of w (splatting)
-        float lw = 1.f - min(ld / falloffScale, 1.f);
-        float hw = 1.f - min(hd / falloffScale, 1.f);
+        float lw = 1.f - min(ld / TERRAIN_DETAIL_LEVEL_FALLOFF, 1.f);
+        float hw = 1.f - min(hd / TERRAIN_DETAIL_LEVEL_FALLOFF, 1.f);
 
         w = min(lw, hw);
       }

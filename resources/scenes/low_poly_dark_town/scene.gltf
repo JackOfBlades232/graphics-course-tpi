@@ -3419,6 +3419,18 @@
     },
     {
       "uri": "textures/terrain/grass/wispy-grass-meadow_height.png"
+    },
+    {
+      "uri": "textures/terrain/sand/desert-rocks1-albedo.png"
+    },
+    {
+      "uri": "textures/terrain/sand/desert-rocks1-Roughness.png"
+    },
+    {
+      "uri": "textures/terrain/sand/desert-rocks1-Height.png"
+    },
+    {
+      "uri": "textures/terrain/sand/desert-rocks1-Normal-ogl.png"
     }
   ],
   "materials": [
@@ -3860,6 +3872,31 @@
           }
         }
       }
+    },
+    {
+      "doubleSided": false,
+      "name": "terrain_sand_detail",
+      "normalTexture": {
+        "index": 15
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 12
+        },
+        "metallicRoughnessTexture": {
+          "index": 13
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 1.0
+      },
+      "extensions": {
+        "JB_terrain": {
+          "displacementCoeff": 0.0,
+          "displacementTexture": {
+            "index": 14
+          }
+        }
+      }
     }
   ],
   "extensions": {
@@ -3932,8 +3969,14 @@
       "details" : [
         {
           "name": "grass",
-          "relHeightRange": [0.0, 1.0],
+          "relHeightRange": [0.29, 1.0],
           "material": 19,
+          "scale": [5.0, 5.0]
+        },
+        {
+          "name": "sand",
+          "relHeightRange": [0.0, 0.31],
+          "material": 20,
           "scale": [5.0, 5.0]
         }
       ]
@@ -6426,6 +6469,22 @@
     {
       "sampler": 1,
       "source": 11
+    },
+    {
+      "sampler": 1,
+      "source": 12
+    },
+    {
+      "sampler": 1,
+      "source": 13
+    },
+    {
+      "sampler": 1,
+      "source": 14
+    },
+    {
+      "sampler": 1,
+      "source": 15
     }
   ]
 }
