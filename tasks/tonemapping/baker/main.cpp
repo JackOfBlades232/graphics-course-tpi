@@ -17,6 +17,7 @@
 #include <string>
 #include <filesystem>
 #include <execution>
+#include <concepts>
 
 #define LOG(fmt_, ...) spdlog::info(fmt_ __VA_OPT__(, ) __VA_ARGS__)
 
@@ -33,6 +34,17 @@
     if (!(e_))                                                                                     \
       FAIL(fmt_ __VA_OPT__(, ) __VA_ARGS__);                                                       \
   } while (0)
+
+// @TODO: pull out
+template <class TS>
+  requires (std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
+std::string to_char_str(const TS& s)
+{
+  if constexpr (std::same_as<TS, std::string>)
+    return s;
+  else
+    return std::to_string(s);
+}
 
 uint32_t best_fit_quantize_normal(glm::vec3 normal)
 {
@@ -89,7 +101,7 @@ int main(int argc, char** argv)
   std::string warning;
   bool success = false;
 
-  LOG("Processing model from '{}' ...", (const char*)path.c_str());
+  LOG("Processing model from '{}' ...", to_char_str(path.string()));
 
   if (path.extension() == ".gltf")
     success = api.LoadASCIIFromFile(&model, &error, &warning, path.string());
@@ -407,7 +419,7 @@ int main(int argc, char** argv)
 
   bool res =
     api.WriteGltfSceneToFile(&model, path.string(), embedImages, embedBuffers, true, false);
-  VERIFY(res, "Failed to write baked scene to {}", (const char*)path.string().c_str());
+  VERIFY(res, "Failed to write baked scene to {}", to_char_str(path.string()));
 
   return 0;
 }
