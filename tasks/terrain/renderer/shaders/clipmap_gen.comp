@@ -235,10 +235,18 @@ void main(void)
     color /= totw;
     matData /= totw;
     n = normalize(n / totw);
+
+    // @TEST
+    n = baseN;
   }
 
   imageStore(geom[params.level], destImageCoord, vec4(h));
   imageStore(normal[params.level], destImageCoord, vec4(n, 1.f));
-  imageStore(albedo[params.level], destImageCoord, vec4(color, 1.f));
-  imageStore(matdata[params.level], destImageCoord, vec4(matData, 1.f));
+
+  // imageStore(albedo[params.level], destImageCoord, vec4(color, 1.f));
+  // imageStore(matdata[params.level], destImageCoord, vec4(matData, 1.f));
+
+  // @TEST
+  imageStore(albedo[params.level], destImageCoord, vec4(0.5f, 0.9f, 0.4f, 1.f));
+  imageStore(matdata[params.level], destImageCoord, vec4(MATERIAL_DIFFUSE, 0.f, 0.f, 1.f));
 }
