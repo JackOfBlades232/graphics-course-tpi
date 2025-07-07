@@ -1,3 +1,3 @@
 include(${PROJECT_SOURCE_DIR}/cmake/common.cmake)
 
-add_subdirectory(terrain)
+add_subdirectory(tonemapping)
