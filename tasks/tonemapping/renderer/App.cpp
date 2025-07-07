@@ -7,6 +7,17 @@
 #include <charconv>
 
 
+// @TODO: pull out
+template <class TS>
+  requires (std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
+std::string to_char_str(const TS& s)
+{
+  if constexpr (std::same_as<TS, std::string>)
+    return s;
+  else
+    return std::to_string(s);
+}
+
 App::App(const char* scene_name, std::span<const char* const> argv)
 {
   if (!parseArgs(argv))
@@ -38,13 +49,13 @@ App::App(const char* scene_name, std::span<const char* const> argv)
     // @TODO: do I have to support binary file separately? Don't remember
     if (entry.is_regular_file() && entry.path().extension() == ".gltf")
     {
-      spdlog::info("Loading scene from {}", (const char*)entry.path().c_str());
+      spdlog::info("Loading scene from {}", to_char_str(entry.path().string()));
       render->loadScene(entry.path().c_str());
       return;
     }
   }
 
-  ETNA_PANIC("A .gltf file was not found in {}", (const char*)scenePath.c_str());
+  ETNA_PANIC("A .gltf file was not found in {}", to_char_str(scenePath.string()));
 }
 
 void App::run()
