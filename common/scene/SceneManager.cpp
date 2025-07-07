@@ -61,10 +61,10 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
   if constexpr (SUPPORTED_EXTENSIONS.size() > 0)
   {
     std::string supportedExtsMsg{SUPPORTED_EXTENSIONS[0]};
-    for (const auto& ext : std::span{SUPPORTED_EXTENSIONS}.subspan(1))
+    for (const auto& supp : std::span{SUPPORTED_EXTENSIONS}.subspan(1))
     {
       supportedExtsMsg += ", ";
-      supportedExtsMsg += std::string{ext};
+      supportedExtsMsg += std::string{supp};
     }
     spdlog::info("glTF: supported extensions : {}", supportedExtsMsg);
   }
@@ -74,36 +74,37 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
   if (
     !model.extensions.empty() || !model.extensionsRequired.empty() || !model.extensionsUsed.empty())
   {
-    for (const auto& [ext, _] : model.extensions)
+    for (const auto& [mext, _] : model.extensions)
     {
       if (
-        std::find(model.extensionsUsed.begin(), model.extensionsUsed.end(), ext) ==
+        std::find(model.extensionsUsed.begin(), model.extensionsUsed.end(), mext) ==
         model.extensionsUsed.end())
       {
         spdlog::error(
           "glTF: inconsistent model, extension \"{}\" is used but not included in extensionsUsed",
-          ext);
+          mext);
         return std::nullopt;
       }
     }
-    for (const auto& ext : model.extensionsRequired)
+    for (const auto& rext : model.extensionsRequired)
     {
 
       if (
-        std::find(SUPPORTED_EXTENSIONS.begin(), SUPPORTED_EXTENSIONS.end(), ext) ==
+        std::find(SUPPORTED_EXTENSIONS.begin(), SUPPORTED_EXTENSIONS.end(), rext) ==
         SUPPORTED_EXTENSIONS.end())
       {
-        spdlog::error("glTF: required extension \"{}\" is not supported", ext);
+        spdlog::error("glTF: required extension \"{}\" is not supported", rext);
         return std::nullopt;
       }
     }
-    for (const auto& ext : model.extensionsUsed)
+    for (const auto& uext : model.extensionsUsed)
     {
       if (
-        std::find(SUPPORTED_EXTENSIONS.begin(), SUPPORTED_EXTENSIONS.end(), ext) ==
+        std::find(SUPPORTED_EXTENSIONS.begin(), SUPPORTED_EXTENSIONS.end(), uext) ==
         SUPPORTED_EXTENSIONS.end())
       {
-        spdlog::warn("glTF: used extension \"{}\" is not supported and will not be displayed", ext);
+        spdlog::warn(
+          "glTF: used extension \"{}\" is not supported and will not be displayed", uext);
       }
     }
   }
@@ -330,7 +331,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
           DrawableInstance{shader_uint(matrixId), shader_uint(relem.materialId), 0});
       }
 
-      totalInstCount += matrixIds.size();
+      totalInstCount += uint32_t(matrixIds.size());
 
       if (!inserted) // Only calculte bbox on first encounter of relem
         continue;
@@ -422,7 +423,8 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       }
       else
       {
-        const uint32_t level = (i - TERRAIN_FIRST_LEVEL_CHUNKS) / TERRAIN_OTHER_LEVELS_CHUNKS + 1;
+        const uint32_t level =
+          (uint32_t(i) - TERRAIN_FIRST_LEVEL_CHUNKS) / TERRAIN_OTHER_LEVELS_CHUNKS + 1;
         const float levelMult = float(1 << level);
         chunkExtent.x = chunkExtent.z =
           levelMult * CLIPMAP_EXTENT_STEP * 2.f / float(TERRAIN_CHUNKS_LEVEL_DIM);
@@ -609,7 +611,7 @@ void SceneManager::uploadData(
   std::span<const uint32_t> indices,
   std::span<const glm::mat4> instance_matrices,
   std::span<const IndirectCommand> draw_commands,
-  std::span<const BBox> bboxes,
+  std::span<const BBox> boxes,
   std::span<const CullableInstance> instances,
   std::span<const Material> material_params)
 {
@@ -643,7 +645,7 @@ void SceneManager::uploadData(
   });
 
   bboxesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
-    .size = bboxes.size_bytes(),
+    .size = boxes.size_bytes(),
     .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "bboxesBuf",
@@ -668,7 +670,7 @@ void SceneManager::uploadData(
   transferHelper.uploadBuffer<uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
   transferHelper.uploadBuffer<glm::mat4>(*oneShotCommands, matricesBuf, 0, instance_matrices);
   transferHelper.uploadBuffer<IndirectCommand>(*oneShotCommands, indirectDrawBuf, 0, draw_commands);
-  transferHelper.uploadBuffer<BBox>(*oneShotCommands, bboxesBuf, 0, bboxes);
+  transferHelper.uploadBuffer<BBox>(*oneShotCommands, bboxesBuf, 0, boxes);
   transferHelper.uploadBuffer<CullableInstance>(*oneShotCommands, instancesBuf, 0, instances);
   transferHelper.uploadBuffer<Material>(*oneShotCommands, materialParamsBuf, 0, material_params);
 }
@@ -740,7 +742,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     if (id < 0)
       return TexSmpIdPair::INVALID;
     const auto& gtex = model.textures[id];
-    const uint32_t samplerId = gtex.sampler < 0 ? 0 : samplerRemapping[gtex.sampler];
+    const uint32_t samplerId = uint32_t(gtex.sampler < 0 ? 0 : samplerRemapping[gtex.sampler]);
     // @TODO graceful
     ETNA_ASSERT(gtex.source >= 0 && gtex.source <= 65535);
     ETNA_ASSERT(samplerId >= 0 && samplerId <= 65535);
@@ -915,7 +917,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     data.rangeMax = terrainExt->rangeMax;
 
     ETNA_ASSERT(terrainExt->details.size() <= TERRAIN_MAX_DETAILS);
-    data.detailCount = terrainExt->details.size();
+    data.detailCount = uint32_t(terrainExt->details.size());
 
     int did = 0;
     std::optional<MaterialType> detailMat{};

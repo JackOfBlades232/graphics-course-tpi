@@ -555,7 +555,9 @@ void WorldRenderer::renderWorld(
         vk::PipelineBindPoint::eCompute, resetIndirectCommandsPipeline.getVkPipeline());
 
       cmd_buf.dispatch(
-        get_linear_wg_count(sceneMgr->getIndirectCommands().size(), BASE_WORK_GROUP_SIZE), 1, 1);
+        get_linear_wg_count(uint32_t(sceneMgr->getIndirectCommands().size()), BASE_WORK_GROUP_SIZE),
+        1,
+        1);
     }
 
     std::array resetAndCulledBarriers2 = {
@@ -603,7 +605,7 @@ void WorldRenderer::renderWorld(
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, cullingPipeline.getVkPipeline());
 
       cmd_buf.dispatch(
-        get_linear_wg_count(sceneMgr->getInstances().size(), BASE_WORK_GROUP_SIZE), 1, 1);
+        get_linear_wg_count(uint32_t(sceneMgr->getInstances().size()), BASE_WORK_GROUP_SIZE), 1, 1);
     }
 
     std::array resetAndCulledBarriers3 = {
@@ -771,7 +773,7 @@ void WorldRenderer::renderWorld(
           sceneMgr->getInstancesBuf(),
           sceneMgr->getBboxesBuf(),
           constants->get(),
-          sceneMgr->getInstances().size());
+          uint32_t(sceneMgr->getInstances().size()));
       }
 
       if (currentDebugTex)
