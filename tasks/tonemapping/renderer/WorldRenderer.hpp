@@ -87,12 +87,14 @@ private:
   std::unique_ptr<SceneManager> sceneMgr;
 
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
+  std::unique_ptr<PostfxRenderer> tonemapper{};
   MeshPipeline staticMeshPipeline{};
   MeshPipeline terrainMeshPipeline{};
   etna::ComputePipeline cullingPipeline{};
   etna::ComputePipeline resetIndirectCommandsPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
 
+  etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image mainViewDepth;
 
@@ -140,4 +142,6 @@ private:
   bool wireframe = false;
   bool drawScene = true;
   bool drawTerrain = true;
+  bool doSatCulling = true;
+  bool doTonemapping = true;
 };

@@ -15,8 +15,11 @@ struct Constants
   CullingMode cullingMode;
 
   shader_vec3 toroidalOffset;
-  shader_uint pad1_;
+
+  shader_uint useTonemapping;
+
   shader_vec3 toroidalUpdatePlayerWorldPos;
+
   shader_uint pad2_;
 };
 

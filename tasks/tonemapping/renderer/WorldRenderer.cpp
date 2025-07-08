@@ -40,6 +40,13 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
   auto& ctx = etna::get_context();
 
+  // @TODO: tighter format
+  hdrTarget = ctx.createImage(etna::Image::CreateInfo{
+    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+    .name = "hdr_target",
+    .format = vk::Format::eR32G32B32A32Sfloat,
+    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+
   mainViewDepth = ctx.createImage(etna::Image::CreateInfo{
     .extent = vk::Extent3D{resolution.x, resolution.y, 1},
     .name = "main_view_depth",
@@ -84,6 +91,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   lights->iterate([](auto& buf) { buf.map(); });
 
   // @TODO: dup handling?
+  debugTextures.emplace("hdr_target", &hdrTarget);
   debugTextures.emplace("main_view_depth", &mainViewDepth);
   debugTextures.emplace("gbuffer_albedo", &gbufAlbedo);
   debugTextures.emplace("gbuffer_material", &gbufMaterial);
@@ -381,6 +389,12 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
     RENDERER_SHADERS_ROOT "gbuffer_resolve.frag.spv",
+    vk::Format::eR32G32B32A32Sfloat,
+    {resolution.x, resolution.y}});
+
+  tonemapper = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
+    "tonemap",
+    RENDERER_SHADERS_ROOT "tonemap.frag.spv",
     swapchain_format,
     {resolution.x, resolution.y}});
 
@@ -434,6 +448,11 @@ void WorldRenderer::update(const FramePacket& packet)
         terrain->needToroidalUpdate = true;
       }
     }
+  }
+
+  {
+    constantsData.cullingMode = doSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
+    constantsData.useTonemapping = doTonemapping;
   }
 }
 
@@ -757,7 +776,23 @@ void WorldRenderer::renderWorld(
         {set.getVkSet(), gbufSet.getVkSet()},
         {});
 
-      gbufferResolver->render(cmd_buf, target_image, target_image_view);
+      gbufferResolver->render(cmd_buf, hdrTarget.get(), hdrTarget.getView({}));
+    }
+
+    {
+      ETNA_PROFILE_GPU(cmd_buf, tonemapping);
+
+      auto set = etna::create_descriptor_set(
+        tonemapper->shaderProgramInfo().getDescriptorLayoutId(0),
+        cmd_buf,
+        {etna::Binding{
+           0, hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+         etna::Binding{8, constants->get().genBinding()}});
+
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, tonemapper->pipelineLayout(), 0, {set.getVkSet()}, {});
+
+      tonemapper->render(cmd_buf, target_image, target_image_view);
     }
 
     {
@@ -972,15 +1007,12 @@ void WorldRenderer::drawGui()
     {
       ImGui::Begin("Scene");
 
-      // @TODO: not static
-      static bool useSatCulling = true;
       ImGui::Checkbox("Draw scene", &drawScene);
       ImGui::Checkbox("Draw terrain", &drawTerrain);
-      ImGui::Checkbox("Use SAT culling", &useSatCulling);
+      ImGui::Checkbox("Use SAT culling", &doSatCulling);
+      ImGui::Checkbox("Use tonemapping", &doTonemapping);
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
-
-      constantsData.cullingMode = useSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
 
       // @TODO: text
       if (ImGui::BeginCombo(
