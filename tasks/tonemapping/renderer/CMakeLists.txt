@@ -21,4 +21,6 @@ target_add_shaders(renderer
   shaders/terrain_mesh.tese
   shaders/terrain_mesh.frag
   shaders/tonemap.frag
+  shaders/histogram_minmax.comp
+  shaders/histogram_clear_minmax.comp
 )

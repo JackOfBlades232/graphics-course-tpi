@@ -3,9 +3,7 @@
 
 #include "cpp_glsl_compat.h"
 #include "materials.h"
-
-// @TODO: tweak, maybe move to another file?
-#define BASE_WORK_GROUP_SIZE 64
+#include "defs.h"
 
 #define TERRAIN_CHUNK_INSTANCE_FLAG 0x1
 

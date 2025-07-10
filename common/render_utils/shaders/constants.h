@@ -20,7 +20,7 @@ struct Constants
 
   shader_vec3 toroidalUpdatePlayerWorldPos;
 
-  shader_uint pad2_;
+  shader_uint useSharedMemForTonemapping;
 };
 
 #endif // CONSTANTS_H_INCLUDED

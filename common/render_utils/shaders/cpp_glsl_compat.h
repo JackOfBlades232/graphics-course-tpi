@@ -83,6 +83,8 @@ shader_mat4 translation(shader_vec3 offs)
 #define round_to_zero(x_) (shader_round((x_) - shader_sign(x_) * 0.5f))
 
 #define SHADER_EPSILON 0.00001f
+#define SHADER_UINT_MAX 4294967295
+#define SHADER_FLT_MAX 3.402823466e+38
 
 // NOLINTEND
 
