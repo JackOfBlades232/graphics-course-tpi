@@ -94,9 +94,14 @@ private:
   etna::ComputePipeline resetIndirectCommandsPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
 
+  etna::ComputePipeline clearHistMinmaxPipeline{};
+  etna::ComputePipeline calculateHistMinmaxPipeline{};
+
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image mainViewDepth;
+
+  etna::Buffer histMinmax;
 
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
@@ -144,4 +149,5 @@ private:
   bool drawTerrain = true;
   bool doSatCulling = true;
   bool doTonemapping = true;
+  bool useSharedMemForTonemapping = false;
 };

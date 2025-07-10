@@ -10,7 +10,7 @@
 #include "common.frag.inc"
 
 
-layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
+layout(local_size_x = CLIPMAP_WORK_GROUP_SIZE) in;
 
 layout(binding = 0, set = 0, r32f) uniform writeonly image2D geom[CLIPMAP_LEVEL_COUNT];
 layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D normal[CLIPMAP_LEVEL_COUNT];

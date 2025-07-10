@@ -3,6 +3,7 @@
 #include "WorldRenderer.hpp"
 
 #include <render_utils/PostfxRenderer.hpp>
+#include <tonemapping.h>
 
 #include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
@@ -90,6 +91,12 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
 
+  histMinmax = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(HistogramLuminanceRange),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "hist_minmax"});
+
   // @TODO: dup handling?
   debugTextures.emplace("hdr_target", &hdrTarget);
   debugTextures.emplace("main_view_depth", &mainViewDepth);
@@ -153,9 +160,6 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .addressMode = vk::SamplerAddressMode::eRepeat,
       .name = "terrain_clipmap_sampler"});
 
-    terrain->geometryLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
-    terrain->normalLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
-    terrain->albedoLevelsBindings.reserve(CLIPMAP_LEVEL_COUNT);
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
       terrain->geometryLevelsBindings.emplace_back(
@@ -283,6 +287,9 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "reset_indirect_commands", {RENDERER_SHADERS_ROOT "reset_indirect_commands.comp.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
+  etna::create_program(
+    "histogram_clear_minmax", {RENDERER_SHADERS_ROOT "histogram_clear_minmax.comp.spv"});
+  etna::create_program("histogram_minmax", {RENDERER_SHADERS_ROOT "histogram_minmax.comp.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -401,6 +408,9 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   bboxRenderer = std::make_unique<BboxRenderer>(
     BboxRenderer::CreateInfo{swapchain_format, {resolution.x, resolution.y}});
   quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{swapchain_format});
+
+  clearHistMinmaxPipeline = pipelineManager.createComputePipeline("histogram_clear_minmax", {});
+  calculateHistMinmaxPipeline = pipelineManager.createComputePipeline("histogram_minmax", {});
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -453,6 +463,7 @@ void WorldRenderer::update(const FramePacket& packet)
   {
     constantsData.cullingMode = doSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
     constantsData.useTonemapping = doTonemapping;
+    constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
   }
 }
 
@@ -538,7 +549,7 @@ void WorldRenderer::renderWorld(
           shader_uint(i));
         cmd_buf.dispatch(
           get_linear_wg_count(
-            calculate_thread_count_for_clipmap_update(dims), BASE_WORK_GROUP_SIZE),
+            calculate_thread_count_for_clipmap_update(dims), CLIPMAP_WORK_GROUP_SIZE),
           1,
           1);
       }
@@ -782,11 +793,106 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, tonemapping);
 
+      vk::BufferMemoryBarrier2 minmaxBarrier{
+        .srcStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
+        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+        .buffer = histMinmax.get(),
+        .size = sizeof(HistogramLuminanceRange)};
+      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
+        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+        .bufferMemoryBarrierCount = 1,
+        .pBufferMemoryBarriers = &minmaxBarrier});
+
+      {
+        auto programInfo = etna::get_shader_program("histogram_clear_minmax");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, histMinmax.genBinding()}});
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          clearHistMinmaxPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, clearHistMinmaxPipeline.getVkPipeline());
+
+        cmd_buf.dispatch(1, 1, 1);
+      }
+
+      vk::BufferMemoryBarrier2 minmaxBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .dstAccessMask =
+          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+        .buffer = histMinmax.get(),
+        .size = sizeof(HistogramLuminanceRange)};
+      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
+        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+        .bufferMemoryBarrierCount = 1,
+        .pBufferMemoryBarriers = &minmaxBarrier2});
+
+      etna::set_state(
+        cmd_buf,
+        hdrTarget.get(),
+        vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader,
+        vk::AccessFlagBits2::eShaderSampledRead,
+        vk::ImageLayout::eShaderReadOnlyOptimal,
+        vk::ImageAspectFlagBits::eColor);
+      etna::flush_barriers(cmd_buf);
+
+      {
+        auto programInfo = etna::get_shader_program("histogram_minmax");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{
+             0,
+             hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{1, histMinmax.genBinding()},
+           etna::Binding{8, constants->get().genBinding()}});
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          calculateHistMinmaxPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, calculateHistMinmaxPipeline.getVkPipeline());
+
+        cmd_buf.dispatch(
+          get_linear_wg_count(
+            hdrTarget.getExtent().width * hdrTarget.getExtent().height,
+            HISTOGRAM_MINMAX_WORK_GROUP_SIZE * PIXELS_PER_THREAD),
+          1,
+          1);
+      }
+
+      vk::BufferMemoryBarrier2 minmaxBarrier3{
+        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .srcAccessMask =
+          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+        .buffer = histMinmax.get(),
+        .size = sizeof(HistogramLuminanceRange)};
+      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
+        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+        .bufferMemoryBarrierCount = 1,
+        .pBufferMemoryBarriers = &minmaxBarrier3});
+
       auto set = etna::create_descriptor_set(
         tonemapper->shaderProgramInfo().getDescriptorLayoutId(0),
         cmd_buf,
         {etna::Binding{
            0, hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+         etna::Binding{1, histMinmax.genBinding()},
          etna::Binding{8, constants->get().genBinding()}});
 
       cmd_buf.bindDescriptorSets(
@@ -1011,6 +1117,8 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Draw terrain", &drawTerrain);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
+      if (doTonemapping)
+        ImGui::Checkbox("Use shared memory for tonemapping", &useSharedMemForTonemapping);
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
 
