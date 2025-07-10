@@ -1,0 +1,10 @@
+#ifndef DEFS_H_INCLUDED
+#define DEFS_H_INCLUDED
+
+// @TODO: tweak
+#define BASE_WORK_GROUP_SIZE 64
+#define MAX_WORK_GROUP_SIZE 1024
+
+#endif // DEFS_H_INCLUDED
+
+

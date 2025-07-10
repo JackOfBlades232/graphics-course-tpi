@@ -23,7 +23,6 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
     instanceExtensions.push_back(ext);
 
   std::vector<const char*> deviceExtensions;
-
   deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
   vk::PhysicalDeviceDescriptorIndexingFeatures featuresDescIndexing{

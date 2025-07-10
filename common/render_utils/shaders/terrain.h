@@ -36,6 +36,8 @@ struct TerrainSourceData
   TerrainDetailRule details[TERRAIN_MAX_DETAILS];
 };
 
+#define CLIPMAP_WORK_GROUP_SIZE (BASE_WORK_GROUP_SIZE * 2)
+
 #define CLIPMAP_LEVEL_COUNT 8
 
 // @TODO: tweakable
