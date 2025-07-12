@@ -9,7 +9,7 @@
 
 // @TODO: pull out
 template <class TS>
-  requires (std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
+  requires(std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
 std::string to_char_str(const TS& s)
 {
   if constexpr (std::same_as<TS, std::string>)
@@ -154,6 +154,8 @@ void App::rotateCam(Camera& cam, const Mouse& ms, float /*dt*/)
 
 bool App::parseArgs(std::span<const char* const> argv)
 {
+  bool hasDebugConfigOverride = false;
+
   for (auto it = argv.begin(); it < argv.end(); ++it)
   {
     const std::string_view arg{*it};
@@ -208,6 +210,28 @@ bool App::parseArgs(std::span<const char* const> argv)
         }
       }
     }
+    else if (arg == "-noDebugConfig")
+    {
+      cfg.useDebugConfig = false;
+    }
+    else if (arg == "-debugConfigFile")
+    {
+      auto err = [] {
+        spdlog::error("Wrong -debugConfigFile usage, correct: -debugConfigFile [filepath]");
+      };
+
+      ++it;
+      if (it == argv.end())
+      {
+        err();
+        return false;
+      }
+
+      hasDebugConfigOverride = true;
+
+      const std::string_view valarg{*it};
+      cfg.debugConfigFile = valarg;
+    }
     else
     {
       spdlog::error("Unknown argument {}", arg);
@@ -225,6 +249,12 @@ bool App::parseArgs(std::span<const char* const> argv)
       cfg.testMultiplexing.offsets.x,
       cfg.testMultiplexing.offsets.y,
       cfg.testMultiplexing.offsets.z);
+  }
+
+  if (hasDebugConfigOverride && !cfg.useDebugConfig)
+  {
+    spdlog::error("-noDebugConfig and -debugConfigFile flags are incompatible");
+    return false;
   }
 
   return true;

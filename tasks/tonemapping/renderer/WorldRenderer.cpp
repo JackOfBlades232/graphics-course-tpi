@@ -3,6 +3,8 @@
 #include "WorldRenderer.hpp"
 
 #include <render_utils/PostfxRenderer.hpp>
+#include <utils/Common.hpp>
+#include <utils/Bitstream.hpp>
 #include <tonemapping.h>
 
 #include <etna/GlobalContext.hpp>
@@ -33,6 +35,8 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   , wc{wc}
   , cfg{config}
 {
+  if (cfg.useDebugConfig)
+    loadDebugConfig();
 }
 
 void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
@@ -1262,6 +1266,16 @@ void WorldRenderer::drawGui()
       if (currentDebugDrawer)
         debugDrawers[*currentDebugDrawer].settings();
 
+      if (cfg.useDebugConfig)
+      {
+        ImGui::NewLine();
+        ImGui::Text("Debug config file : %s", cfg.debugConfigFile.c_str());
+        if (ImGui::Button("Save config"))
+          saveDebugConfig();
+        if (ImGui::Button("Reload config"))
+          loadDebugConfig();
+      }
+
       ImGui::End();
     }
   }
@@ -1316,4 +1330,106 @@ void WorldRenderer::registerManagedImage(
         currentDebugTexLayer =
           glm::clamp(currentDebugTexLayer, 0u, uint32_t(img.getLayerCount() - 1));
       }});
+}
+
+void WorldRenderer::loadDebugConfig()
+{
+  auto readerMaybe = make_binfile_reader(cfg.debugConfigFile.c_str());
+  if (!readerMaybe)
+  {
+    spdlog::warn(
+      "Failed to load debug config from {}, using default settings", cfg.debugConfigFile);
+    return;
+  }
+
+  auto& reader = *readerMaybe;
+  auto verMaybe = reader.read<uint32_t>();
+
+  if (!verMaybe)
+  {
+    spdlog::warn("Invalid debug config {}, using default settings", cfg.debugConfigFile);
+    return;
+  }
+  else if (*verMaybe != cfg.debugConfigFileFormatVer)
+  {
+    spdlog::warn(
+      "Loaded debug config with format ver {} from {}, while renderer requires {}, using default "
+      "settings",
+      *verMaybe,
+      cfg.debugConfigFile,
+      cfg.debugConfigFileFormatVer);
+    return;
+  }
+
+  bool hasDebugDrawer = unwrap(reader.read<bool>());
+  if (hasDebugDrawer)
+  {
+    uint32_t len = unwrap(reader.read<uint32_t>());
+    std::string drawer{};
+    drawer.resize(len, '\0');
+    ETNA_ASSERT(drawer.length() == len);
+    ETNA_VERIFY(reader.read(drawer.data(), drawer.length()));
+    currentDebugDrawer.emplace(std::move(drawer));
+  }
+  else
+  {
+    currentDebugDrawer = std::nullopt;
+  }
+
+  currentDebugTexMip = unwrap(reader.read<uint32_t>());
+  currentDebugTexLayer = unwrap(reader.read<uint32_t>());
+  currentDebugTexColorRange = unwrap(reader.read<glm::vec2>());
+  currentDebugTexShowR = unwrap(reader.read<bool>());
+  currentDebugTexShowG = unwrap(reader.read<bool>());
+  currentDebugTexShowB = unwrap(reader.read<bool>());
+  currentDebugTexShowA = unwrap(reader.read<bool>());
+  settingsGuiEnabled = unwrap(reader.read<bool>());
+  drawBboxes = unwrap(reader.read<bool>());
+  wireframe = unwrap(reader.read<bool>());
+  drawScene = unwrap(reader.read<bool>());
+  drawTerrain = unwrap(reader.read<bool>());
+  doSatCulling = unwrap(reader.read<bool>());
+  doTonemapping = unwrap(reader.read<bool>());
+  useSharedMemForTonemapping = unwrap(reader.read<bool>());
+
+  spdlog::info("Loaded debug config from {}", cfg.debugConfigFile.c_str());
+}
+
+void WorldRenderer::saveDebugConfig()
+{
+  auto writerMaybe = make_binfile_writer(cfg.debugConfigFile.c_str());
+  if (!writerMaybe)
+  {
+    spdlog::warn("Failed to save debug config to {}", cfg.debugConfigFile);
+    return;
+  }
+
+  auto& writer = *writerMaybe;
+
+  ETNA_VERIFY(writer.write(cfg.debugConfigFileFormatVer));
+
+  ETNA_VERIFY(writer.write(currentDebugDrawer.has_value()));
+  if (currentDebugDrawer)
+  {
+    ETNA_VERIFY(writer.write(uint32_t(currentDebugDrawer->length())));
+    ETNA_VERIFY(writer.write(currentDebugDrawer->c_str(), currentDebugDrawer->length()));
+  }
+
+  ETNA_VERIFY(writer.write(currentDebugTexMip));
+  ETNA_VERIFY(writer.write(currentDebugTexLayer));
+  ETNA_VERIFY(writer.write(currentDebugTexColorRange));
+  ETNA_VERIFY(writer.write(currentDebugTexShowR));
+  ETNA_VERIFY(writer.write(currentDebugTexShowG));
+  ETNA_VERIFY(writer.write(currentDebugTexShowB));
+  ETNA_VERIFY(writer.write(currentDebugTexShowA));
+  ETNA_VERIFY(writer.write(settingsGuiEnabled));
+  ETNA_VERIFY(writer.write(drawBboxes));
+  ETNA_VERIFY(writer.write(wireframe));
+  ETNA_VERIFY(writer.write(drawScene));
+  ETNA_VERIFY(writer.write(drawTerrain));
+  ETNA_VERIFY(writer.write(doSatCulling));
+  ETNA_VERIFY(writer.write(doTonemapping));
+  ETNA_VERIFY(writer.write(useSharedMemForTonemapping));
+
+  spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }
