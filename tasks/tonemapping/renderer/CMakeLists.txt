@@ -22,5 +22,7 @@ target_add_shaders(renderer
   shaders/terrain_mesh.frag
   shaders/tonemap.frag
   shaders/histogram_minmax.comp
-  shaders/histogram_clear_minmax.comp
+  shaders/histogram_binning.comp
+  shaders/histogram_distribution.comp
+  shaders/histogram_clear.comp
 )

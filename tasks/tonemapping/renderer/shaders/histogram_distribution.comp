@@ -1,0 +1,25 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "tonemapping.h"
+
+
+layout(local_size_x = 1) in;
+
+layout(binding = 0, set = 0) buffer hist_t
+{
+  HistogramData data;
+};
+
+void main(void)
+{
+  // @TODO: can be done better
+  uint cumsum[HISTOGRAM_BINS];
+  cumsum[0] = data.binsDensity[0];
+  for (int i = 1; i < HISTOGRAM_BINS; ++i)
+    cumsum[i] = cumsum[i - 1] + data.binsDensity[i];
+  for (int i = 0; i < HISTOGRAM_BINS; ++i)
+    data.binsDistibution[i] = float(cumsum[i]) / float(cumsum[HISTOGRAM_BINS - 1]);
+}
+

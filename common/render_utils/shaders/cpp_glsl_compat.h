@@ -41,6 +41,8 @@ using shader_bool = glm::uint;
 #define shader_round glm::round
 #define shader_sign glm::sign
 #define shader_abs glm::abs
+#define shader_log glm::log
+#define shader_exp glm::exp
 
 #else
 
@@ -68,6 +70,8 @@ using shader_bool = glm::uint;
 #define shader_round round
 #define shader_sign sign
 #define shader_abs abs
+#define shader_log log
+#define shader_exp exp
 
 // @TODO: route to glm::translate for cpp
 shader_mat4 translation(shader_vec3 offs)

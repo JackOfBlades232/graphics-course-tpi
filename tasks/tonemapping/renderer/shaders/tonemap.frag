@@ -11,7 +11,7 @@ layout(location = 0) out vec4 out_fragColor;
 layout(binding = 0) uniform sampler2D hdrImage;
 layout(binding = 1, set = 0) readonly buffer minmax_t
 {
-  HistogramLuminanceRange lumRange;
+  HistogramData histData;
 };
 
 layout(binding = 8, set = 0) uniform constants_t
@@ -26,18 +26,29 @@ layout(location = 0 ) in VS_OUT
 
 void main(void)
 {
-  // @TODO: real tonemapping
   const vec4 hdrColor = textureLod(hdrImage, surf.texCoord, 0.f);
 
   vec3 ldrColor;
 
   if (constants.useTonemapping != 0)
   {
-    const float minLuminance = normalized_to_luminance(lumRange.min);
-    const float maxLuminance = normalized_to_luminance(lumRange.max);
+    const float minLuminance = normalized_to_luminance(histData.minNormLuminance);
+    const float maxLuminance = normalized_to_luminance(histData.maxNormLuminance);
+    const float minLogLuminance = to_log10(minLuminance);
+    const float maxLogLuminance = to_log10(maxLuminance);
 
-    const float luminance = luminance_bt601(hdrColor);
-    ldrColor = ((hdrColor - minLuminance) / (maxLuminance - minLuminance)).xyz;
+    const float worldLuminance = luminance_bt601(hdrColor);
+    const float worldLogLuminance = to_log10(worldLuminance);
+
+    const uint bin = uint(floor(
+      float((worldLogLuminance - minLogLuminance) / (maxLogLuminance - minLogLuminance)) *
+      float(HISTOGRAM_BINS)));
+    const float P = histData.binsDistibution[clamp(bin, 0, HISTOGRAM_BINS - 1)];
+
+    const float displayLogLuminance = minLogLuminance + (maxLogLuminance - minLogLuminance) * P;
+    const float displayLuminance = from_log10(displayLogLuminance);
+
+    ldrColor = hdrColor.xyz * displayLuminance / worldLuminance;
   }
   else
   {

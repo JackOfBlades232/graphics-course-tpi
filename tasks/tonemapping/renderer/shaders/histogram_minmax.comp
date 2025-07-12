@@ -7,12 +7,12 @@
 #include "cpp_glsl_compat.h"
 
 
-layout(local_size_x = HISTOGRAM_MINMAX_WORK_GROUP_SIZE) in;
+layout(local_size_x = HISTOGRAM_WORK_GROUP_SIZE) in;
 
 layout(binding = 0, set = 0) uniform sampler2D hdrImage;
-layout(binding = 1, set = 0) buffer minmax_t
+layout(binding = 1, set = 0) buffer hist_t
 {
-  HistogramLuminanceRange range;
+  HistogramData data;
 };
 
 layout(binding = 8, set = 0) uniform constants_t
@@ -26,7 +26,8 @@ float load_luminance(ivec2 coord, ivec2 size)
   return luminance_bt601(col);
 }
 
-shared HistogramLuminanceRange minmaxSharedBuffer[HISTOGRAM_MINMAX_WORK_GROUP_SIZE];
+
+shared HistogramLuminanceRange minmaxSharedBuffer[HISTOGRAM_WORK_GROUP_SIZE];
 
 void main(void)
 {
@@ -34,8 +35,8 @@ void main(void)
   const int imPixels = imSz.x * imSz.y;
 
   const int globId = int(gl_GlobalInvocationID.x);
-  const int localFirstPixel = globId * PIXELS_PER_THREAD;
-  const int localPixelCount = min(PIXELS_PER_THREAD, imPixels - localFirstPixel);
+  const int localFirstPixel = globId * HISTOGRAM_PIXELS_PER_THREAD;
+  const int localPixelCount = min(HISTOGRAM_PIXELS_PER_THREAD, imPixels - localFirstPixel);
 
   uint localMin = SHADER_UINT_MAX;
   uint localMax = 0;
@@ -53,8 +54,8 @@ void main(void)
   {
     if (globId < imPixels)
     {
-      atomicMin(range.min, localMin);
-      atomicMax(range.max, localMax);
+      atomicMin(data.minNormLuminance, localMin);
+      atomicMax(data.maxNormLuminance, localMax);
     }
   }
   else
@@ -65,12 +66,12 @@ void main(void)
 
     barrier();
 
-    for (int skip = 1; skip < HISTOGRAM_MINMAX_WORK_GROUP_SIZE; skip <<= 1)
+    for (int skip = 1; skip < HISTOGRAM_WORK_GROUP_SIZE; skip <<= 1)
     {
       if (locId % skip == 0)
       {
         const int nextId = locId + skip;
-        if (nextId < HISTOGRAM_MINMAX_WORK_GROUP_SIZE)
+        if (nextId < HISTOGRAM_WORK_GROUP_SIZE)
         {
           minmaxSharedBuffer[locId].min = min(minmaxSharedBuffer[locId].min, minmaxSharedBuffer[nextId].min);
           minmaxSharedBuffer[locId].max = max(minmaxSharedBuffer[locId].max, minmaxSharedBuffer[nextId].max);
@@ -82,8 +83,8 @@ void main(void)
 
     if (locId == 0)
     {
-      atomicMin(range.min, minmaxSharedBuffer[0].min);
-      atomicMax(range.max, minmaxSharedBuffer[0].max);
+      atomicMin(data.minNormLuminance, minmaxSharedBuffer[0].min);
+      atomicMax(data.maxNormLuminance, minmaxSharedBuffer[0].max);
     }
   }
 }
