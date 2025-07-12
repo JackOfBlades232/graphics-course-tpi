@@ -8,6 +8,7 @@
 #include <etna/GraphicsPipeline.hpp>
 #include <etna/ComputePipeline.hpp>
 #include <glm/glm.hpp>
+#include <function2/function2.hpp>
 
 #include <constants.h>
 
@@ -84,6 +85,20 @@ private:
     bool needToroidalUpdate = false;
   };
 
+  struct DebugDrawer
+  {
+    using DrawRoutine = fu2::unique_function<void(
+      vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view)>;
+    using SettingsRoutine = fu2::unique_function<void()>;
+
+    DrawRoutine draw;
+    SettingsRoutine settings;
+  };
+
+  void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
+  void registerManagedImage(
+    const etna::Image& img, std::optional<std::string> name_override = std::nullopt);
+
   std::unique_ptr<SceneManager> sceneMgr;
 
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
@@ -135,8 +150,10 @@ private:
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};
   std::unique_ptr<QuadRenderer> quadRenderer{};
-  std::map<std::string, const etna::Image*> debugTextures{};
-  std::optional<std::string> currentDebugTex{};
+  // @TODO: add abstraction to drawing whatever to part of viewport
+  etna::GraphicsPipeline histogramDebugPipeline{};
+  std::map<std::string, DebugDrawer> debugDrawers{};
+  std::optional<std::string> currentDebugDrawer{};
   uint32_t currentDebugTexMip = 0;
   uint32_t currentDebugTexLayer = 0;
   glm::vec2 currentDebugTexColorRange = {0.f, 1.f};

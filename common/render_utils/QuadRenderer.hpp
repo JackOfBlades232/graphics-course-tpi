@@ -1,10 +1,13 @@
 #pragma once
 
+#include "shaders/cpp_glsl_compat.h"
+
 #include <etna/Vulkan.hpp>
 #include <etna/GraphicsPipeline.hpp>
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
-#include "shaders/cpp_glsl_compat.h"
+
+#include <string>
 
 
 /**
@@ -35,6 +38,9 @@ public:
     bool showG = true,
     bool showB = true,
     bool showA = true);
+
+  static const std::string_view VERTEX_SHADER_PATH;
+  static const std::string_view FRAGMENT_SHADER_PATH;
 
 private:
   etna::GraphicsPipeline pipeline;
