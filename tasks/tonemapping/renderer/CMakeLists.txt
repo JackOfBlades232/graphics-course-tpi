@@ -25,4 +25,5 @@ target_add_shaders(renderer
   shaders/histogram_binning.comp
   shaders/histogram_distribution.comp
   shaders/histogram_clear.comp
+  shaders/histogram_debug.frag
 )
