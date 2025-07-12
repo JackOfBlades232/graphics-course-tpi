@@ -4,12 +4,20 @@
 #include "defs.h"
 #include "cpp_glsl_compat.h"
 
-#define HISTOGRAM_MINMAX_WORK_GROUP_SIZE (MAX_WORK_GROUP_SIZE / 8)
-#define PIXELS_PER_THREAD 128
+#define HISTOGRAM_WORK_GROUP_SIZE (MAX_WORK_GROUP_SIZE / 8)
+#define HISTOGRAM_PIXELS_PER_THREAD 128
+#define HISTOGRAM_BINS 100
+
+struct HistogramData
+{
+  uint minNormLuminance, maxNormLuminance; // normalized at [0, 1] -> [0, 255]
+  uint binsDensity[HISTOGRAM_BINS];
+  float binsDistibution[HISTOGRAM_BINS];
+};
 
 struct HistogramLuminanceRange
 {
-  uint min, max; // normalized at [0, 1] -> [0, 255]
+  uint min, max; 
 };
 
 float luminance_bt601(shader_vec4 col)
@@ -26,6 +34,16 @@ shader_uint luminance_to_normalized(float luminance)
 float normalized_to_luminance(shader_uint normalized)
 {
   return float(normalized) / 255.f;
+}
+
+float to_log10(float lin)
+{
+  return (1.f / shader_log(10.f)) * shader_log(lin + 1.f);
+}
+
+float from_log10(float loga)
+{
+  return shader_exp(loga * shader_log(10.f)) - 1.f;
 }
 
 #endif // TONEMAPPING_H_INCLUDED
