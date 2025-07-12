@@ -94,14 +94,16 @@ private:
   etna::ComputePipeline resetIndirectCommandsPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
 
-  etna::ComputePipeline clearHistMinmaxPipeline{};
+  etna::ComputePipeline clearHistPipeline{};
   etna::ComputePipeline calculateHistMinmaxPipeline{};
+  etna::ComputePipeline calculateHistDensityPipeline{};
+  etna::ComputePipeline calculateHistDistributionPipeline{};
 
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image mainViewDepth;
 
-  etna::Buffer histMinmax;
+  etna::Buffer histData;
 
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
