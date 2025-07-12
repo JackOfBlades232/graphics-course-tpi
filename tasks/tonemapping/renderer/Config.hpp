@@ -10,4 +10,8 @@ struct Config
 {
   bool testMultiplexScene = false;
   SceneMultiplexing testMultiplexing{};
+
+  std::string debugConfigFile{"./debug_config.bin"};
+  uint32_t debugConfigFileFormatVer = 0;
+  bool useDebugConfig = true;
 };

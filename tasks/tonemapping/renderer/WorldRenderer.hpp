@@ -95,10 +95,7 @@ private:
     SettingsRoutine settings;
   };
 
-  void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
-  void registerManagedImage(
-    const etna::Image& img, std::optional<std::string> name_override = std::nullopt);
-
+private:
   std::unique_ptr<SceneManager> sceneMgr;
 
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
@@ -153,6 +150,7 @@ private:
   // @TODO: add abstraction to drawing whatever to part of viewport
   etna::GraphicsPipeline histogramDebugPipeline{};
   std::map<std::string, DebugDrawer> debugDrawers{};
+
   std::optional<std::string> currentDebugDrawer{};
   uint32_t currentDebugTexMip = 0;
   uint32_t currentDebugTexLayer = 0;
@@ -169,4 +167,12 @@ private:
   bool doSatCulling = true;
   bool doTonemapping = true;
   bool useSharedMemForTonemapping = false;
+
+private:
+  void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
+  void registerManagedImage(
+    const etna::Image& img, std::optional<std::string> name_override = std::nullopt);
+
+  void loadDebugConfig();
+  void saveDebugConfig();
 };
