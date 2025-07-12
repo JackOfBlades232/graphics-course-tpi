@@ -42,35 +42,45 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   auto& ctx = etna::get_context();
 
   // @TODO: tighter format
-  hdrTarget = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "hdr_target",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    hdrTarget,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "hdr_target",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
-  mainViewDepth = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "main_view_depth",
-    .format = vk::Format::eD32Sfloat,
-    .imageUsage =
-      vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    mainViewDepth,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "main_view_depth",
+      .format = vk::Format::eD32Sfloat,
+      .imageUsage =
+        vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled});
 
   // @TODO: compact gbuffer
-  gbufAlbedo = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "gbuffer_albedo",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
-  gbufMaterial = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "gbuffer_material",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
-  gbufNormal = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "gbuffer_normal",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    gbufAlbedo,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "gbuffer_albedo",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    gbufMaterial,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "gbuffer_material",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    gbufNormal,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "gbuffer_normal",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
   defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
 
@@ -96,13 +106,6 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "hist_data"});
-
-  // @TODO: dup handling?
-  debugTextures.emplace("hdr_target", &hdrTarget);
-  debugTextures.emplace("main_view_depth", &mainViewDepth);
-  debugTextures.emplace("gbuffer_albedo", &gbufAlbedo);
-  debugTextures.emplace("gbuffer_material", &gbufMaterial);
-  debugTextures.emplace("gbuffer_normal", &gbufNormal);
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -128,32 +131,40 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
     memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
 
-    terrain->geometryClipmap = ctx.createImage(etna::Image::CreateInfo{
-      .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
-      .name = "geometry_clipmap",
-      .format = vk::Format::eR32Sfloat,
-      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-      .layers = CLIPMAP_LEVEL_COUNT});
-    terrain->normalClipmap = ctx.createImage(etna::Image::CreateInfo{
-      .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
-      .name = "normal_clipmap",
-      .format = vk::Format::eR32G32B32A32Sfloat,
-      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-      .layers = CLIPMAP_LEVEL_COUNT});
-    terrain->albedoClipmap = ctx.createImage(etna::Image::CreateInfo{
-      // @TODO: settable
-      .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
-      .name = "albedo_clipmap",
-      .format = vk::Format::eR32G32B32A32Sfloat,
-      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-      .layers = CLIPMAP_LEVEL_COUNT});
-    terrain->matdataClipmap = ctx.createImage(etna::Image::CreateInfo{
-      // @TODO: settable
-      .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
-      .name = "matdata_clipmap",
-      .format = vk::Format::eR32G32B32A32Sfloat,
-      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-      .layers = CLIPMAP_LEVEL_COUNT});
+    createManagedImage(
+      terrain->geometryClipmap,
+      etna::Image::CreateInfo{
+        .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+        .name = "geometry_clipmap",
+        .format = vk::Format::eR32Sfloat,
+        .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+        .layers = CLIPMAP_LEVEL_COUNT});
+    createManagedImage(
+      terrain->normalClipmap,
+      etna::Image::CreateInfo{
+        .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+        .name = "normal_clipmap",
+        .format = vk::Format::eR32G32B32A32Sfloat,
+        .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+        .layers = CLIPMAP_LEVEL_COUNT});
+    createManagedImage(
+      terrain->albedoClipmap,
+      etna::Image::CreateInfo{// @TODO: settable
+                              .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+                              .name = "albedo_clipmap",
+                              .format = vk::Format::eR32G32B32A32Sfloat,
+                              .imageUsage =
+                                vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+                              .layers = CLIPMAP_LEVEL_COUNT});
+    createManagedImage(
+      terrain->matdataClipmap,
+      etna::Image::CreateInfo{// @TODO: settable
+                              .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+                              .name = "matdata_clipmap",
+                              .format = vk::Format::eR32G32B32A32Sfloat,
+                              .imageUsage =
+                                vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+                              .layers = CLIPMAP_LEVEL_COUNT});
 
     terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
       .filter = vk::Filter::eLinear,
@@ -212,11 +223,6 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         uint32_t(i));
     }
 
-    debugTextures.emplace("geometry_clipmap", &terrain->geometryClipmap);
-    debugTextures.emplace("normal_clipmap", &terrain->normalClipmap);
-    debugTextures.emplace("albedo_clipmap", &terrain->albedoClipmap);
-    debugTextures.emplace("matdata_clipmap", &terrain->matdataClipmap);
-
     constantsData.toroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   }
   else
@@ -242,11 +248,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     const auto& tex = sceneMgr->getTextures()[i];
     texBindings.emplace_back(
       etna::Binding{0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal), uint32_t(i)});
-
-    // @TODO: dup handling?
-    debugTextures.emplace(
-      std::string{"bindless_tex_"} + std::to_string(i) + "[" + std::string{tex.getName()} + "]",
-      &tex);
+    registerManagedImage(
+      tex,
+      std::string{"bindless_tex_"} + std::to_string(i) + "[" + std::string{tex.getName()} + "]");
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
   {
@@ -292,6 +296,9 @@ void WorldRenderer::loadShaders()
   etna::create_program("histogram_binning", {RENDERER_SHADERS_ROOT "histogram_binning.comp.spv"});
   etna::create_program(
     "histogram_distribution", {RENDERER_SHADERS_ROOT "histogram_distribution.comp.spv"});
+  etna::create_program(
+    "histogram_debug",
+    {RENDERER_SHADERS_ROOT "histogram_debug.frag.spv", QuadRenderer::VERTEX_SHADER_PATH});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -416,6 +423,53 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   calculateHistDensityPipeline = pipelineManager.createComputePipeline("histogram_binning", {});
   calculateHistDistributionPipeline =
     pipelineManager.createComputePipeline("histogram_distribution", {});
+
+  histogramDebugPipeline = pipelineManager.createGraphicsPipeline(
+    "histogram_debug",
+    {
+      .blendingConfig =
+        {.attachments = {vk::PipelineColorBlendAttachmentState{
+           .blendEnable = vk::True,
+           .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+           .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+           .colorBlendOp = vk::BlendOp::eAdd,
+           .srcAlphaBlendFactor = vk::BlendFactor::eOne,
+           .dstAlphaBlendFactor = vk::BlendFactor::eOne,
+           .alphaBlendOp = vk::BlendOp::eAdd,
+           .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+             vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA}},
+         .logicOp = vk::LogicOp::eSet},
+      .fragmentShaderOutput =
+        {
+          .colorAttachmentFormats = {swapchain_format},
+        },
+    });
+
+  debugDrawers.emplace(
+    "histrogram_debug_view",
+    DebugDrawer{
+      [this](vk::CommandBuffer cb, vk::Image ti, vk::ImageView tiv) {
+        auto programInfo = etna::get_shader_program("histogram_debug");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0), cb, {etna::Binding{0, histData.genBinding()}});
+
+        etna::RenderTargetState renderTargets{
+          cb,
+          {{0, 0}, {resolution.x / 2, resolution.y / 2}},
+          {{.image = ti, .view = tiv, .loadOp = vk::AttachmentLoadOp::eLoad}},
+          {}};
+
+        cb.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics,
+          histogramDebugPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cb.bindPipeline(vk::PipelineBindPoint::eGraphics, histogramDebugPipeline.getVkPipeline());
+
+        cb.draw(3, 1, 0, 0);
+      },
+      [] {}});
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -710,7 +764,7 @@ void WorldRenderer::renderWorld(
           sceneMgr->getIndirectCommandsBuf().get(), offset, count, sizeof(IndirectCommand));
       }
 
-      if (drawTerrain)
+      if (terrain && drawTerrain)
       {
         ETNA_PROFILE_GPU(cmd_buf, terrain);
 
@@ -942,7 +996,8 @@ void WorldRenderer::renderWorld(
           0,
           {set.getVkSet()},
           {});
-        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, calculateHistDistributionPipeline.getVkPipeline());
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, calculateHistDistributionPipeline.getVkPipeline());
 
         cmd_buf.dispatch(1, 1, 1);
       }
@@ -990,28 +1045,8 @@ void WorldRenderer::renderWorld(
           uint32_t(sceneMgr->getInstances().size()));
       }
 
-      if (currentDebugTex)
-      {
-        // @TODO: mip levels
-        const auto* tex = debugTextures[*currentDebugTex];
-        ETNA_ASSERT(tex);
-        quadRenderer->render(
-          cmd_buf,
-          target_image,
-          target_image_view,
-          {{0, 0},
-           {(resolution.y / 2) * tex->getExtent().width / tex->getExtent().height,
-            resolution.y / 2}},
-          *tex,
-          defaultSampler,
-          currentDebugTexLayer,
-          currentDebugTexMip,
-          currentDebugTexColorRange,
-          currentDebugTexShowR,
-          currentDebugTexShowG,
-          currentDebugTexShowB,
-          currentDebugTexShowA);
-      }
+      if (currentDebugDrawer)
+        debugDrawers[*currentDebugDrawer].draw(cmd_buf, target_image, target_image_view);
     }
   }
 }
@@ -1195,23 +1230,26 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
 
+      if (!terrain)
+        drawTerrain = false;
+
       // @TODO: text
       if (ImGui::BeginCombo(
-            "Debug texture view", currentDebugTex ? currentDebugTex->c_str() : "none"))
+            "Debug texture view", currentDebugDrawer ? currentDebugDrawer->c_str() : "none"))
       {
         {
-          bool selected = !currentDebugTex.has_value();
+          bool selected = !currentDebugDrawer.has_value();
           if (ImGui::Selectable("none", selected))
-            currentDebugTex.reset();
+            currentDebugDrawer.reset();
           if (selected)
             ImGui::SetItemDefaultFocus();
         }
-        auto it = debugTextures.begin();
-        for (size_t i = 0; i < debugTextures.size(); i++)
+        auto it = debugDrawers.begin();
+        for (size_t i = 0; i < debugDrawers.size(); i++)
         {
-          bool selected = currentDebugTex.has_value() && *currentDebugTex == it->first;
+          bool selected = currentDebugDrawer.has_value() && *currentDebugDrawer == it->first;
           if (ImGui::Selectable(it->first.c_str(), selected))
-            currentDebugTex = it->first;
+            currentDebugDrawer = it->first;
           if (selected)
             ImGui::SetItemDefaultFocus();
 
@@ -1221,10 +1259,44 @@ void WorldRenderer::drawGui()
         ImGui::EndCombo();
       }
 
-      if (currentDebugTex)
-      {
-        const auto* tex = debugTextures.at(*currentDebugTex);
-        ETNA_ASSERT(tex);
+      if (currentDebugDrawer)
+        debugDrawers[*currentDebugDrawer].settings();
+
+      ImGui::End();
+    }
+  }
+}
+
+void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci)
+{
+  dst = etna::get_context().createImage(std::move(ci));
+  registerManagedImage(dst);
+}
+
+void WorldRenderer::registerManagedImage(
+  const etna::Image& img, std::optional<std::string> name_override)
+{
+  debugDrawers.emplace(
+    name_override ? *name_override : std::string{img.getName()},
+    DebugDrawer{
+      [&img, this](vk::CommandBuffer cb, vk::Image ti, vk::ImageView tiv) {
+        quadRenderer->render(
+          cb,
+          ti,
+          tiv,
+          {{0, 0},
+           {(resolution.y / 2) * img.getExtent().width / img.getExtent().height, resolution.y / 2}},
+          img,
+          defaultSampler,
+          currentDebugTexLayer,
+          currentDebugTexMip,
+          currentDebugTexColorRange,
+          currentDebugTexShowR,
+          currentDebugTexShowG,
+          currentDebugTexShowB,
+          currentDebugTexShowA);
+      },
+      [&img, this] {
         ImGui::InputInt("Debug texture mip level", (int*)&currentDebugTexMip);
         ImGui::InputInt("Debug texture layer", (int*)&currentDebugTexLayer);
         ImGui::InputFloat2("Debug texture color range", &currentDebugTexColorRange.x);
@@ -1240,12 +1312,8 @@ void WorldRenderer::drawGui()
           std::max(currentDebugTexColorRange.x, currentDebugTexColorRange.y);
 
         currentDebugTexMip =
-          glm::clamp(currentDebugTexMip, 0u, uint32_t(tex->getMipLevelCount() - 1));
+          glm::clamp(currentDebugTexMip, 0u, uint32_t(img.getMipLevelCount() - 1));
         currentDebugTexLayer =
-          glm::clamp(currentDebugTexLayer, 0u, uint32_t(tex->getLayerCount() - 1));
-      }
-
-      ImGui::End();
-    }
-  }
+          glm::clamp(currentDebugTexLayer, 0u, uint32_t(img.getLayerCount() - 1));
+      }});
 }
