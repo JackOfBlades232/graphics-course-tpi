@@ -3908,7 +3908,7 @@
             0.8,
             0.9
           ],
-          "intensity": 2.5,
+          "intensity": 0.5,
           "type": "directional"
         },
         {
@@ -3921,7 +3921,7 @@
             1.0,
             0.0
           ],
-          "intensity": 2.5,
+          "intensity": 1.0,
           "range": 20.0,
           "type": "spot"
         },

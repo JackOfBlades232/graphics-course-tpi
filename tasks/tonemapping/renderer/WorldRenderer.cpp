@@ -1106,6 +1106,21 @@ void WorldRenderer::drawGui()
     {
       ImGui::Begin("Lights");
 
+      const bool prevDirVal = directionalLightsAreOn;
+      const bool prevPointVal = pointLightsAreOn;
+      const bool prevSpotVal = spotLightsAreOn;
+
+      ImGui::Checkbox("Enable directional lights", &directionalLightsAreOn);
+      ImGui::Checkbox("Enable point lights", &pointLightsAreOn);
+      ImGui::Checkbox("Enable spot lights", &spotLightsAreOn);
+
+      if (directionalLightsAreOn != prevDirVal)
+        setAllDirLightsIntensity(directionalLightsAreOn ? 1.f : 0.f);
+      if (pointLightsAreOn != prevPointVal)
+        setAllPointLightsIntensity(pointLightsAreOn ? 1.f : 0.f);
+      if (spotLightsAreOn != prevSpotVal)
+        setAllSpotLightsIntensity(spotLightsAreOn ? 1.f : 0.f);
+
       // @TODO: not static
       static enum LType
       {
@@ -1432,4 +1447,20 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(useSharedMemForTonemapping));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
+}
+
+void WorldRenderer::setAllDirLightsIntensity(float val)
+{
+  for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
+    sceneMgr->lightsRW().directionalLights[i].intensity = val;
+}
+void WorldRenderer::setAllPointLightsIntensity(float val)
+{
+  for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
+    sceneMgr->lightsRW().pointLights[i].intensity = val;
+}
+void WorldRenderer::setAllSpotLightsIntensity(float val)
+{
+  for (size_t i = 0; i < sceneMgr->getLights().spotLightsCount; ++i)
+    sceneMgr->lightsRW().spotLights[i].intensity = val;
 }

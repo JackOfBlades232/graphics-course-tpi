@@ -14,6 +14,12 @@ layout(binding = 0, set = 0) buffer hist_t
 
 void main(void)
 {
+  data.minLuminance = normalized_to_luminance(data.minNormLuminance);
+  data.maxLuminance = normalized_to_luminance(data.maxNormLuminance);
+
+  data.minLogLuminance = to_log10(data.minLuminance);
+  data.maxLogLuminance = to_log10(data.maxLuminance);
+
   // @TODO: can be done better
   uint cumsum[HISTOGRAM_BINS];
   cumsum[0] = data.binsDensity[0];

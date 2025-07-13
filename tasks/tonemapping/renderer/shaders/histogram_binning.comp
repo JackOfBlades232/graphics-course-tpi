@@ -23,6 +23,7 @@ float load_luminance(ivec2 coord, ivec2 size)
 
 void main(void)
 {
+  // @NOTE: can't use min/maxLuminance or min/minLogLuminance yet, as it's not computed
   const float minLuminance = normalized_to_luminance(data.minNormLuminance);
   const float maxLuminance = normalized_to_luminance(data.maxNormLuminance);
 
