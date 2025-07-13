@@ -98,6 +98,9 @@ vec4 shade_cook_torrance(
   float hv = max(dot(hh, vv), 0.f);
   float nh = max(dot(nn, hh), 0.f);
 
+  if (nv < SHADER_EPSILON || nl < SHADER_EPSILON)
+    return vec4(0.f, 0.f, 0.f, 1.f);
+
   float a = roughness * roughness;
   float a2 = a * a;
 

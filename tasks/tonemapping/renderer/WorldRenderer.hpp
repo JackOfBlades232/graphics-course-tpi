@@ -145,6 +145,10 @@ private:
   const Config& cfg;
 
   // @DEBUG
+  bool directionalLightsAreOn = true;
+  bool pointLightsAreOn = true;
+  bool spotLightsAreOn = true;
+
   std::unique_ptr<BboxRenderer> bboxRenderer{};
   std::unique_ptr<QuadRenderer> quadRenderer{};
   // @TODO: add abstraction to drawing whatever to part of viewport
@@ -175,4 +179,8 @@ private:
 
   void loadDebugConfig();
   void saveDebugConfig();
+
+  void setAllDirLightsIntensity(float val);
+  void setAllPointLightsIntensity(float val);
+  void setAllSpotLightsIntensity(float val);
 };
