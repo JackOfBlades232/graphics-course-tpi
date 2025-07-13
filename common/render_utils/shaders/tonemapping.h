@@ -11,6 +11,8 @@
 struct HistogramData
 {
   uint minNormLuminance, maxNormLuminance; // normalized at [0, 1] -> [0, 255]
+  float minLuminance, maxLuminance;
+  float minLogLuminance, maxLogLuminance;
   uint binsDensity[HISTOGRAM_BINS];
   float binsDistibution[HISTOGRAM_BINS];
 };
