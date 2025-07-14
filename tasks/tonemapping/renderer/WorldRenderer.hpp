@@ -109,6 +109,8 @@ private:
   etna::ComputePipeline clearHistPipeline{};
   etna::ComputePipeline calculateHistMinmaxPipeline{};
   etna::ComputePipeline calculateHistDensityPipeline{};
+  etna::ComputePipeline calculatePreRefinedHistPipeline{};
+  etna::ComputePipeline calculateRefinedHistPipeline{};
   etna::ComputePipeline calculateHistDistributionPipeline{};
 
   etna::Image hdrTarget;
@@ -116,6 +118,7 @@ private:
   etna::Image mainViewDepth;
 
   etna::Buffer histData;
+  etna::Buffer luminanceBuffer;
 
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
