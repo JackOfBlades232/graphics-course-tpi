@@ -23,12 +23,12 @@ float load_luminance(ivec2 coord, ivec2 size)
 
 void main(void)
 {
-  // @NOTE: can't use min/maxLuminance or min/minLogLuminance yet, as it's not computed
+  // @NOTE: can't use data's min/maxLuminance or min/minLogLuminance yet, as it's not computed
   const float minLuminance = normalized_to_luminance(data.minNormLuminance);
   const float maxLuminance = normalized_to_luminance(data.maxNormLuminance);
 
-  const float minLogLuminance = to_log10(minLuminance);
-  const float maxLogLuminance = to_log10(maxLuminance);
+  const float minLogLuminance = to_logscale(minLuminance);
+  const float maxLogLuminance = to_logscale(maxLuminance);
   const float binSize = (maxLogLuminance - minLogLuminance) / float(HISTOGRAM_BINS);
 
   const ivec2 imSz = ivec2(textureSize(hdrImage, 0));
@@ -41,7 +41,7 @@ void main(void)
   for (int p = localFirstPixel; p < localFirstPixel + localPixelCount; ++p)
   {
     const ivec2 imCoord = ivec2(p % imSz.x, p / imSz.x);
-    const float logLuminance = to_log10(load_luminance(imCoord, imSz));
+    const float logLuminance = to_logscale(load_luminance(imCoord, imSz));
 
     const uint bin = uint(floor((logLuminance - minLogLuminance) / binSize));
     atomicAdd(data.binsDensity[clamp(bin, 0, HISTOGRAM_BINS - 1)], 1);

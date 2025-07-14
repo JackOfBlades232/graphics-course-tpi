@@ -38,15 +38,20 @@ float normalized_to_luminance(shader_uint normalized)
   return float(normalized) / 255.f;
 }
 
-float to_log10(float lin)
+const float LOGSCALE_BASE = 10.f;
+
+float to_logscale(float lin)
 {
-  return (1.f / shader_log(10.f)) * shader_log(lin + 1.f);
+  return (1.f / shader_log(LOGSCALE_BASE)) * shader_log(lin + 1.f);
 }
 
-float from_log10(float loga)
+float from_logscale(float loga)
 {
-  return shader_exp(loga * shader_log(10.f)) - 1.f;
+  return shader_exp(loga * shader_log(LOGSCALE_BASE)) - 1.f;
 }
+
+#define MIN_DISPLAY_LOG_LUMINANCE to_logscale(0.f)
+#define MAX_DISPLAY_LOG_LUMINANCE to_logscale(1.f)
 
 #endif // TONEMAPPING_H_INCLUDED
 
