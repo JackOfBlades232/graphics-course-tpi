@@ -34,19 +34,21 @@ void main(void)
   {
     const float minLuminance = normalized_to_luminance(histData.minNormLuminance);
     const float maxLuminance = normalized_to_luminance(histData.maxNormLuminance);
-    const float minLogLuminance = to_log10(minLuminance);
-    const float maxLogLuminance = to_log10(maxLuminance);
+    const float minLogLuminance = to_logscale(minLuminance);
+    const float maxLogLuminance = to_logscale(maxLuminance);
 
     const float worldLuminance = luminance_bt601(hdrColor);
-    const float worldLogLuminance = to_log10(worldLuminance);
+    const float worldLogLuminance = to_logscale(worldLuminance);
 
-    const uint bin = uint(floor(
+    const int bin = int(floor(
       float((worldLogLuminance - minLogLuminance) / (maxLogLuminance - minLogLuminance)) *
       float(HISTOGRAM_BINS)));
-    const float P = histData.binsDistibution[clamp(bin, 0, HISTOGRAM_BINS - 1)];
+    const float P = bin < 0 ? 0.f : (bin >= HISTOGRAM_BINS ? 1.f : histData.binsDistibution[bin]);
 
-    const float displayLogLuminance = minLogLuminance + (maxLogLuminance - minLogLuminance) * P;
-    const float displayLuminance = from_log10(displayLogLuminance);
+    const float displayLogLuminance =
+      MIN_DISPLAY_LOG_LUMINANCE +
+      (MAX_DISPLAY_LOG_LUMINANCE - MIN_DISPLAY_LOG_LUMINANCE) * P;
+    const float displayLuminance = from_logscale(displayLogLuminance);
 
     ldrColor = hdrColor.xyz * displayLuminance / worldLuminance;
   }

@@ -17,15 +17,16 @@ void main(void)
   data.minLuminance = normalized_to_luminance(data.minNormLuminance);
   data.maxLuminance = normalized_to_luminance(data.maxNormLuminance);
 
-  data.minLogLuminance = to_log10(data.minLuminance);
-  data.maxLogLuminance = to_log10(data.maxLuminance);
+  data.minLogLuminance = to_logscale(data.minLuminance);
+  data.maxLogLuminance = to_logscale(data.maxLuminance);
 
   // @TODO: can be done better
   uint cumsum[HISTOGRAM_BINS];
   cumsum[0] = data.binsDensity[0];
   for (int i = 1; i < HISTOGRAM_BINS; ++i)
     cumsum[i] = cumsum[i - 1] + data.binsDensity[i];
-  for (int i = 0; i < HISTOGRAM_BINS; ++i)
-    data.binsDistibution[i] = float(cumsum[i]) / float(cumsum[HISTOGRAM_BINS - 1]);
+  data.binsDistibution[0] = 0.f;
+  for (int i = 1; i < HISTOGRAM_BINS; ++i)
+    data.binsDistibution[i] = float(cumsum[i - 1]) / float(cumsum[HISTOGRAM_BINS - 1]);
 }
 
