@@ -14,6 +14,8 @@ struct HistogramData
   float minLuminance, maxLuminance;
   float minLogLuminance, maxLogLuminance;
   uint binsDensity[HISTOGRAM_BINS];
+  uint binsCumCount[HISTOGRAM_BINS];
+  uint binsRefinedDensity[HISTOGRAM_BINS];
   float binsDistibution[HISTOGRAM_BINS];
 };
 

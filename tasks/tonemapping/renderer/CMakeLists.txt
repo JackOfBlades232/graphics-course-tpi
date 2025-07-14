@@ -23,6 +23,8 @@ target_add_shaders(renderer
   shaders/tonemap.frag
   shaders/histogram_minmax.comp
   shaders/histogram_binning.comp
+  shaders/histogram_pre_refine.comp
+  shaders/histogram_refine.comp
   shaders/histogram_distribution.comp
   shaders/histogram_clear.comp
   shaders/histogram_debug.frag

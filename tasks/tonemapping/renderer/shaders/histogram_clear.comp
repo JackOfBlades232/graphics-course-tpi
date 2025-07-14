@@ -19,9 +19,15 @@ void main(void)
   {
     data.minNormLuminance = SHADER_UINT_MAX;
     data.maxNormLuminance = 0;
+    data.minLuminance = SHADER_FLT_MAX;
+    data.maxLuminance = 0.f;
+    data.minLogLuminance = SHADER_FLT_MAX;
+    data.maxLogLuminance = 0.f;
     for (int i = 0; i < HISTOGRAM_BINS; ++i)
     {
       data.binsDensity[i] = 0;
+      data.binsCumCount[i] = 0;
+      data.binsRefinedDensity[i] = 0;
       data.binsDistibution[i] = 0.f;
     }
   }

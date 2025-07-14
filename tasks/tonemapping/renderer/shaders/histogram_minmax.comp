@@ -27,7 +27,7 @@ float load_luminance(ivec2 coord, ivec2 size)
 }
 
 const float MIN_ADMISSIBLE_LUMINANCE = 0.f;
-const float MAX_ADMISSIBLE_LUMINANCE = 10000.f;
+const float MAX_ADMISSIBLE_LUMINANCE = SHADER_FLT_MAX;
 
 shared HistogramLuminanceRange minmaxSharedBuffer[HISTOGRAM_WORK_GROUP_SIZE];
 

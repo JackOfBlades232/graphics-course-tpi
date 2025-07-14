@@ -9,7 +9,7 @@
 layout(location = 0) out vec4 out_fragColor;
 
 layout(binding = 0) uniform sampler2D hdrImage;
-layout(binding = 1, set = 0) readonly buffer minmax_t
+layout(binding = 1, set = 0) readonly buffer hist_t
 {
   HistogramData histData;
 };
