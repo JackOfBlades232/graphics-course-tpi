@@ -79,12 +79,8 @@ vec3 conductor_frensel_shlick(vec3 f0, float hv)
 vec4 shade_cook_torrance(
   vec3 n, vec3 l, vec3 v, float metalness, float roughness, vec3 albedo, vec3 lightCol)
 {
-  // @HUH: why does this look more adequate on with no gamma correction?
-
   vec3 c = albedo;
-  //vec3 c = pow(albedo, vec3(GAMMA_POW));
   vec3 lc = lightCol;
-  //vec3 lc = pow(lightCol, vec3(GAMMA_POW));
 
   vec3 c_diff = mix(c, vec3(0.0f), metalness);
 
@@ -114,7 +110,6 @@ vec4 shade_cook_torrance(
   vec3 spec = nl * f * spec_bsdf;
 
   return vec4((spec + diff) * lc, 1.f);
-  //return pow(vec4((spec + diff) * lc, 1.f), 1.f / vec4(GAMMA_POW)); 
 }
 
 vec3 calculate_diffuse(vec3 normal, vec3 lightDir, vec3 albedo, vec3 lightIntensity)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <initializer_list>
 
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
@@ -113,6 +114,8 @@ private:
   etna::ComputePipeline calculateRefinedHistPipeline{};
   etna::ComputePipeline calculateHistDistributionPipeline{};
 
+  etna::ComputePipeline bitonicFloatSortPipeline{};
+
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image mainViewDepth;
@@ -180,10 +183,20 @@ private:
   void registerManagedImage(
     const etna::Image& img, std::optional<std::string> name_override = std::nullopt);
 
+  void emitBarriers(
+    vk::CommandBuffer cmd_buf,
+    std::initializer_list<const std::variant<vk::BufferMemoryBarrier2, vk::ImageMemoryBarrier2>>
+      barriers);
+
   void loadDebugConfig();
   void saveDebugConfig();
 
   void setAllDirLightsIntensity(float val);
   void setAllPointLightsIntensity(float val);
   void setAllSpotLightsIntensity(float val);
+
+  uint hdrImagePixelCount() const
+  {
+    return hdrTarget.getExtent().width * hdrTarget.getExtent().height;
+  }
 };
