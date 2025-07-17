@@ -9,42 +9,18 @@
 
 layout(local_size_x = HISTOGRAM_WORK_GROUP_SIZE) in;
 
-layout(binding = 0, set = 0) writeonly buffer binned_luminances_t
-{
-  float binnedLogLuminances[];
-};
-layout(binding = 1, set = 0) buffer hist_t
+layout(binding = 0, set = 0) buffer hist_t
 {
   HistogramData data;
+};
+layout(binding = 1, set = 0) readonly buffer luminances_t
+{
+  float logLuminances[];
 };
 
 void main(void)
 {
-  const int globId = int(gl_GlobalInvocationID.x);
-  if (globId >= HISTOGRAM_BINS)
-    return;
-
-  uint bin = 0;
-
-  // @TODO: can bin search be pulled out?
-  uint l = 0, r = HISTOGRAM_BINS;
-  while (l < r)
-  {
-    bin = (l + r) / 2;
-    const int diff = int(data.binsCumCount[bin]) - globId;
-    if (diff >= 0 && diff < data.binsDensity[bin])
-    {
-      break;
-    }
-
-    if (diff < 0)
-      r = bin;
-    else
-      l = bin;
-  }
-
-  const uint end = data.binsCumCount[bin];
-  const uint begin = end - data.binsDensity[bin];
-
-  // @TODO: how tf should I sort this?
+  // @TEST
+  if (gl_GlobalInvocationID.x == 0)
+    data.testValue = logLuminances[0];
 }

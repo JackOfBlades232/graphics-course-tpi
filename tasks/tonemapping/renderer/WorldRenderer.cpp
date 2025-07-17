@@ -111,7 +111,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "hist_data"});
   luminanceBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = sizeof(float) * hdrTarget.getExtent().width * hdrTarget.getExtent().height,
+    .size = sizeof(float) * hdrImagePixelCount(),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "luminance_buffer"});
@@ -311,6 +311,7 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "histogram_debug",
     {RENDERER_SHADERS_ROOT "histogram_debug.frag.spv", QuadRenderer::VERTEX_SHADER_PATH});
+  etna::create_program("bitonic_sort_float", {RENDERER_SHADERS_ROOT "bitonic_sort_float.comp.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -438,6 +439,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   calculateRefinedHistPipeline = pipelineManager.createComputePipeline("histogram_refine", {});
   calculateHistDistributionPipeline =
     pipelineManager.createComputePipeline("histogram_distribution", {});
+
+  bitonicFloatSortPipeline = pipelineManager.createComputePipeline("bitonic_sort_float", {});
 
   histogramDebugPipeline = pipelineManager.createGraphicsPipeline(
     "histogram_debug",
@@ -629,18 +632,15 @@ void WorldRenderer::renderWorld(
       }
     }
 
-    std::array resetAndCulledBarriers = {vk::BufferMemoryBarrier2{
-      .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
-      .srcAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
-      .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-      .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-      .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-      .size = sceneMgr->getIndirectCommands().size_bytes()}};
-    vk::DependencyInfo dep{
-      .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-      .bufferMemoryBarrierCount = static_cast<uint32_t>(resetAndCulledBarriers.size()),
-      .pBufferMemoryBarriers = resetAndCulledBarriers.data()};
-    cmd_buf.pipelineBarrier2(dep);
+    emitBarriers(
+      cmd_buf,
+      {vk::BufferMemoryBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+        .srcAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+        .buffer = sceneMgr->getIndirectCommandsBuf().get(),
+        .size = sceneMgr->getIndirectCommands().size_bytes()}});
 
     {
       ETNA_PROFILE_GPU(cmd_buf, reset);
@@ -664,27 +664,23 @@ void WorldRenderer::renderWorld(
         1);
     }
 
-    std::array resetAndCulledBarriers2 = {
-      vk::BufferMemoryBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-        .size = sceneMgr->getIndirectCommands().size_bytes()},
-      vk::BufferMemoryBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eVertexShader,
-        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-        .buffer = culledInstancesBuf.get(),
-        .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance)}};
-    vk::DependencyInfo dep2{
-      .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-      .bufferMemoryBarrierCount = static_cast<uint32_t>(resetAndCulledBarriers2.size()),
-      .pBufferMemoryBarriers = resetAndCulledBarriers2.data()};
-    cmd_buf.pipelineBarrier2(dep2);
+    emitBarriers(
+      cmd_buf,
+      {vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .dstAccessMask =
+           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+         .buffer = sceneMgr->getIndirectCommandsBuf().get(),
+         .size = sceneMgr->getIndirectCommands().size_bytes()},
+       vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eVertexShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+         .buffer = culledInstancesBuf.get(),
+         .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance)}});
 
     {
       ETNA_PROFILE_GPU(cmd_buf, culling);
@@ -712,27 +708,23 @@ void WorldRenderer::renderWorld(
         get_linear_wg_count(uint32_t(sceneMgr->getInstances().size()), BASE_WORK_GROUP_SIZE), 1, 1);
     }
 
-    std::array resetAndCulledBarriers3 = {
-      vk::BufferMemoryBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
-        .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
-        .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-        .size = sceneMgr->getIndirectCommands().size_bytes()},
-      vk::BufferMemoryBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
-        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-        .buffer = culledInstancesBuf.get(),
-        .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance)}};
-    vk::DependencyInfo dep3{
-      .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-      .bufferMemoryBarrierCount = static_cast<uint32_t>(resetAndCulledBarriers3.size()),
-      .pBufferMemoryBarriers = resetAndCulledBarriers3.data()};
-    cmd_buf.pipelineBarrier2(dep3);
+    emitBarriers(
+      cmd_buf,
+      {vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask =
+           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+         .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+         .buffer = sceneMgr->getIndirectCommandsBuf().get(),
+         .size = sceneMgr->getIndirectCommands().size_bytes()},
+       vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
+         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .buffer = culledInstancesBuf.get(),
+         .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance)}});
 
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
@@ -867,28 +859,26 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, tonemapping);
 
-      std::array histBarriers{
-        vk::BufferMemoryBarrier2{
-          .srcStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
-          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-          .buffer = histData.get(),
-          .size = sizeof(HistogramData)},
-        vk::BufferMemoryBarrier2{
-          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .srcAccessMask =
-            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-          .buffer = luminanceBuffer.get(),
-          .size = sizeof(float) * hdrTarget.getExtent().width * hdrTarget.getExtent().height}};
-      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-        .bufferMemoryBarrierCount = histBarriers.size(),
-        .pBufferMemoryBarriers = histBarriers.data()});
+      emitBarriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+           .srcStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
+           .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+           .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+           .buffer = histData.get(),
+           .size = sizeof(HistogramData)},
+         vk::BufferMemoryBarrier2{
+           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+           .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+           .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+           .buffer = luminanceBuffer.get(),
+           .size = sizeof(float) * hdrImagePixelCount()}});
 
       {
+        ETNA_PROFILE_GPU(cmd_buf, histogram_clear);
+
         auto programInfo = etna::get_shader_program("histogram_clear");
         auto set = etna::create_descriptor_set(
           programInfo.getDescriptorLayoutId(0), cmd_buf, {etna::Binding{0, histData.genBinding()}});
@@ -904,18 +894,16 @@ void WorldRenderer::renderWorld(
         cmd_buf.dispatch(1, 1, 1);
       }
 
-      vk::BufferMemoryBarrier2 histBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .buffer = histData.get(),
-        .size = sizeof(HistogramData)};
-      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers = &histBarrier2});
+      emitBarriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = histData.get(),
+          .size = sizeof(HistogramData)}});
 
       etna::set_state(
         cmd_buf,
@@ -927,6 +915,8 @@ void WorldRenderer::renderWorld(
       etna::flush_barriers(cmd_buf);
 
       {
+        ETNA_PROFILE_GPU(cmd_buf, histogram_minmax);
+
         auto programInfo = etna::get_shader_program("histogram_minmax");
         auto set = etna::create_descriptor_set(
           programInfo.getDescriptorLayoutId(0),
@@ -948,27 +938,26 @@ void WorldRenderer::renderWorld(
 
         cmd_buf.dispatch(
           get_linear_wg_count(
-            hdrTarget.getExtent().width * hdrTarget.getExtent().height,
-            HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
+            hdrImagePixelCount(), HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
           1,
           1);
       }
 
-      vk::BufferMemoryBarrier2 histBarrier3{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .buffer = histData.get(),
-        .size = sizeof(HistogramData)};
-      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers = &histBarrier3});
+      emitBarriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = histData.get(),
+          .size = sizeof(HistogramData)}});
 
       {
+        ETNA_PROFILE_GPU(cmd_buf, histogram_binning);
+
         auto programInfo = etna::get_shader_program("histogram_binning");
         auto set = etna::create_descriptor_set(
           programInfo.getDescriptorLayoutId(0),
@@ -989,27 +978,14 @@ void WorldRenderer::renderWorld(
 
         cmd_buf.dispatch(
           get_linear_wg_count(
-            hdrTarget.getExtent().width * hdrTarget.getExtent().height,
-            HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
+            hdrImagePixelCount(), HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
           1,
           1);
       }
 
-      vk::BufferMemoryBarrier2 histBarrier4{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .buffer = histData.get(),
-        .size = sizeof(HistogramData)};
-      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers = &histBarrier4});
-
       {
+        ETNA_PROFILE_GPU(cmd_buf, histogram_pre_refine);
+
         auto programInfo = etna::get_shader_program("histogram_pre_refine");
         auto set = etna::create_descriptor_set(
           programInfo.getDescriptorLayoutId(0),
@@ -1018,8 +994,7 @@ void WorldRenderer::renderWorld(
             etna::Binding{
               0,
               hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-            etna::Binding{1, histData.genBinding()},
-            etna::Binding{2, luminanceBuffer.genBinding()},
+            etna::Binding{1, luminanceBuffer.genBinding()},
           });
 
         cmd_buf.bindDescriptorSets(
@@ -1033,26 +1008,97 @@ void WorldRenderer::renderWorld(
 
         cmd_buf.dispatch(
           get_linear_wg_count(
-            hdrTarget.getExtent().width * hdrTarget.getExtent().height,
-            HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
+            hdrImagePixelCount(), HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
           1,
           1);
       }
 
-      vk::BufferMemoryBarrier2 histBarrier5{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .buffer = luminanceBuffer.get(),
-        .size = sizeof(float) * hdrTarget.getExtent().width * hdrTarget.getExtent().height};
-      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers = &histBarrier5});
+      emitBarriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+           .srcAccessMask =
+             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+           .dstAccessMask =
+             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+           .buffer = histData.get(),
+           .size = sizeof(HistogramData)},
+         vk::BufferMemoryBarrier2{
+           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+           .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+           .dstAccessMask =
+             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+           .buffer = luminanceBuffer.get(),
+           .size = sizeof(float) * hdrImagePixelCount()}});
 
       {
+        ETNA_PROFILE_GPU(cmd_buf, histogram_sort);
+
+        auto programInfo = etna::get_shader_program("bitonic_sort_float");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, luminanceBuffer.genBinding()}});
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          bitonicFloatSortPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, bitonicFloatSortPipeline.getVkPipeline());
+
+        const uint32_t closestPow = uint32_t(ceil(log2f(float(hdrImagePixelCount()))));
+
+        for (uint32_t stage = 0; stage < closestPow; ++stage)
+          for (uint32_t pass = 0; pass <= stage; ++pass)
+          {
+            struct BitonicSortPushConsts
+            {
+              shader_uint shiftPow;
+              shader_uint dirSwitchRunPow;
+            } pushConstants{stage - pass, stage};
+
+            cmd_buf.pushConstants<BitonicSortPushConsts>(
+              bitonicFloatSortPipeline.getVkPipelineLayout(),
+              vk::ShaderStageFlagBits::eCompute,
+              0,
+              pushConstants);
+
+            cmd_buf.dispatch(get_linear_wg_count(1u << closestPow, BASE_WORK_GROUP_SIZE), 1, 1);
+
+            emitBarriers(
+              cmd_buf,
+              {vk::BufferMemoryBarrier2{
+                .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .buffer = luminanceBuffer.get(),
+                .size = sizeof(float) * hdrImagePixelCount()}});
+          }
+      }
+
+      emitBarriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = histData.get(),
+          .size = sizeof(HistogramData)}});
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, histogram_refine);
+
         auto programInfo = etna::get_shader_program("histogram_refine");
         auto set = etna::create_descriptor_set(
           programInfo.getDescriptorLayoutId(0),
@@ -1071,24 +1117,28 @@ void WorldRenderer::renderWorld(
         cmd_buf.bindPipeline(
           vk::PipelineBindPoint::eCompute, calculateRefinedHistPipeline.getVkPipeline());
 
-        cmd_buf.dispatch(get_linear_wg_count(HISTOGRAM_BINS, HISTOGRAM_WORK_GROUP_SIZE), 1, 1);
+        cmd_buf.dispatch(
+          get_linear_wg_count(
+            hdrImagePixelCount(), HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
+          1,
+          1);
       }
 
-      vk::BufferMemoryBarrier2 histBarrier6{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .buffer = histData.get(),
-        .size = sizeof(HistogramData)};
-      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers = &histBarrier6});
+      emitBarriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = histData.get(),
+          .size = sizeof(HistogramData)}});
 
       {
+        ETNA_PROFILE_GPU(cmd_buf, histogram_distribution);
+
         auto programInfo = etna::get_shader_program("histogram_distribution");
         auto set = etna::create_descriptor_set(
           programInfo.getDescriptorLayoutId(0), cmd_buf, {etna::Binding{0, histData.genBinding()}});
@@ -1105,31 +1155,34 @@ void WorldRenderer::renderWorld(
         cmd_buf.dispatch(1, 1, 1);
       }
 
-      vk::BufferMemoryBarrier2 histBarrier7{
-        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .srcAccessMask =
-          vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
-        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-        .buffer = histData.get(),
-        .size = sizeof(HistogramData)};
-      cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers = &histBarrier7});
-
-      auto set = etna::create_descriptor_set(
-        tonemapper->shaderProgramInfo().getDescriptorLayoutId(0),
+      emitBarriers(
         cmd_buf,
-        {etna::Binding{
-           0, hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-         etna::Binding{1, histData.genBinding()},
-         etna::Binding{8, constants->get().genBinding()}});
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+          .buffer = histData.get(),
+          .size = sizeof(HistogramData)}});
 
-      cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, tonemapper->pipelineLayout(), 0, {set.getVkSet()}, {});
+      {
+        ETNA_PROFILE_GPU(cmd_buf, tonemapping_apply);
 
-      tonemapper->render(cmd_buf, target_image, target_image_view);
+        auto set = etna::create_descriptor_set(
+          tonemapper->shaderProgramInfo().getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{
+             0,
+             hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{1, histData.genBinding()},
+           etna::Binding{8, constants->get().genBinding()}});
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics, tonemapper->pipelineLayout(), 0, {set.getVkSet()}, {});
+
+        tonemapper->render(cmd_buf, target_image, target_image_view);
+      }
     }
 
     {
@@ -1444,6 +1497,32 @@ void WorldRenderer::registerManagedImage(
         currentDebugTexLayer =
           glm::clamp(currentDebugTexLayer, 0u, uint32_t(img.getLayerCount() - 1));
       }});
+}
+
+void WorldRenderer::emitBarriers(
+  vk::CommandBuffer cmd_buf,
+  std::initializer_list<const std::variant<vk::BufferMemoryBarrier2, vk::ImageMemoryBarrier2>>
+    barriers)
+{
+  std::vector<vk::BufferMemoryBarrier2> bufferBarriers{};
+  std::vector<vk::ImageMemoryBarrier2> imageBarriers{};
+  for (const auto& barrier : barriers)
+  {
+    std::visit(
+      [&](const auto& b) {
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(b)>, vk::BufferMemoryBarrier2>)
+          bufferBarriers.push_back(b);
+        else
+          imageBarriers.push_back(b);
+      },
+      barrier);
+  }
+  cmd_buf.pipelineBarrier2(vk::DependencyInfo{
+    .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+    .bufferMemoryBarrierCount = uint32_t(bufferBarriers.size()),
+    .pBufferMemoryBarriers = bufferBarriers.data(),
+    .imageMemoryBarrierCount = uint32_t(imageBarriers.size()),
+    .pImageMemoryBarriers = imageBarriers.data()});
 }
 
 void WorldRenderer::loadDebugConfig()

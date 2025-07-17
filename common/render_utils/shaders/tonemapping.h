@@ -17,6 +17,7 @@ struct HistogramData
   uint binsCumCount[HISTOGRAM_BINS];
   uint binsRefinedDensity[HISTOGRAM_BINS];
   float binsDistibution[HISTOGRAM_BINS];
+  float testValue; // @TEST
 };
 
 struct HistogramLuminanceRange
