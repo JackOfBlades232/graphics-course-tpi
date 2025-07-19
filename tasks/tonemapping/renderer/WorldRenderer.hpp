@@ -112,17 +112,14 @@ private:
   etna::ComputePipeline calculateHistMinmaxPipeline{};
   etna::ComputePipeline calculateHistDensityPipeline{};
   etna::ComputePipeline calculatePreRefinedHistPipeline{};
-  etna::ComputePipeline calculateRefinedHistPipeline{};
   etna::ComputePipeline calculateHistDistributionPipeline{};
-
-  std::unique_ptr<BitonicSorter<float>> luminanceSorter{};
 
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image mainViewDepth;
 
   etna::Buffer histData;
-  etna::Buffer luminanceBuffer;
+  etna::Buffer jndBinsData;
 
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;

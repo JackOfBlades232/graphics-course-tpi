@@ -6,16 +6,21 @@
 #include "cpp_glsl_compat.h"
 
 
-layout(local_size_x = 1) in;
+layout(local_size_x = HISTOGRAM_WORK_GROUP_SIZE) in;
 
 layout(binding = 0, set = 0) writeonly buffer hist_t
 {
   HistogramData data;
 };
+layout(binding = 1, set = 0) writeonly buffer jnd_bins_t
+{
+  uint jndBins[];
+};
 
 void main(void)
 {
-  if (gl_GlobalInvocationID.x == 0)
+  const uint glodId = gl_GlobalInvocationID.x;
+  if (glodId == 0)
   {
     data.minNormLuminance = SHADER_UINT_MAX;
     data.maxNormLuminance = 0;
@@ -23,13 +28,21 @@ void main(void)
     data.maxLuminance = 0.f;
     data.minLogLuminance = SHADER_FLT_MAX;
     data.maxLogLuminance = 0.f;
-    for (int i = 0; i < HISTOGRAM_BINS; ++i)
-    {
-      data.binsDensity[i] = 0;
-      data.binsCumCount[i] = 0;
-      data.binsRefinedDensity[i] = 0;
-      data.binsDistibution[i] = 0.f;
-    }
+  }
+  if (glodId < HISTOGRAM_BINS)
+  {
+    data.binsDensity[glodId] = 0;
+    data.binsCumDensity[glodId] = 0;
+    data.binsRefinedJnds[glodId] = 0.f;
+    data.binsRefinedBinCounts[glodId] = 0;
+    data.binsRefinedBinCumCounts[glodId] = 0;
+    data.binsRefinedDensity[glodId] = 0;
+    data.binsCumRefinedDensity[glodId] = 0;
+    data.binsDistibution[glodId] = 0.f;
+  }
+  if (glodId < jndBins.length())
+  {
+    jndBins[glodId] = 0;
   }
 }
 

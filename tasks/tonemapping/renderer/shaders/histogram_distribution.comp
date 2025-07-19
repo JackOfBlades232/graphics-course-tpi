@@ -20,16 +20,32 @@ void main(void)
   data.minLogLuminance = to_logscale(data.minLuminance);
   data.maxLogLuminance = to_logscale(data.maxLuminance);
 
-  data.binsCumCount[0] = data.binsDensity[0];
+  data.binsCumDensity[0] = data.binsDensity[0];
   for (int i = 1; i < HISTOGRAM_BINS; ++i)
-    data.binsCumCount[i] = data.binsCumCount[i - 1] + data.binsDensity[i];
+    data.binsCumDensity[i] = data.binsCumDensity[i - 1] + data.binsDensity[i];
+
+  data.binsCumRefinedDensity[0] = data.binsRefinedDensity[0];
+  for (int i = 1; i < HISTOGRAM_BINS; ++i)
+  {
+    data.binsCumRefinedDensity[i] =
+      data.binsCumRefinedDensity[i - 1] + data.binsRefinedDensity[i];
+  }
 
   data.binsDistibution[0] = 0.f;
   for (int i = 1; i < HISTOGRAM_BINS; ++i)
   {
+    const float densityCoeff =
+      float(data.binsCumDensity[i - 1]) /
+      float(data.binsCumDensity[HISTOGRAM_BINS - 1]);
+    const float refinedDensityCoeff =
+      float(data.binsCumRefinedDensity[i - 1]) /
+      float(data.binsCumRefinedDensity[HISTOGRAM_BINS - 1]);
+    const float indexCoeff = float(i) / float(HISTOGRAM_BINS);
+
     data.binsDistibution[i] =
-      float(data.binsCumCount[i - 1]) /
-      float(data.binsCumCount[HISTOGRAM_BINS - 1]);
+      0.4f * densityCoeff +
+      0.4f * refinedDensityCoeff +
+      0.2f * indexCoeff;
   }
 }
 
