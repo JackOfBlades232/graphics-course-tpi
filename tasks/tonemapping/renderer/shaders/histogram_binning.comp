@@ -14,6 +14,10 @@ layout(binding = 1, set = 0) buffer hist_t
 {
   HistogramData data;
 };
+layout(binding = 2, set = 0) buffer jnd_bins_t
+{
+  uint jndBins[];
+};
 
 float load_luminance(ivec2 coord, ivec2 size)
 {
@@ -23,13 +27,8 @@ float load_luminance(ivec2 coord, ivec2 size)
 
 void main(void)
 {
-  // @NOTE: can't use data's min/maxLuminance or min/minLogLuminance yet, as it's not computed
-  const float minLuminance = normalized_to_luminance(data.minNormLuminance);
-  const float maxLuminance = normalized_to_luminance(data.maxNormLuminance);
-
-  const float minLogLuminance = to_logscale(minLuminance);
-  const float maxLogLuminance = to_logscale(maxLuminance);
-  const float binSize = (maxLogLuminance - minLogLuminance) / float(HISTOGRAM_BINS);
+  const float binSize =
+    (data.maxLogLuminance - data.minLogLuminance) / float(HISTOGRAM_BINS);
 
   const ivec2 imSz = ivec2(textureSize(hdrImage, 0));
   const int imPixels = imSz.x * imSz.y;
@@ -43,7 +42,20 @@ void main(void)
     const ivec2 imCoord = ivec2(p % imSz.x, p / imSz.x);
     const float logLuminance = to_logscale(load_luminance(imCoord, imSz));
 
-    const uint bin = uint(floor((logLuminance - minLogLuminance) / binSize));
-    atomicAdd(data.binsDensity[clamp(bin, 0, HISTOGRAM_BINS - 1)], 1);
+    const uint rbin = uint(floor((logLuminance - data.minLogLuminance) / binSize));
+    const uint bin = clamp(rbin, 0, HISTOGRAM_BINS - 1);
+    atomicAdd(data.binsDensity[bin], 1);
+
+    const float inBinOffset = logLuminance - float(bin) * binSize;
+    const uint refinedLocBin = uint(floor(inBinOffset / data.binsRefinedJnds[bin]));
+
+    const uint refinedBin =
+      (bin == 0 ? 0 : data.binsRefinedBinCumCounts[bin - 1]) + refinedLocBin;
+
+    const uint bucket = refinedBin >> 5;
+    const uint bit = 1 << (refinedBin & 31);
+    const uint prev = atomicOr(jndBins[bucket], bit);
+    if ((prev & bit) == 0)
+      atomicAdd(data.binsRefinedDensity[bin], 1);
   }
 }
