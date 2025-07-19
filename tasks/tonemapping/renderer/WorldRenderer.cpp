@@ -111,7 +111,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "hist_data"});
   luminanceBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = sizeof(float) * hdrImagePixelCount(),
+    .size = sizeof(float) * next_pot(hdrImagePixelCount()),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "luminance_buffer"});
@@ -158,22 +158,20 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         .layers = CLIPMAP_LEVEL_COUNT});
     createManagedImage(
       terrain->albedoClipmap,
-      etna::Image::CreateInfo{// @TODO: settable
-                              .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
-                              .name = "albedo_clipmap",
-                              .format = vk::Format::eR32G32B32A32Sfloat,
-                              .imageUsage =
-                                vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-                              .layers = CLIPMAP_LEVEL_COUNT});
+      etna::Image::CreateInfo{
+        .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+        .name = "albedo_clipmap",
+        .format = vk::Format::eR32G32B32A32Sfloat,
+        .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+        .layers = CLIPMAP_LEVEL_COUNT});
     createManagedImage(
       terrain->matdataClipmap,
-      etna::Image::CreateInfo{// @TODO: settable
-                              .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
-                              .name = "matdata_clipmap",
-                              .format = vk::Format::eR32G32B32A32Sfloat,
-                              .imageUsage =
-                                vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-                              .layers = CLIPMAP_LEVEL_COUNT});
+      etna::Image::CreateInfo{
+        .extent = vk::Extent3D{CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION, 1},
+        .name = "matdata_clipmap",
+        .format = vk::Format::eR32G32B32A32Sfloat,
+        .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+        .layers = CLIPMAP_LEVEL_COUNT});
 
     terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
       .filter = vk::Filter::eLinear,
@@ -311,7 +309,6 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "histogram_debug",
     {RENDERER_SHADERS_ROOT "histogram_debug.frag.spv", QuadRenderer::VERTEX_SHADER_PATH});
-  etna::create_program("bitonic_sort_float", {RENDERER_SHADERS_ROOT "bitonic_sort_float.comp.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -427,6 +424,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     swapchain_format,
     {resolution.x, resolution.y}});
 
+  luminanceSorter = std::make_unique<BitonicSorter<float>>();
+
   bboxRenderer = std::make_unique<BboxRenderer>(
     BboxRenderer::CreateInfo{swapchain_format, {resolution.x, resolution.y}});
   quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{swapchain_format});
@@ -439,8 +438,6 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   calculateRefinedHistPipeline = pipelineManager.createComputePipeline("histogram_refine", {});
   calculateHistDistributionPipeline =
     pipelineManager.createComputePipeline("histogram_distribution", {});
-
-  bitonicFloatSortPipeline = pipelineManager.createComputePipeline("bitonic_sort_float", {});
 
   histogramDebugPipeline = pipelineManager.createGraphicsPipeline(
     "histogram_debug",
@@ -859,6 +856,8 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, tonemapping);
 
+      const uint32_t lumBufSize = next_pot(hdrImagePixelCount());
+
       emitBarriers(
         cmd_buf,
         {vk::BufferMemoryBarrier2{
@@ -874,7 +873,7 @@ void WorldRenderer::renderWorld(
            .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
            .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
            .buffer = luminanceBuffer.get(),
-           .size = sizeof(float) * hdrImagePixelCount()}});
+           .size = sizeof(float) * lumBufSize}});
 
       {
         ETNA_PROFILE_GPU(cmd_buf, histogram_clear);
@@ -1007,81 +1006,23 @@ void WorldRenderer::renderWorld(
           vk::PipelineBindPoint::eCompute, calculatePreRefinedHistPipeline.getVkPipeline());
 
         cmd_buf.dispatch(
-          get_linear_wg_count(
-            hdrImagePixelCount(), HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
+          get_linear_wg_count(lumBufSize, HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
           1,
           1);
       }
 
-      emitBarriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .srcAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .dstAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .buffer = histData.get(),
-           .size = sizeof(HistogramData)},
-         vk::BufferMemoryBarrier2{
-           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .dstAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .buffer = luminanceBuffer.get(),
-           .size = sizeof(float) * hdrImagePixelCount()}});
-
       {
         ETNA_PROFILE_GPU(cmd_buf, histogram_sort);
 
-        auto programInfo = etna::get_shader_program("bitonic_sort_float");
-        auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
+        luminanceSorter->sort(
           cmd_buf,
-          {etna::Binding{0, luminanceBuffer.genBinding()}});
-
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eCompute,
-          bitonicFloatSortPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet()},
-          {});
-        cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, bitonicFloatSortPipeline.getVkPipeline());
-
-        const uint32_t closestPow = uint32_t(ceil(log2f(float(hdrImagePixelCount()))));
-
-        for (uint32_t stage = 0; stage < closestPow; ++stage)
-          for (uint32_t pass = 0; pass <= stage; ++pass)
-          {
-            struct BitonicSortPushConsts
-            {
-              shader_uint shiftPow;
-              shader_uint dirSwitchRunPow;
-            } pushConstants{stage - pass, stage};
-
-            cmd_buf.pushConstants<BitonicSortPushConsts>(
-              bitonicFloatSortPipeline.getVkPipelineLayout(),
-              vk::ShaderStageFlagBits::eCompute,
-              0,
-              pushConstants);
-
-            cmd_buf.dispatch(get_linear_wg_count(1u << closestPow, BASE_WORK_GROUP_SIZE), 1, 1);
-
-            emitBarriers(
-              cmd_buf,
-              {vk::BufferMemoryBarrier2{
-                .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-                .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
-                  vk::AccessFlagBits2::eShaderStorageWrite,
-                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
-                  vk::AccessFlagBits2::eShaderStorageWrite,
-                .buffer = luminanceBuffer.get(),
-                .size = sizeof(float) * hdrImagePixelCount()}});
-          }
+          luminanceBuffer,
+          lumBufSize,
+          vk::BufferMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+            .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead});
       }
 
       emitBarriers(

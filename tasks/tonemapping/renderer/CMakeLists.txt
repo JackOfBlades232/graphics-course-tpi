@@ -27,6 +27,5 @@ target_add_shaders(renderer
   shaders/histogram_refine.comp
   shaders/histogram_distribution.comp
   shaders/histogram_clear.comp
-  shaders/bitonic_sort_float.comp
   shaders/histogram_debug.frag
 )

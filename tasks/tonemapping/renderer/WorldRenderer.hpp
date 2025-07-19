@@ -14,6 +14,7 @@
 #include <constants.h>
 
 #include <render_utils/PostfxRenderer.hpp>
+#include <render_utils/BitonicSort.hpp>
 #include <render_utils/BboxRenderer.hpp>
 #include <render_utils/QuadRenderer.hpp>
 #include <scene/SceneManager.hpp>
@@ -114,7 +115,7 @@ private:
   etna::ComputePipeline calculateRefinedHistPipeline{};
   etna::ComputePipeline calculateHistDistributionPipeline{};
 
-  etna::ComputePipeline bitonicFloatSortPipeline{};
+  std::unique_ptr<BitonicSorter<float>> luminanceSorter{};
 
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
