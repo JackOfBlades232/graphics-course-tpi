@@ -13,14 +13,12 @@ layout(binding = 0, set = 0) buffer hist_t
 {
   HistogramData data;
 };
-layout(binding = 1, set = 0) readonly buffer luminances_t
+layout(binding = 1, set = 0) readonly buffer jnd_bins_t
 {
-  float logLuminances[];
+  uint jndBins[];
 };
 
 void main(void)
 {
-  // @TEST
-  if (gl_GlobalInvocationID.x == 0)
-    data.testValue = logLuminances[0];
+
 }

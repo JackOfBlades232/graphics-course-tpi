@@ -9,37 +9,57 @@
 
 layout(local_size_x = HISTOGRAM_WORK_GROUP_SIZE) in;
 
-layout(binding = 0, set = 0) uniform sampler2D hdrImage;
-layout(binding = 1, set = 0) writeonly buffer luminances_t
+layout(binding = 0, set = 0) buffer hist_t
 {
-  float logLuminances[];
+  HistogramData data;
 };
 
-float load_luminance(ivec2 coord, ivec2 size)
+// @TODO: i want to do linear bins on log jnd. This is not correct!
+//        but how do I fix? I think I need to do some inverse transform.
+
+float calculate_jnd(float lum)
 {
-  const vec4 col = textureLod(hdrImage, vec2(coord) / vec2(size), 0);
-  return luminance_bt601(col);
+  // Not to_logscale, because formula doesn't do +1 to arg
+  const float loglum = log(lum) / log(10.f);
+  float logjnd;
+
+  if (lum < SHADER_EPSILON || loglum < -3.94f)
+    logjnd = -3.81f;
+  else if (loglum < -1.44f)
+    logjnd = pow(0.405f * loglum + 1.6f, 2.18f) - 3.81;
+  else if (loglum < -0.0184f)
+    logjnd = loglum - 1.345f;
+  else if (loglum < 1.9)
+    logjnd = pow(0.249f * loglum + 0.65f, 2.7f) - 1.67;
+  else
+    logjnd = loglum - 2.205f;
+
+  return exp(logjnd * log(10.f));
 }
 
 void main(void)
 {
-  const ivec2 imSz = ivec2(textureSize(hdrImage, 0));
-  const int globId = int(gl_GlobalInvocationID.x);
-  const int localFirstPixel = globId * HISTOGRAM_PIXELS_PER_THREAD;
-  const int localPixelCount =
-    min(HISTOGRAM_PIXELS_PER_THREAD, logLuminances.length() - localFirstPixel);
+  data.minLuminance = normalized_to_luminance(data.minNormLuminance);
+  data.maxLuminance = normalized_to_luminance(data.maxNormLuminance);
 
-  for (int p = localFirstPixel; p < localFirstPixel + localPixelCount; ++p)
+  data.minLogLuminance = to_logscale(data.minLuminance);
+  data.maxLogLuminance = to_logscale(data.maxLuminance);
+
+  const float binSize = 
+    (data.maxLogLuminance - data.minLogLuminance) / float(HISTOGRAM_BINS);
+
+  for (int i = 0; i < HISTOGRAM_BINS; ++i)
   {
-    const ivec2 imCoord = ivec2(p % imSz.x, p / imSz.x);
-    if (imCoord.y < imSz.y)
-    {
-      const float logLuminance = to_logscale(load_luminance(imCoord, imSz));
-      logLuminances[p] = logLuminance;
-    }
-    else
-    {
-      logLuminances[p] = SHADER_FLT_MAX;
-    }
+    const float minBinLog = data.minLogLuminance + float(i) * binSize;
+    const float maxBinLog = minBinLog + binSize;
+
+    const float binCenter = from_logscale((minBinLog + maxBinLog) * 0.5f);
+
+    const float logJnd = to_logscale(calculate_jnd(binCenter));
+    data.binsRefinedJnds[i] = logJnd;
+    data.binsRefinedBinCounts[i] = uint(ceil(binSize / logJnd));
+
+    data.binsRefinedBinCumCounts[i] = data.binsRefinedBinCounts[i] +
+      (i == 0 ? 0 : data.binsRefinedBinCumCounts[i - 1]);
   }
 }
