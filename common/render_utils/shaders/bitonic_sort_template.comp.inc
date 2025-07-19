@@ -1,9 +1,4 @@
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
-#extension GL_GOOGLE_include_directive : require
-
 #include "defs.h"
-
 
 layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 
@@ -15,11 +10,11 @@ layout(push_constant) uniform params_t
 
 layout(binding = 0, set = 0) buffer data_t
 {
-  float data[];
+  TYPE data[];
 };
 
 // @TODO:
-// fix -- this is not being properly sorted
+// make suitable for NPOT
 // optimize -- this tanks framerate like crazy
 
 void main(void)
@@ -27,28 +22,25 @@ void main(void)
   const uint globId = uint(gl_GlobalInvocationID.x);
   const uint dirGroupId = globId >> params.dirSwitchRunPow;
   const uint shiftGroupId = globId >> params.shiftPow;
-  const uint inShiftGroupId = globId - shiftGroupId;
-
   const uint shift = 1 << params.shiftPow;
+  const uint inShiftGroupId = globId - shiftGroupId * shift;
 
   const uint first = shiftGroupId * shift * 2 + inShiftGroupId;
   const uint second = first + shift;
 
-  if (second >= data.length())
-    return;
-
-  const float dfirst = data[first];
-  const float dsecond = data[second];
-
-  const bool shouldSwap =
-    // (dirGroupId & 1) == 1 ? (dfirst < dsecond) : (dsecond < dfirst);
-    // @TEST
-    (dirGroupId & 1) == 0 ? (dfirst < dsecond) : (dsecond < dfirst);
-
-  if (shouldSwap)
+  if (second < data.length())
   {
-    data[first] = dsecond;
-    data[second] = dfirst;
+    const TYPE dfirst = data[first];
+    const TYPE dsecond = data[second];
+
+    const bool shouldSwap =
+      (dirGroupId & 1) == 1 ? LESS(dfirst, dsecond) : LESS(dsecond, dfirst);
+
+    if (shouldSwap)
+    {
+      data[first] = dsecond;
+      data[second] = dfirst;
+    }
   }
 }
 

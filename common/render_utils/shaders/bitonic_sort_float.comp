@@ -1,0 +1,8 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#define TYPE float
+#define LESS(a_, b_) ((a_) < (b_))
+
+#include "bitonic_sort_template.comp.inc"

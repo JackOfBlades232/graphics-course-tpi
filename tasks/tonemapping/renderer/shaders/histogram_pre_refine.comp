@@ -32,7 +32,14 @@ void main(void)
   for (int p = localFirstPixel; p < localFirstPixel + localPixelCount; ++p)
   {
     const ivec2 imCoord = ivec2(p % imSz.x, p / imSz.x);
-    const float logLuminance = to_logscale(load_luminance(imCoord, imSz));
-    logLuminances[p] = logLuminance;
+    if (imCoord.y < imSz.y)
+    {
+      const float logLuminance = to_logscale(load_luminance(imCoord, imSz));
+      logLuminances[p] = logLuminance;
+    }
+    else
+    {
+      logLuminances[p] = SHADER_FLT_MAX;
+    }
   }
 }
