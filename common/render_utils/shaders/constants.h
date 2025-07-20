@@ -21,6 +21,11 @@ struct Constants
   shader_vec3 toroidalUpdatePlayerWorldPos;
 
   shader_uint useSharedMemForTonemapping;
+
+  float tonemappingRegW;
+  float tonemappingRefinedW;
+  float tonemappingMinAdmissibleLum;
+  float tonemappingMaxAdmissibleLum;
 };
 
 #endif // CONSTANTS_H_INCLUDED

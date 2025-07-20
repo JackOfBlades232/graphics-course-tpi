@@ -19,6 +19,11 @@ layout(binding = 2, set = 0) buffer jnd_bins_t
   uint jndBins[];
 };
 
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
 float load_luminance(ivec2 coord, ivec2 size)
 {
   const vec4 col = textureLod(hdrImage, vec2(coord) / vec2(size), 0);
@@ -40,7 +45,16 @@ void main(void)
   for (int p = localFirstPixel; p < localFirstPixel + localPixelCount; ++p)
   {
     const ivec2 imCoord = ivec2(p % imSz.x, p / imSz.x);
-    const float logLuminance = to_logscale(load_luminance(imCoord, imSz));
+    const float luminance = load_luminance(imCoord, imSz);
+
+    if (
+      luminance < constants.tonemappingMinAdmissibleLum ||
+      luminance > constants.tonemappingMaxAdmissibleLum)
+    {
+      continue;
+    }
+
+    const float logLuminance = to_logscale(luminance);
 
     const uint rbin = uint(floor((logLuminance - data.minLogLuminance) / binSize));
     const uint bin = clamp(rbin, 0, HISTOGRAM_BINS - 1);
