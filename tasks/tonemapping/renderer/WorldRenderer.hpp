@@ -120,6 +120,7 @@ private:
 
   etna::Buffer histData;
   etna::Buffer jndBinsData;
+  uint32_t jndBinsDataSize;
 
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
@@ -175,6 +176,9 @@ private:
   bool doSatCulling = true;
   bool doTonemapping = true;
   bool useSharedMemForTonemapping = false;
+  float tonemappingRegW = 0.5f, tonemappingRefinedW = 0.5f;
+  // @TODO: find a way to deal with jittering from lum outliers?
+  float tonemappingMinAdmissibleLum = 0.01f, tonemappingMaxAdmissibleLum = 10.f;
 
 private:
   void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
@@ -193,7 +197,7 @@ private:
   void setAllPointLightsIntensity(float val);
   void setAllSpotLightsIntensity(float val);
 
-  uint hdrImagePixelCount() const
+  shader_uint hdrImagePixelCount() const
   {
     return hdrTarget.getExtent().width * hdrTarget.getExtent().height;
   }

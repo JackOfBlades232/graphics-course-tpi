@@ -34,6 +34,9 @@ enum class CullingMode : shader_uint
   SAT = 1
 };
 
+#define CULLING_MODE_PER_VERTEX CullingMode::PER_VERTEX
+#define CULLING_MODE_SAT CullingMode::SAT
+
 #else
 
 #define CullingMode shader_uint
