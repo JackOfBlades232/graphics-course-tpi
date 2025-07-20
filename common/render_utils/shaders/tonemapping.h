@@ -6,7 +6,7 @@
 
 #define HISTOGRAM_WORK_GROUP_SIZE (MAX_WORK_GROUP_SIZE / 8)
 #define HISTOGRAM_PIXELS_PER_THREAD 128
-#define HISTOGRAM_BINS 1000
+#define HISTOGRAM_BINS 100
 
 struct HistogramData
 {
@@ -21,7 +21,6 @@ struct HistogramData
   uint binsRefinedDensity[HISTOGRAM_BINS];
   uint binsCumRefinedDensity[HISTOGRAM_BINS];
   float binsDistibution[HISTOGRAM_BINS];
-  float testValue; // @TEST
 };
 
 struct HistogramLuminanceRange

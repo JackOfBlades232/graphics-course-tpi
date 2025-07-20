@@ -26,9 +26,6 @@ float load_luminance(ivec2 coord, ivec2 size)
   return luminance_bt601(col);
 }
 
-const float MIN_ADMISSIBLE_LUMINANCE = 0.f;
-const float MAX_ADMISSIBLE_LUMINANCE = SHADER_FLT_MAX;
-
 shared HistogramLuminanceRange minmaxSharedBuffer[HISTOGRAM_WORK_GROUP_SIZE];
 
 void main(void)
@@ -47,7 +44,9 @@ void main(void)
     const ivec2 imCoord = ivec2(p % imSz.x, p / imSz.x);
     const float luminance = load_luminance(imCoord, imSz);
 
-    if (luminance >= MIN_ADMISSIBLE_LUMINANCE && luminance <= MAX_ADMISSIBLE_LUMINANCE)
+    if (
+      luminance >= constants.tonemappingMinAdmissibleLum &&
+      luminance <= constants.tonemappingMaxAdmissibleLum)
     {
       const uint nlum = luminance_to_normalized(luminance);
       localMin = min(localMin, nlum);

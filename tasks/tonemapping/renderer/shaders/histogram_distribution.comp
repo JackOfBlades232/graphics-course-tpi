@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "tonemapping.h"
+#include "constants.h"
 
 
 layout(local_size_x = 1) in;
@@ -10,6 +11,11 @@ layout(local_size_x = 1) in;
 layout(binding = 0, set = 0) buffer hist_t
 {
   HistogramData data;
+};
+
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
 };
 
 void main(void)
@@ -43,9 +49,9 @@ void main(void)
     const float indexCoeff = float(i) / float(HISTOGRAM_BINS);
 
     data.binsDistibution[i] =
-      0.4f * densityCoeff +
-      0.4f * refinedDensityCoeff +
-      0.2f * indexCoeff;
+      constants.tonemappingRegW * densityCoeff +
+      constants.tonemappingRefinedW * refinedDensityCoeff +
+      (1.f - constants.tonemappingRegW - constants.tonemappingRefinedW) * indexCoeff;
   }
 }
 

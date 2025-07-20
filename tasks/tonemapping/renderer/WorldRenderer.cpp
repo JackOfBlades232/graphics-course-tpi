@@ -105,16 +105,28 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
 
+  jndBinsDataSize = align_up_pot(div_enough(hdrImagePixelCount(), 8u), 4u);
+
   histData = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = sizeof(HistogramData),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "hist_data"});
   jndBinsData = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = hdrImagePixelCount() / 8,
+    .size = jndBinsDataSize,
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "jnd_bins_buffer"});
+}
+
+static void validate_tonemapping_coeffs(float reg, float refined, float min_lum, float max_lum)
+{
+  ETNA_ASSERT(reg >= 0.f && reg <= 1.f);
+  ETNA_ASSERT(refined >= 0.f && refined <= 1.f);
+  ETNA_ASSERT(reg + refined <= 1.f);
+  ETNA_ASSERT(min_lum >= 0.f);
+  ETNA_ASSERT(max_lum >= min_lum);
+  ETNA_ASSERT(max_lum < 100.f);
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -255,9 +267,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     const auto& tex = sceneMgr->getTextures()[i];
     texBindings.emplace_back(
       etna::Binding{0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal), uint32_t(i)});
-    registerManagedImage(
-      tex,
-      std::string{"bindless_tex_"} + std::to_string(i) + "[" + std::string{tex.getName()} + "]");
+    registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", i, tex.getName()));
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
   {
@@ -534,6 +544,10 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.cullingMode = doSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
     constantsData.useTonemapping = doTonemapping;
     constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
+    constantsData.tonemappingRegW = tonemappingRegW;
+    constantsData.tonemappingRefinedW = tonemappingRefinedW;
+    constantsData.tonemappingMinAdmissibleLum = tonemappingMinAdmissibleLum;
+    constantsData.tonemappingMaxAdmissibleLum = tonemappingMaxAdmissibleLum;
   }
 }
 
@@ -814,7 +828,6 @@ void WorldRenderer::renderWorld(
       }
     }
 
-    // @TODO: should resolve be in renderer rather than in world renderer?
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredResolve);
 
@@ -867,7 +880,7 @@ void WorldRenderer::renderWorld(
            .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
            .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
            .buffer = jndBinsData.get(),
-           .size = hdrImagePixelCount() / 8}});
+           .size = jndBinsDataSize}});
 
       {
         ETNA_PROFILE_GPU(cmd_buf, histogram_clear);
@@ -886,10 +899,10 @@ void WorldRenderer::renderWorld(
           {});
         cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, clearHistPipeline.getVkPipeline());
 
-        // @TODO: many elems per thread?
         cmd_buf.dispatch(
           get_linear_wg_count(
-            hdrImagePixelCount() / (sizeof(shader_uint) * 8), HISTOGRAM_WORK_GROUP_SIZE),
+            std::max<uint32_t>(jndBinsDataSize / sizeof(shader_uint), HISTOGRAM_BINS),
+            HISTOGRAM_WORK_GROUP_SIZE),
           1,
           1);
       }
@@ -992,7 +1005,7 @@ void WorldRenderer::renderWorld(
            .dstAccessMask =
              vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
            .buffer = jndBinsData.get(),
-           .size = hdrImagePixelCount() / 8}});
+           .size = jndBinsDataSize}});
 
       {
         ETNA_PROFILE_GPU(cmd_buf, histogram_binning);
@@ -1005,7 +1018,8 @@ void WorldRenderer::renderWorld(
              0,
              hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{1, histData.genBinding()},
-           etna::Binding{2, jndBinsData.genBinding()}});
+           etna::Binding{2, jndBinsData.genBinding()},
+           etna::Binding{8, constants->get().genBinding()}});
 
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
@@ -1041,14 +1055,17 @@ void WorldRenderer::renderWorld(
            .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
            .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
            .buffer = jndBinsData.get(),
-           .size = hdrImagePixelCount() / 8}});
+           .size = jndBinsDataSize}});
 
       {
         ETNA_PROFILE_GPU(cmd_buf, histogram_distribution);
 
         auto programInfo = etna::get_shader_program("histogram_distribution");
         auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0), cmd_buf, {etna::Binding{0, histData.genBinding()}});
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, histData.genBinding()},
+           etna::Binding{8, constants->get().genBinding()}});
 
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
@@ -1304,7 +1321,28 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
+      {
         ImGui::Checkbox("Use shared memory for tonemapping", &useSharedMemForTonemapping);
+
+        float constW = 1.f - tonemappingRegW - tonemappingRefinedW;
+        ImGui::SliderFloat("Regular bin W", &tonemappingRegW, 0.f, 1.f);
+        ImGui::SliderFloat("Refined bin W", &tonemappingRefinedW, 0.f, 1.f);
+        ImGui::SliderFloat("Constant W", &constW, 0.f, 1.f);
+
+        tonemappingRegW = glm::clamp(tonemappingRegW, 0.f, 1.f);
+        tonemappingRefinedW = glm::clamp(tonemappingRefinedW, 0.f, 1.f - tonemappingRegW);
+
+        float minAdmissibleLogLum = glm::log(tonemappingMinAdmissibleLum + 1.f) / glm::log(10.f);
+        float maxAdmissibleLogLum = glm::log(tonemappingMaxAdmissibleLum + 1.f) / glm::log(10.f);
+        ImGui::SliderFloat(
+          "Min admissible lum (log10(+1))", &minAdmissibleLogLum, 0.f, 4.f - SHADER_EPSILON);
+        ImGui::SliderFloat("Max admissible lum (log10(+1))", &maxAdmissibleLogLum, 0.f, 4.f);
+        maxAdmissibleLogLum =
+          glm::clamp(maxAdmissibleLogLum, minAdmissibleLogLum + SHADER_EPSILON, 4.f);
+
+        tonemappingMinAdmissibleLum = glm::exp(minAdmissibleLogLum * glm::log(10.f)) - 1.f;
+        tonemappingMaxAdmissibleLum = glm::exp(maxAdmissibleLogLum * glm::log(10.f)) - 1.f;
+      }
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
 
@@ -1491,6 +1529,13 @@ void WorldRenderer::loadDebugConfig()
   doSatCulling = unwrap(reader.read<bool>());
   doTonemapping = unwrap(reader.read<bool>());
   useSharedMemForTonemapping = unwrap(reader.read<bool>());
+  tonemappingRegW = unwrap(reader.read<float>());
+  tonemappingRefinedW = unwrap(reader.read<float>());
+  tonemappingMinAdmissibleLum = unwrap(reader.read<float>());
+  tonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
+
+  validate_tonemapping_coeffs(
+    tonemappingRegW, tonemappingRefinedW, tonemappingMinAdmissibleLum, tonemappingMaxAdmissibleLum);
 
   spdlog::info("Loaded debug config from {}", cfg.debugConfigFile.c_str());
 }
@@ -1530,6 +1575,10 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(doSatCulling));
   ETNA_VERIFY(writer.write(doTonemapping));
   ETNA_VERIFY(writer.write(useSharedMemForTonemapping));
+  ETNA_VERIFY(writer.write(tonemappingRegW));
+  ETNA_VERIFY(writer.write(tonemappingRefinedW));
+  ETNA_VERIFY(writer.write(tonemappingMinAdmissibleLum));
+  ETNA_VERIFY(writer.write(tonemappingMaxAdmissibleLum));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }
