@@ -4,6 +4,7 @@ add_library(render_utils
   BboxRenderer.cpp
   PostfxRenderer.cpp
   BitonicSort.cpp
+  Common.cpp
 )
 
 target_include_directories(render_utils PUBLIC ..)

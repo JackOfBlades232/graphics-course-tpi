@@ -2,7 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
-#include "tonemapping.h"
+#include "histogram_tonemapping.h"
 
 
 layout(location = 0) out vec4 out_fragColor;

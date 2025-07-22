@@ -2,8 +2,10 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
+#include "histogram_tonemapping.h"
 #include "constants.h"
-#include "tonemapping.h"
+
+#include "common.frag.inc"
 
 
 layout(location = 0) out vec4 out_fragColor;
@@ -28,8 +30,6 @@ float get_bin_dist(int bin)
 {
   return bin < 0 ? 0.f : (bin >= HISTOGRAM_BINS ? 1.f : histData.binsDistibution[bin]);
 }
-
-#include "common.frag.inc"
 
 void main(void)
 {

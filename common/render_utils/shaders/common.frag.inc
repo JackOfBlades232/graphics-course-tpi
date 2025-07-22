@@ -1,5 +1,5 @@
-#ifndef COMMON_H_INCLUDED
-#define COMMON_H_INCLUDED
+#ifndef SHADER_COMMON_FRAG_INC_INCLUDED
+#define SHADER_COMMON_FRAG_INC_INCLUDED
 
 // @TODO: read why this works lel
 vec4 catmull_rom_cubic_coeffs(float t)
@@ -54,4 +54,4 @@ float simplex_noise(vec2 v)
   return 130.0 * dot(m, g);
 }
 
-#endif // COMMON_H_INCLUDED
+#endif // SHADER_COMMON_FRAG_INC_INCLUDED

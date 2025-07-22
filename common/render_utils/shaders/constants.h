@@ -22,10 +22,10 @@ struct Constants
 
   shader_uint useSharedMemForTonemapping;
 
-  float tonemappingRegW;
-  float tonemappingRefinedW;
-  float tonemappingMinAdmissibleLum;
-  float tonemappingMaxAdmissibleLum;
+  float histEqTonemappingRegW;
+  float histEqTonemappingRefinedW;
+  float histEqTonemappingMinAdmissibleLum;
+  float histEqTonemappingMaxAdmissibleLum;
 };
 
 #endif // CONSTANTS_H_INCLUDED
