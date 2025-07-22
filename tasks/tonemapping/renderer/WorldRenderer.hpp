@@ -3,8 +3,9 @@
 #include "FramePacket.hpp"
 #include "Config.hpp"
 
+#include <render_components/IComponent.hpp>
+#include <render_components/ITonemapper.hpp>
 #include <render_components/DebugDrawer.hpp>
-#include <render_components/HistogramEqTonemapper.hpp>
 
 #include <render_utils/PostfxRenderer.hpp>
 #include <render_utils/BitonicSort.hpp>
@@ -26,6 +27,7 @@
 
 #include <unordered_map>
 #include <initializer_list>
+#include <concepts>
 
 
 class WorldRenderer
@@ -89,6 +91,18 @@ private:
     bool needToroidalUpdate = false;
   };
 
+  enum class TonemappingTechnique
+  {
+    HISTOGRAM_EQ = 0,
+    REINHARD,
+
+    COUNT
+  };
+  static constexpr size_t TONEMAPPING_TECHNIQUE_COUNT = size_t(TonemappingTechnique::COUNT);
+
+  static constexpr std::array<std::string_view, TONEMAPPING_TECHNIQUE_COUNT>
+    TONEMAPPING_TECHNIQUE_NAMES = {"Histogram equalization", "Reinhard"};
+
 private:
   std::unique_ptr<SceneManager> sceneMgr;
 
@@ -99,8 +113,9 @@ private:
   etna::ComputePipeline resetIndirectCommandsPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
 
-  // @TODO: lazy?
-  HistogramEqTonemapper historgramEqTonemapper{};
+  std::vector<std::unique_ptr<IComponent>> rcomponents{};
+
+  std::array<ITonemapper*, TONEMAPPING_TECHNIQUE_COUNT> tonemapperComps{};
 
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
@@ -162,6 +177,7 @@ private:
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
+  TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::HISTOGRAM_EQ;
 
 private:
   void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
@@ -178,5 +194,13 @@ private:
   shader_uint hdrImagePixelCount() const
   {
     return hdrTarget.getExtent().width * hdrTarget.getExtent().height;
+  }
+
+  template <std::derived_from<ITonemapper> T>
+  void registerTonemapper(TonemappingTechnique technique)
+  {
+    auto tonemapper = std::make_unique<T>();
+    tonemapperComps[size_t(technique)] = tonemapper.get();
+    rcomponents.emplace_back(std::move(tonemapper));
   }
 };
