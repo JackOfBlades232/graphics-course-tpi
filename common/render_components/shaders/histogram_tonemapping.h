@@ -10,22 +10,22 @@
 
 struct HistogramData
 {
-  uint minNormLuminance, maxNormLuminance; // normalized at [0, 1] -> [0, 255]
+  shader_uint minNormLuminance, maxNormLuminance; // normalized at [0, 1] -> [0, 255]
   float minLuminance, maxLuminance;
   float minLogLuminance, maxLogLuminance;
-  uint binsDensity[HISTOGRAM_BINS];
-  uint binsCumDensity[HISTOGRAM_BINS];
+  shader_uint binsDensity[HISTOGRAM_BINS];
+  shader_uint binsCumDensity[HISTOGRAM_BINS];
   float binsRefinedJnds[HISTOGRAM_BINS];
-  uint binsRefinedBinCounts[HISTOGRAM_BINS];
-  uint binsRefinedBinCumCounts[HISTOGRAM_BINS];
-  uint binsRefinedDensity[HISTOGRAM_BINS];
-  uint binsCumRefinedDensity[HISTOGRAM_BINS];
+  shader_uint binsRefinedBinCounts[HISTOGRAM_BINS];
+  shader_uint binsRefinedBinCumCounts[HISTOGRAM_BINS];
+  shader_uint binsRefinedDensity[HISTOGRAM_BINS];
+  shader_uint binsCumRefinedDensity[HISTOGRAM_BINS];
   float binsDistibution[HISTOGRAM_BINS];
 };
 
 struct HistogramLuminanceRange
 {
-  uint min, max; 
+  shader_uint min, max; 
 };
 
 float luminance_bt601(shader_vec4 col)
