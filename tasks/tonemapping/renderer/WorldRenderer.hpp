@@ -161,7 +161,7 @@ private:
   bool useSharedMemForTonemapping = false;
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
-  float histEqTonemappingMinAdmissibleLum = 0.01f, histEqTonemappingMaxAdmissibleLum = 10.f;
+  float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
 
 private:
   void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
