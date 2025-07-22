@@ -2,6 +2,9 @@
 
 #include "WorldRenderer.hpp"
 
+#include <render_components/HistogramEqTonemapper.hpp>
+#include <render_components/ReinhardTonemapper.hpp>
+
 #include <render_utils/PostfxRenderer.hpp>
 #include <render_utils/Common.hpp>
 #include <utils/Common.hpp>
@@ -35,6 +38,9 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   , wc{wc}
   , cfg{config}
 {
+  registerTonemapper<HistogramEqTonemapper>(TonemappingTechnique::HISTOGRAM_EQ);
+  registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
+
   if (cfg.useDebugConfig)
     loadDebugConfig();
 }
@@ -105,7 +111,8 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
 
-  historgramEqTonemapper.allocateResources(resolution);
+  for (auto& component : rcomponents)
+    component->allocateResources(resolution);
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -288,7 +295,8 @@ void WorldRenderer::loadShaders()
     "reset_indirect_commands", {RENDERER_SHADERS_ROOT "reset_indirect_commands.comp.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
 
-  historgramEqTonemapper.loadShaders();
+  for (auto& component : rcomponents)
+    component->loadShaders();
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -402,7 +410,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     BboxRenderer::CreateInfo{swapchain_format, {resolution.x, resolution.y}});
   quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{swapchain_format});
 
-  historgramEqTonemapper.setupPipelines(swapchain_format, debugDrawers);
+  for (auto& component : rcomponents)
+    component->setupPipelines(swapchain_format, debugDrawers);
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -778,7 +787,7 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, tonemapping);
 
-      historgramEqTonemapper.tonemap(
+      tonemapperComps[size_t(currentTonemappingTechnique)]->tonemap(
         cmd_buf, target_image, target_image_view, hdrTarget, defaultSampler, constants->get());
     }
 
@@ -995,29 +1004,48 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
       {
-        ImGui::Checkbox("Use shared memory for tonemapping", &useSharedMemForTonemapping);
+        if (ImGui::BeginCombo(
+              "Tonemapper",
+              TONEMAPPING_TECHNIQUE_NAMES[size_t(currentTonemappingTechnique)].data()))
+        {
+          for (size_t i = 0; i < TONEMAPPING_TECHNIQUE_COUNT; i++)
+          {
+            bool selected = currentTonemappingTechnique == TonemappingTechnique(i);
+            if (ImGui::Selectable(TONEMAPPING_TECHNIQUE_NAMES[i].data(), selected))
+              currentTonemappingTechnique = TonemappingTechnique(i);
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
 
-        float constW = 1.f - histEqTonemappingRegW - histEqTonemappingRefinedW;
-        ImGui::SliderFloat("Regular bin W", &histEqTonemappingRegW, 0.f, 1.f);
-        ImGui::SliderFloat("Refined bin W", &histEqTonemappingRefinedW, 0.f, 1.f);
-        ImGui::SliderFloat("Constant W", &constW, 0.f, 1.f);
+          ImGui::EndCombo();
+        }
 
-        histEqTonemappingRegW = glm::clamp(histEqTonemappingRegW, 0.f, 1.f);
-        histEqTonemappingRefinedW =
-          glm::clamp(histEqTonemappingRefinedW, 0.f, 1.f - histEqTonemappingRegW);
+        if (currentTonemappingTechnique == TonemappingTechnique::HISTOGRAM_EQ)
+        {
+          ImGui::Checkbox("Use shared memory for tonemapping", &useSharedMemForTonemapping);
 
-        float minAdmissibleLogLum =
-          glm::log(histEqTonemappingMinAdmissibleLum + 1.f) / glm::log(10.f);
-        float maxAdmissibleLogLum =
-          glm::log(histEqTonemappingMaxAdmissibleLum + 1.f) / glm::log(10.f);
-        ImGui::SliderFloat(
-          "Min admissible lum (log10(+1))", &minAdmissibleLogLum, 0.f, 4.f - SHADER_EPSILON);
-        ImGui::SliderFloat("Max admissible lum (log10(+1))", &maxAdmissibleLogLum, 0.f, 4.f);
-        maxAdmissibleLogLum =
-          glm::clamp(maxAdmissibleLogLum, minAdmissibleLogLum + SHADER_EPSILON, 4.f);
+          float constW = 1.f - histEqTonemappingRegW - histEqTonemappingRefinedW;
+          ImGui::SliderFloat("Regular bin W", &histEqTonemappingRegW, 0.f, 1.f);
+          ImGui::SliderFloat("Refined bin W", &histEqTonemappingRefinedW, 0.f, 1.f);
+          ImGui::SliderFloat("Constant W", &constW, 0.f, 1.f);
 
-        histEqTonemappingMinAdmissibleLum = glm::exp(minAdmissibleLogLum * glm::log(10.f)) - 1.f;
-        histEqTonemappingMaxAdmissibleLum = glm::exp(maxAdmissibleLogLum * glm::log(10.f)) - 1.f;
+          histEqTonemappingRegW = glm::clamp(histEqTonemappingRegW, 0.f, 1.f);
+          histEqTonemappingRefinedW =
+            glm::clamp(histEqTonemappingRefinedW, 0.f, 1.f - histEqTonemappingRegW);
+
+          float minAdmissibleLogLum =
+            glm::log(histEqTonemappingMinAdmissibleLum + 1.f) / glm::log(10.f);
+          float maxAdmissibleLogLum =
+            glm::log(histEqTonemappingMaxAdmissibleLum + 1.f) / glm::log(10.f);
+          ImGui::SliderFloat(
+            "Min admissible lum (log10(+1))", &minAdmissibleLogLum, 0.f, 4.f - SHADER_EPSILON);
+          ImGui::SliderFloat("Max admissible lum (log10(+1))", &maxAdmissibleLogLum, 0.f, 4.f);
+          maxAdmissibleLogLum =
+            glm::clamp(maxAdmissibleLogLum, minAdmissibleLogLum + SHADER_EPSILON, 4.f);
+
+          histEqTonemappingMinAdmissibleLum = glm::exp(minAdmissibleLogLum * glm::log(10.f)) - 1.f;
+          histEqTonemappingMaxAdmissibleLum = glm::exp(maxAdmissibleLogLum * glm::log(10.f)) - 1.f;
+        }
       }
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
@@ -1193,6 +1221,7 @@ void WorldRenderer::loadDebugConfig()
   histEqTonemappingRefinedW = unwrap(reader.read<float>());
   histEqTonemappingMinAdmissibleLum = unwrap(reader.read<float>());
   histEqTonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
+  currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
 
   validate_hist_tonemapping_coeffs(
     histEqTonemappingRegW,
@@ -1242,6 +1271,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(histEqTonemappingRefinedW));
   ETNA_VERIFY(writer.write(histEqTonemappingMinAdmissibleLum));
   ETNA_VERIFY(writer.write(histEqTonemappingMaxAdmissibleLum));
+  ETNA_VERIFY(writer.write(currentTonemappingTechnique));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

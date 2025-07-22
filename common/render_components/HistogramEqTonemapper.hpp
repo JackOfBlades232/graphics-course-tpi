@@ -1,26 +1,20 @@
 #pragma once
 
-#include "DebugDrawer.hpp"
+#include "ITonemapper.hpp"
 
 #include <render_utils/PostfxRenderer.hpp>
-
-#include <etna/Buffer.hpp>
-#include <etna/Image.hpp>
-#include <etna/Sampler.hpp>
 #include <etna/GraphicsPipeline.hpp>
 #include <etna/ComputePipeline.hpp>
 
-#include <glm/glm.hpp>
 
-
-class HistogramEqTonemapper
+class HistogramEqTonemapper final : public ITonemapper
 {
 public:
   HistogramEqTonemapper() = default;
 
-  void allocateResources(glm::uvec2 resolution);
-  void loadShaders();
-  void setupPipelines(vk::Format swapchain_format, DebugDrawersRegistry& debug_drawer_reg);
+  void allocateResources(glm::uvec2 resolution) final;
+  void loadShaders() final;
+  void setupPipelines(vk::Format swapchain_format, DebugDrawersRegistry& debug_drawer_reg) final;
 
   void tonemap(
     vk::CommandBuffer cmd_buff,
@@ -28,7 +22,7 @@ public:
     vk::ImageView target_image_view,
     const etna::Image& hdr_image,
     const etna::Sampler& sampler,
-    const etna::Buffer& constants);
+    const etna::Buffer& constants) final;
 
 private:
   etna::ComputePipeline clearPipeline{};

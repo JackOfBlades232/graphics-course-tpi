@@ -1,5 +1,5 @@
-#ifndef TONEMAPPING_H_INCLUDED
-#define TONEMAPPING_H_INCLUDED
+#ifndef HISTOGRAM_TONEMAPPING_H_INCLUDED
+#define HISTOGRAM_TONEMAPPING_H_INCLUDED
 
 #include "defs.h"
 #include "cpp_glsl_compat.h"
@@ -59,5 +59,5 @@ float from_logscale(float loga)
 #define MIN_DISPLAY_LOG_LUMINANCE to_logscale(0.f)
 #define MAX_DISPLAY_LOG_LUMINANCE to_logscale(1.f)
 
-#endif // TONEMAPPING_H_INCLUDED
+#endif // HISTOGRAM_TONEMAPPING_H_INCLUDED
 

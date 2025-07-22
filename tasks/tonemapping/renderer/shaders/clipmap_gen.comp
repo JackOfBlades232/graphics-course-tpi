@@ -4,8 +4,8 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "draw.h"
-
 #include "constants.h"
+#include "terrain.h"
 
 #include "common.frag.inc"
 

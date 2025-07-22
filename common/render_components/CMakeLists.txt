@@ -1,6 +1,7 @@
 
 add_library(render_components
   HistogramEqTonemapper.cpp
+  ReinhardTonemapper.cpp
 )
 
 target_include_directories(render_components PUBLIC ..)
@@ -20,5 +21,6 @@ target_add_shaders(render_components
   shaders/histogram_clear.comp
   shaders/histogram_debug.frag
   shaders/histogram_tonemap.frag
+  shaders/reinhard_tonemap.frag
 )
 
