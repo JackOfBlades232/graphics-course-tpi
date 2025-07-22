@@ -32,5 +32,7 @@ set(CPM_etna_SOURCE "${PROJECT_SOURCE_DIR}/../etna")
 include("cmake/thirdparty.cmake")
 include("cmake/shaders.cmake")
 
+add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+
 add_subdirectory(common)
 add_subdirectory(tasks)
