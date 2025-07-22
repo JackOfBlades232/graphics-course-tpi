@@ -3,9 +3,9 @@
 #include "WorldRenderer.hpp"
 
 #include <render_utils/PostfxRenderer.hpp>
+#include <render_utils/Common.hpp>
 #include <utils/Common.hpp>
 #include <utils/Bitstream.hpp>
-#include <tonemapping.h>
 
 #include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
@@ -105,28 +105,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
 
-  jndBinsDataSize = align_up_pot(div_enough(hdrImagePixelCount(), 8u), 4u);
-
-  histData = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = sizeof(HistogramData),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "hist_data"});
-  jndBinsData = ctx.createBuffer(etna::Buffer::CreateInfo{
-    .size = jndBinsDataSize,
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "jnd_bins_buffer"});
-}
-
-static void validate_tonemapping_coeffs(float reg, float refined, float min_lum, float max_lum)
-{
-  ETNA_ASSERT(reg >= 0.f && reg <= 1.f);
-  ETNA_ASSERT(refined >= 0.f && refined <= 1.f);
-  ETNA_ASSERT(reg + refined <= 1.f);
-  ETNA_ASSERT(min_lum >= 0.f);
-  ETNA_ASSERT(max_lum >= min_lum);
-  ETNA_ASSERT(max_lum < 100.f);
+  historgramEqTonemapper.allocateResources(resolution);
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -308,16 +287,8 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "reset_indirect_commands", {RENDERER_SHADERS_ROOT "reset_indirect_commands.comp.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
-  etna::create_program("histogram_clear", {RENDERER_SHADERS_ROOT "histogram_clear.comp.spv"});
-  etna::create_program("histogram_minmax", {RENDERER_SHADERS_ROOT "histogram_minmax.comp.spv"});
-  etna::create_program("histogram_binning", {RENDERER_SHADERS_ROOT "histogram_binning.comp.spv"});
-  etna::create_program(
-    "histogram_pre_refine", {RENDERER_SHADERS_ROOT "histogram_pre_refine.comp.spv"});
-  etna::create_program(
-    "histogram_distribution", {RENDERER_SHADERS_ROOT "histogram_distribution.comp.spv"});
-  etna::create_program(
-    "histogram_debug",
-    {RENDERER_SHADERS_ROOT "histogram_debug.frag.spv", QuadRenderer::VERTEX_SHADER_PATH});
+
+  historgramEqTonemapper.loadShaders();
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -427,70 +398,11 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     vk::Format::eR32G32B32A32Sfloat,
     {resolution.x, resolution.y}});
 
-  tonemapper = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
-    "tonemap",
-    RENDERER_SHADERS_ROOT "tonemap.frag.spv",
-    swapchain_format,
-    {resolution.x, resolution.y}});
-
   bboxRenderer = std::make_unique<BboxRenderer>(
     BboxRenderer::CreateInfo{swapchain_format, {resolution.x, resolution.y}});
   quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{swapchain_format});
 
-  clearHistPipeline = pipelineManager.createComputePipeline("histogram_clear", {});
-  calculateHistMinmaxPipeline = pipelineManager.createComputePipeline("histogram_minmax", {});
-  calculateHistDensityPipeline = pipelineManager.createComputePipeline("histogram_binning", {});
-  calculatePreRefinedHistPipeline =
-    pipelineManager.createComputePipeline("histogram_pre_refine", {});
-  calculateHistDistributionPipeline =
-    pipelineManager.createComputePipeline("histogram_distribution", {});
-
-  histogramDebugPipeline = pipelineManager.createGraphicsPipeline(
-    "histogram_debug",
-    {
-      .blendingConfig =
-        {.attachments = {vk::PipelineColorBlendAttachmentState{
-           .blendEnable = vk::True,
-           .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
-           .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-           .colorBlendOp = vk::BlendOp::eAdd,
-           .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-           .dstAlphaBlendFactor = vk::BlendFactor::eOne,
-           .alphaBlendOp = vk::BlendOp::eAdd,
-           .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-             vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA}},
-         .logicOp = vk::LogicOp::eSet},
-      .fragmentShaderOutput =
-        {
-          .colorAttachmentFormats = {swapchain_format},
-        },
-    });
-
-  debugDrawers.emplace(
-    "histrogram_debug_view",
-    DebugDrawer{
-      [this](vk::CommandBuffer cb, vk::Image ti, vk::ImageView tiv) {
-        auto programInfo = etna::get_shader_program("histogram_debug");
-        auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0), cb, {etna::Binding{0, histData.genBinding()}});
-
-        etna::RenderTargetState renderTargets{
-          cb,
-          {{0, 0}, {resolution.x / 2, resolution.y / 2}},
-          {{.image = ti, .view = tiv, .loadOp = vk::AttachmentLoadOp::eLoad}},
-          {}};
-
-        cb.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics,
-          histogramDebugPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet()},
-          {});
-        cb.bindPipeline(vk::PipelineBindPoint::eGraphics, histogramDebugPipeline.getVkPipeline());
-
-        cb.draw(3, 1, 0, 0);
-      },
-      [] {}});
+  historgramEqTonemapper.setupPipelines(swapchain_format, debugDrawers);
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -542,12 +454,13 @@ void WorldRenderer::update(const FramePacket& packet)
 
   {
     constantsData.cullingMode = doSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
+
     constantsData.useTonemapping = doTonemapping;
     constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
-    constantsData.tonemappingRegW = tonemappingRegW;
-    constantsData.tonemappingRefinedW = tonemappingRefinedW;
-    constantsData.tonemappingMinAdmissibleLum = tonemappingMinAdmissibleLum;
-    constantsData.tonemappingMaxAdmissibleLum = tonemappingMaxAdmissibleLum;
+    constantsData.histEqTonemappingRegW = histEqTonemappingRegW;
+    constantsData.histEqTonemappingRefinedW = histEqTonemappingRefinedW;
+    constantsData.histEqTonemappingMinAdmissibleLum = histEqTonemappingMinAdmissibleLum;
+    constantsData.histEqTonemappingMaxAdmissibleLum = histEqTonemappingMaxAdmissibleLum;
   }
 }
 
@@ -639,7 +552,7 @@ void WorldRenderer::renderWorld(
       }
     }
 
-    emitBarriers(
+    emit_barriers(
       cmd_buf,
       {vk::BufferMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
@@ -671,7 +584,7 @@ void WorldRenderer::renderWorld(
         1);
     }
 
-    emitBarriers(
+    emit_barriers(
       cmd_buf,
       {vk::BufferMemoryBarrier2{
          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
@@ -715,7 +628,7 @@ void WorldRenderer::renderWorld(
         get_linear_wg_count(uint32_t(sceneMgr->getInstances().size()), BASE_WORK_GROUP_SIZE), 1, 1);
     }
 
-    emitBarriers(
+    emit_barriers(
       cmd_buf,
       {vk::BufferMemoryBarrier2{
          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
@@ -865,248 +778,8 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, tonemapping);
 
-      emitBarriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-           .srcStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
-           .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-           .buffer = histData.get(),
-           .size = sizeof(HistogramData)},
-         vk::BufferMemoryBarrier2{
-           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-           .buffer = jndBinsData.get(),
-           .size = jndBinsDataSize}});
-
-      {
-        ETNA_PROFILE_GPU(cmd_buf, histogram_clear);
-
-        auto programInfo = etna::get_shader_program("histogram_clear");
-        auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
-          cmd_buf,
-          {etna::Binding{0, histData.genBinding()}, etna::Binding{1, jndBinsData.genBinding()}});
-
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eCompute,
-          clearHistPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet()},
-          {});
-        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, clearHistPipeline.getVkPipeline());
-
-        cmd_buf.dispatch(
-          get_linear_wg_count(
-            std::max<uint32_t>(jndBinsDataSize / sizeof(shader_uint), HISTOGRAM_BINS),
-            HISTOGRAM_WORK_GROUP_SIZE),
-          1,
-          1);
-      }
-
-      emitBarriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .dstAccessMask =
-            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-          .buffer = histData.get(),
-          .size = sizeof(HistogramData)}});
-
-      etna::set_state(
-        cmd_buf,
-        hdrTarget.get(),
-        vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader,
-        vk::AccessFlagBits2::eShaderSampledRead,
-        vk::ImageLayout::eShaderReadOnlyOptimal,
-        vk::ImageAspectFlagBits::eColor);
-      etna::flush_barriers(cmd_buf);
-
-      {
-        ETNA_PROFILE_GPU(cmd_buf, histogram_minmax);
-
-        auto programInfo = etna::get_shader_program("histogram_minmax");
-        auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
-          cmd_buf,
-          {etna::Binding{
-             0,
-             hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{1, histData.genBinding()},
-           etna::Binding{8, constants->get().genBinding()}});
-
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eCompute,
-          calculateHistMinmaxPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet()},
-          {});
-        cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, calculateHistMinmaxPipeline.getVkPipeline());
-
-        cmd_buf.dispatch(
-          get_linear_wg_count(
-            hdrImagePixelCount(), HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
-          1,
-          1);
-      }
-
-      emitBarriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .srcAccessMask =
-            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .dstAccessMask =
-            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-          .buffer = histData.get(),
-          .size = sizeof(HistogramData)}});
-
-      {
-        ETNA_PROFILE_GPU(cmd_buf, histogram_pre_refine);
-
-        auto programInfo = etna::get_shader_program("histogram_pre_refine");
-        auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0), cmd_buf, {etna::Binding{0, histData.genBinding()}});
-
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eCompute,
-          calculatePreRefinedHistPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet()},
-          {});
-        cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, calculatePreRefinedHistPipeline.getVkPipeline());
-
-        cmd_buf.dispatch(1, 1, 1);
-      }
-
-      emitBarriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .srcAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .dstAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .buffer = histData.get(),
-           .size = sizeof(HistogramData)},
-         vk::BufferMemoryBarrier2{
-           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .dstAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .buffer = jndBinsData.get(),
-           .size = jndBinsDataSize}});
-
-      {
-        ETNA_PROFILE_GPU(cmd_buf, histogram_binning);
-
-        auto programInfo = etna::get_shader_program("histogram_binning");
-        auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
-          cmd_buf,
-          {etna::Binding{
-             0,
-             hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{1, histData.genBinding()},
-           etna::Binding{2, jndBinsData.genBinding()},
-           etna::Binding{8, constants->get().genBinding()}});
-
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eCompute,
-          calculateHistDensityPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet()},
-          {});
-        cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, calculateHistDensityPipeline.getVkPipeline());
-
-        cmd_buf.dispatch(
-          get_linear_wg_count(
-            hdrImagePixelCount(), HISTOGRAM_WORK_GROUP_SIZE * HISTOGRAM_PIXELS_PER_THREAD),
-          1,
-          1);
-      }
-
-      emitBarriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .srcAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .dstAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .buffer = histData.get(),
-           .size = sizeof(HistogramData)},
-         vk::BufferMemoryBarrier2{
-           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .srcAccessMask =
-             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-           .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-           .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-           .buffer = jndBinsData.get(),
-           .size = jndBinsDataSize}});
-
-      {
-        ETNA_PROFILE_GPU(cmd_buf, histogram_distribution);
-
-        auto programInfo = etna::get_shader_program("histogram_distribution");
-        auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
-          cmd_buf,
-          {etna::Binding{0, histData.genBinding()},
-           etna::Binding{8, constants->get().genBinding()}});
-
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eCompute,
-          calculateHistDistributionPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet()},
-          {});
-        cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, calculateHistDistributionPipeline.getVkPipeline());
-
-        cmd_buf.dispatch(1, 1, 1);
-      }
-
-      emitBarriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .srcAccessMask =
-            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-          .dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
-          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-          .buffer = histData.get(),
-          .size = sizeof(HistogramData)}});
-
-      {
-        ETNA_PROFILE_GPU(cmd_buf, tonemapping_apply);
-
-        auto set = etna::create_descriptor_set(
-          tonemapper->shaderProgramInfo().getDescriptorLayoutId(0),
-          cmd_buf,
-          {etna::Binding{
-             0,
-             hdrTarget.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{1, histData.genBinding()},
-           etna::Binding{8, constants->get().genBinding()}});
-
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, tonemapper->pipelineLayout(), 0, {set.getVkSet()}, {});
-
-        tonemapper->render(cmd_buf, target_image, target_image_view);
-      }
+      historgramEqTonemapper.tonemap(
+        cmd_buf, target_image, target_image_view, hdrTarget, defaultSampler, constants->get());
     }
 
     {
@@ -1324,24 +997,27 @@ void WorldRenderer::drawGui()
       {
         ImGui::Checkbox("Use shared memory for tonemapping", &useSharedMemForTonemapping);
 
-        float constW = 1.f - tonemappingRegW - tonemappingRefinedW;
-        ImGui::SliderFloat("Regular bin W", &tonemappingRegW, 0.f, 1.f);
-        ImGui::SliderFloat("Refined bin W", &tonemappingRefinedW, 0.f, 1.f);
+        float constW = 1.f - histEqTonemappingRegW - histEqTonemappingRefinedW;
+        ImGui::SliderFloat("Regular bin W", &histEqTonemappingRegW, 0.f, 1.f);
+        ImGui::SliderFloat("Refined bin W", &histEqTonemappingRefinedW, 0.f, 1.f);
         ImGui::SliderFloat("Constant W", &constW, 0.f, 1.f);
 
-        tonemappingRegW = glm::clamp(tonemappingRegW, 0.f, 1.f);
-        tonemappingRefinedW = glm::clamp(tonemappingRefinedW, 0.f, 1.f - tonemappingRegW);
+        histEqTonemappingRegW = glm::clamp(histEqTonemappingRegW, 0.f, 1.f);
+        histEqTonemappingRefinedW =
+          glm::clamp(histEqTonemappingRefinedW, 0.f, 1.f - histEqTonemappingRegW);
 
-        float minAdmissibleLogLum = glm::log(tonemappingMinAdmissibleLum + 1.f) / glm::log(10.f);
-        float maxAdmissibleLogLum = glm::log(tonemappingMaxAdmissibleLum + 1.f) / glm::log(10.f);
+        float minAdmissibleLogLum =
+          glm::log(histEqTonemappingMinAdmissibleLum + 1.f) / glm::log(10.f);
+        float maxAdmissibleLogLum =
+          glm::log(histEqTonemappingMaxAdmissibleLum + 1.f) / glm::log(10.f);
         ImGui::SliderFloat(
           "Min admissible lum (log10(+1))", &minAdmissibleLogLum, 0.f, 4.f - SHADER_EPSILON);
         ImGui::SliderFloat("Max admissible lum (log10(+1))", &maxAdmissibleLogLum, 0.f, 4.f);
         maxAdmissibleLogLum =
           glm::clamp(maxAdmissibleLogLum, minAdmissibleLogLum + SHADER_EPSILON, 4.f);
 
-        tonemappingMinAdmissibleLum = glm::exp(minAdmissibleLogLum * glm::log(10.f)) - 1.f;
-        tonemappingMaxAdmissibleLum = glm::exp(maxAdmissibleLogLum * glm::log(10.f)) - 1.f;
+        histEqTonemappingMinAdmissibleLum = glm::exp(minAdmissibleLogLum * glm::log(10.f)) - 1.f;
+        histEqTonemappingMaxAdmissibleLum = glm::exp(maxAdmissibleLogLum * glm::log(10.f)) - 1.f;
       }
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
@@ -1444,30 +1120,14 @@ void WorldRenderer::registerManagedImage(
       }});
 }
 
-void WorldRenderer::emitBarriers(
-  vk::CommandBuffer cmd_buf,
-  std::initializer_list<const std::variant<vk::BufferMemoryBarrier2, vk::ImageMemoryBarrier2>>
-    barriers)
+static void validate_hist_tonemapping_coeffs(float reg, float refined, float min_lum, float max_lum)
 {
-  std::vector<vk::BufferMemoryBarrier2> bufferBarriers{};
-  std::vector<vk::ImageMemoryBarrier2> imageBarriers{};
-  for (const auto& barrier : barriers)
-  {
-    std::visit(
-      [&](const auto& b) {
-        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(b)>, vk::BufferMemoryBarrier2>)
-          bufferBarriers.push_back(b);
-        else
-          imageBarriers.push_back(b);
-      },
-      barrier);
-  }
-  cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-    .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-    .bufferMemoryBarrierCount = uint32_t(bufferBarriers.size()),
-    .pBufferMemoryBarriers = bufferBarriers.data(),
-    .imageMemoryBarrierCount = uint32_t(imageBarriers.size()),
-    .pImageMemoryBarriers = imageBarriers.data()});
+  ETNA_ASSERT(reg >= 0.f && reg <= 1.f);
+  ETNA_ASSERT(refined >= 0.f && refined <= 1.f);
+  ETNA_ASSERT(reg + refined <= 1.f);
+  ETNA_ASSERT(min_lum >= 0.f);
+  ETNA_ASSERT(max_lum >= min_lum);
+  ETNA_ASSERT(max_lum < 100.f);
 }
 
 void WorldRenderer::loadDebugConfig()
@@ -1529,13 +1189,16 @@ void WorldRenderer::loadDebugConfig()
   doSatCulling = unwrap(reader.read<bool>());
   doTonemapping = unwrap(reader.read<bool>());
   useSharedMemForTonemapping = unwrap(reader.read<bool>());
-  tonemappingRegW = unwrap(reader.read<float>());
-  tonemappingRefinedW = unwrap(reader.read<float>());
-  tonemappingMinAdmissibleLum = unwrap(reader.read<float>());
-  tonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
+  histEqTonemappingRegW = unwrap(reader.read<float>());
+  histEqTonemappingRefinedW = unwrap(reader.read<float>());
+  histEqTonemappingMinAdmissibleLum = unwrap(reader.read<float>());
+  histEqTonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
 
-  validate_tonemapping_coeffs(
-    tonemappingRegW, tonemappingRefinedW, tonemappingMinAdmissibleLum, tonemappingMaxAdmissibleLum);
+  validate_hist_tonemapping_coeffs(
+    histEqTonemappingRegW,
+    histEqTonemappingRefinedW,
+    histEqTonemappingMinAdmissibleLum,
+    histEqTonemappingMaxAdmissibleLum);
 
   spdlog::info("Loaded debug config from {}", cfg.debugConfigFile.c_str());
 }
@@ -1575,10 +1238,10 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(doSatCulling));
   ETNA_VERIFY(writer.write(doTonemapping));
   ETNA_VERIFY(writer.write(useSharedMemForTonemapping));
-  ETNA_VERIFY(writer.write(tonemappingRegW));
-  ETNA_VERIFY(writer.write(tonemappingRefinedW));
-  ETNA_VERIFY(writer.write(tonemappingMinAdmissibleLum));
-  ETNA_VERIFY(writer.write(tonemappingMaxAdmissibleLum));
+  ETNA_VERIFY(writer.write(histEqTonemappingRegW));
+  ETNA_VERIFY(writer.write(histEqTonemappingRefinedW));
+  ETNA_VERIFY(writer.write(histEqTonemappingMinAdmissibleLum));
+  ETNA_VERIFY(writer.write(histEqTonemappingMaxAdmissibleLum));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

@@ -7,7 +7,7 @@ add_executable(renderer
 )
 
 target_link_libraries(renderer
-  PRIVATE glfw etna glm::glm wsi gui scene render_utils)
+  PRIVATE glfw etna glm::glm wsi gui scene render_utils render_components)
 
 target_add_shaders(renderer
   shaders/gbuffer_resolve.frag
@@ -20,11 +20,4 @@ target_add_shaders(renderer
   shaders/terrain_mesh.tesc
   shaders/terrain_mesh.tese
   shaders/terrain_mesh.frag
-  shaders/tonemap.frag
-  shaders/histogram_minmax.comp
-  shaders/histogram_pre_refine.comp
-  shaders/histogram_binning.comp
-  shaders/histogram_distribution.comp
-  shaders/histogram_clear.comp
-  shaders/histogram_debug.frag
 )

@@ -2,7 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
-#include "tonemapping.h"
+#include "histogram_tonemapping.h"
 #include "constants.h"
 
 
@@ -20,12 +20,6 @@ layout(binding = 8, set = 0) uniform constants_t
 
 void main(void)
 {
-  data.minLuminance = normalized_to_luminance(data.minNormLuminance);
-  data.maxLuminance = normalized_to_luminance(data.maxNormLuminance);
-
-  data.minLogLuminance = to_logscale(data.minLuminance);
-  data.maxLogLuminance = to_logscale(data.maxLuminance);
-
   data.binsCumDensity[0] = data.binsDensity[0];
   for (int i = 1; i < HISTOGRAM_BINS; ++i)
     data.binsCumDensity[i] = data.binsCumDensity[i - 1] + data.binsDensity[i];
@@ -49,9 +43,9 @@ void main(void)
     const float indexCoeff = float(i) / float(HISTOGRAM_BINS);
 
     data.binsDistibution[i] =
-      constants.tonemappingRegW * densityCoeff +
-      constants.tonemappingRefinedW * refinedDensityCoeff +
-      (1.f - constants.tonemappingRegW - constants.tonemappingRefinedW) * indexCoeff;
+      constants.histEqTonemappingRegW * densityCoeff +
+      constants.histEqTonemappingRefinedW * refinedDensityCoeff +
+      (1.f - constants.histEqTonemappingRegW - constants.histEqTonemappingRefinedW) * indexCoeff;
   }
 }
 
