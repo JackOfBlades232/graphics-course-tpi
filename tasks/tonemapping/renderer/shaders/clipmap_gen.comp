@@ -4,10 +4,13 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "draw.h"
-#include "terrain.h"
+
 #include "constants.h"
 
 #include "common.frag.inc"
+
+// @TODO:
+//  on low framerate clipmap has artifacts. Fix!
 
 
 layout(local_size_x = CLIPMAP_WORK_GROUP_SIZE) in;
