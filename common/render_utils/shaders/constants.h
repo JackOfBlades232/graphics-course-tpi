@@ -26,6 +26,11 @@ struct Constants
   float histEqTonemappingRefinedW;
   float histEqTonemappingMinAdmissibleLum;
   float histEqTonemappingMaxAdmissibleLum;
+
+  // @TODO: try getting exposure from histogram instead
+  float acesExposure;
+
+  shader_uint pad1_, pad2_, pad3_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

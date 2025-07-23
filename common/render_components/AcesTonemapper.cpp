@@ -1,25 +1,26 @@
-#include "ReinhardTonemapper.hpp"
+#include "AcesTonemapper.hpp"
 
 #include <etna/PipelineManager.hpp>
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Profiling.hpp>
 
 
-void ReinhardTonemapper::allocateResources(glm::uvec2 resolution)
+// @NOTE: with a trait based shader compiler, this can be easily generic w/ Reinhard
+void AcesTonemapper::allocateResources(glm::uvec2 resolution)
 {
   targetResolution = resolution;
 }
 
-void ReinhardTonemapper::setupPipelines(vk::Format swapchain_format, DebugDrawersRegistry&)
+void AcesTonemapper::setupPipelines(vk::Format swapchain_format, DebugDrawersRegistry&)
 {
   tonemapper = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
-    "reinhard_tonemap",
-    RENDER_COMPONENTS_SHADERS_ROOT "reinhard_tonemap.frag.spv",
+    "aces_tonemap",
+    RENDER_COMPONENTS_SHADERS_ROOT "aces_tonemap.frag.spv",
     swapchain_format,
     {targetResolution.x, targetResolution.y}});
 }
 
-void ReinhardTonemapper::tonemap(
+void AcesTonemapper::tonemap(
   vk::CommandBuffer cmd_buf,
   vk::Image target_image,
   vk::ImageView target_image_view,
@@ -40,3 +41,4 @@ void ReinhardTonemapper::tonemap(
 
   tonemapper->render(cmd_buf, target_image, target_image_view);
 }
+

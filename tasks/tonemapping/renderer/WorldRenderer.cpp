@@ -4,6 +4,7 @@
 
 #include <render_components/HistogramEqTonemapper.hpp>
 #include <render_components/ReinhardTonemapper.hpp>
+#include <render_components/AcesTonemapper.hpp>
 
 #include <render_utils/PostfxRenderer.hpp>
 #include <render_utils/Common.hpp>
@@ -40,6 +41,7 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
 {
   registerTonemapper<HistogramEqTonemapper>(TonemappingTechnique::HISTOGRAM_EQ);
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
+  registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
 
   if (cfg.useDebugConfig)
     loadDebugConfig();
@@ -470,6 +472,7 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.histEqTonemappingRefinedW = histEqTonemappingRefinedW;
     constantsData.histEqTonemappingMinAdmissibleLum = histEqTonemappingMinAdmissibleLum;
     constantsData.histEqTonemappingMaxAdmissibleLum = histEqTonemappingMaxAdmissibleLum;
+    constantsData.acesExposure = acesExposure;
   }
 }
 
@@ -1046,6 +1049,10 @@ void WorldRenderer::drawGui()
           histEqTonemappingMinAdmissibleLum = glm::exp(minAdmissibleLogLum * glm::log(10.f)) - 1.f;
           histEqTonemappingMaxAdmissibleLum = glm::exp(maxAdmissibleLogLum * glm::log(10.f)) - 1.f;
         }
+        else if (currentTonemappingTechnique == TonemappingTechnique::ACES)
+        {
+          ImGui::SliderFloat("Hardcoded exposure", &acesExposure, 0.f, 64.f);
+        }
       }
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
@@ -1221,6 +1228,7 @@ void WorldRenderer::loadDebugConfig()
   histEqTonemappingRefinedW = unwrap(reader.read<float>());
   histEqTonemappingMinAdmissibleLum = unwrap(reader.read<float>());
   histEqTonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
+  acesExposure = unwrap(reader.read<float>());
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
 
   validate_hist_tonemapping_coeffs(
@@ -1271,6 +1279,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(histEqTonemappingRefinedW));
   ETNA_VERIFY(writer.write(histEqTonemappingMinAdmissibleLum));
   ETNA_VERIFY(writer.write(histEqTonemappingMaxAdmissibleLum));
+  ETNA_VERIFY(writer.write(acesExposure));
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());

@@ -95,13 +95,14 @@ private:
   {
     HISTOGRAM_EQ = 0,
     REINHARD,
+    ACES,
 
     COUNT
   };
   static constexpr size_t TONEMAPPING_TECHNIQUE_COUNT = size_t(TonemappingTechnique::COUNT);
 
   static constexpr std::array<std::string_view, TONEMAPPING_TECHNIQUE_COUNT>
-    TONEMAPPING_TECHNIQUE_NAMES = {"Histogram equalization", "Reinhard"};
+    TONEMAPPING_TECHNIQUE_NAMES = {"Histogram equalization", "Reinhard", "ACES"};
 
 private:
   std::unique_ptr<SceneManager> sceneMgr;
@@ -177,7 +178,8 @@ private:
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
-  TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::HISTOGRAM_EQ;
+  float acesExposure = 2.f;
+  TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
 
 private:
   void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);

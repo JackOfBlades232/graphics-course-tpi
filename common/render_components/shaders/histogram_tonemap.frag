@@ -72,5 +72,5 @@ void main(void)
     ldrColor = clamp(hdrColor.xyz, 0.f, 1.f);
   }
 
-  out_fragColor = vec4(ldrColor, 1.f);
+  out_fragColor = vec4(pow(ldrColor, vec3(1.f/2.2f)), 1.f);
 }
