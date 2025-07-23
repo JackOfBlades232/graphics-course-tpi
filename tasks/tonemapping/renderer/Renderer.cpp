@@ -64,7 +64,7 @@ void Renderer::initFrameDelivery(vk::UniqueSurfaceKHR a_surface, ResolutionProvi
   auto [w, h] = window->recreateSwapchain(etna::Window::DesiredProperties{
     .resolution = {resolution.x, resolution.y},
     .vsync = useVsync,
-    .autoGamma = true
+    .autoGamma = false
   });
 
   resolution = {w, h};
