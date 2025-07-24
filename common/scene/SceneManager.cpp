@@ -3,11 +3,13 @@
 #include "SceneManager.hpp"
 #include "etna/Assert.hpp"
 
-#include <filesystem>
-#include <stack>
-#include <unordered_map>
-
 #include <JB_terrain/JbTerrain.hpp>
+
+#include <render_utils/Common.hpp>
+
+#include <quantization.h>
+#include <materials.h>
+#include <geometry.h>
 
 #include <spdlog/spdlog.h>
 #include <fmt/std.h>
@@ -17,10 +19,9 @@
 #include <etna/GlobalContext.hpp>
 #include <etna/OneShotCmdMgr.hpp>
 
-#include <quantization.h>
-#include <materials.h>
-#include <geometry.h>
-
+#include <filesystem>
+#include <stack>
+#include <unordered_map>
 
 SceneManager::SceneManager()
   : oneShotCommands{etna::get_context().createOneShotCmdMgr()}
@@ -696,7 +697,9 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     samplers.emplace_back(etna::Sampler::CreateInfo{
       .filter = vk::Filter::eNearest,
       .addressMode = vk::SamplerAddressMode::eRepeat,
-      .name = "<default sampler>"});
+      .name = "<default_sampler>",
+      .minLod = 0.f,
+      .maxLod = VK_LOD_CLAMP_NONE});
 
     auto hashGltfSampler = [](const tinygltf::Sampler& smp) {
       auto hasher = std::hash<int>{};
@@ -733,7 +736,11 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
                : vk::SamplerAddressMode::eRepeat);
 
         samplers.emplace_back(etna::Sampler::CreateInfo{
-          .filter = filterMode, .addressMode = addressMode, .name = loadedSampler.name});
+          .filter = filterMode,
+          .addressMode = addressMode,
+          .name = loadedSampler.name,
+          .minLod = 0.f,
+          .maxLod = VK_LOD_CLAMP_NONE});
       }
     }
   }
@@ -884,13 +891,13 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
                                                                       : requiredImageFormats[i];
 
       etna::Image img = etna::get_context().createImage(etna::Image::CreateInfo{
-        .extent = {(uint32_t)loadedImg.width, (uint32_t)loadedImg.height, 1},
+        .extent = {uint32_t(loadedImg.width), uint32_t(loadedImg.height), 1},
         .name = loadedImg.uri,
         .format = format,
         .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-          vk::ImageUsageFlagBits::eTransferDst});
+          vk::ImageUsageFlagBits::eTransferDst,
+        .mipLevels = mip_count_for_dims(uint32_t(loadedImg.width), uint32_t(loadedImg.height))});
 
-      // @TODO: gen mips
       // @TODO: batch uploads, or make a streaming thread, this hangs hard on start
       transferHelper.uploadImage(
         *oneShotCommands,
@@ -904,6 +911,16 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
 
       textures.push_back(std::move(img));
     }
+  }
+
+  // @TODO: mix into frames, and make this an api of the SceneManager instead
+  {
+    auto cmdBuf = oneShotCommands->start();
+    ETNA_CHECK_VK_RESULT(cmdBuf.begin(vk::CommandBufferBeginInfo{}));
+    for (auto& tex : textures)
+      gen_mips(cmdBuf, tex);
+    ETNA_CHECK_VK_RESULT(cmdBuf.end());
+    oneShotCommands->submitAndWait(cmdBuf);
   }
 
   // @TODO: make terrain also use a material?

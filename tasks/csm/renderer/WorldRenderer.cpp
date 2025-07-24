@@ -94,7 +94,8 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
-  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
+  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
+    .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
 
   constants.emplace(wc, [&ctx](size_t) {
     return ctx.createBuffer(etna::Buffer::CreateInfo{
