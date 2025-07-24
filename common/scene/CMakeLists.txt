@@ -1,7 +1,8 @@
 
 add_library(scene
   SceneManager.cpp
-  gltf_jb_ext/JB_terrain/JbTerrain.cpp)
+  gltf_jb_ext/JB_terrain/JbTerrain.cpp
+  gltf_jb_ext/JB_skybox/JbSkybox.cpp)
 
 target_include_directories(scene PUBLIC .. gltf_jb_ext)
 

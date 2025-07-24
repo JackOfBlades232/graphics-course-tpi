@@ -1,11 +1,17 @@
 #ifndef BINDLESS_H_INCLUDED
 #define BINDLESS_H_INCLUDED
 
+#extension GL_EXT_nonuniform_qualifier : enable
+
 #include "common.frag.inc"
 
 #define BINDLESS_SAMPLER(ids_)                 \
   sampler2D(                                   \
     bindlessTextures[nonuniformEXT((ids_).x)], \
+    bindlessSamplers[nonuniformEXT((ids_).y)])
+#define BINDLESS_CUBE_SAMPLER(ids_)                \
+  samplerCube(                                     \
+    bindlessCubeTextures[nonuniformEXT((ids_).x)], \
     bindlessSamplers[nonuniformEXT((ids_).y)])
 
 layout(binding = 0, set = 1) readonly buffer material_params_t
@@ -13,6 +19,7 @@ layout(binding = 0, set = 1) readonly buffer material_params_t
   Material materialParams[];
 };
 layout(binding = 0, set = 2) uniform texture2D bindlessTextures[];
+layout(binding = 0, set = 2) uniform textureCube bindlessCubeTextures[];
 layout(binding = 0, set = 3) uniform sampler bindlessSamplers[];
 
 vec4 sample_bindless_tex(TexSmpIdPair ids, vec2 uv)
@@ -31,6 +38,24 @@ vec4 sample_bindless_tex_lod(TexSmpIdPair ids, vec2 uv, float lod)
 
   const uvec2 texSmpIds = unpack_tex_smp_id_pair(ids);
   return textureLod(BINDLESS_SAMPLER(texSmpIds), uv, lod);
+}
+
+vec4 sample_bindless_tex_cube(TexSmpIdPair ids, vec3 uv)
+{
+  if (ids == NO_TEXTURE_ID)
+    return vec4(1.0f);
+
+  const uvec2 texSmpIds = unpack_tex_smp_id_pair(ids);
+  return texture(BINDLESS_CUBE_SAMPLER(texSmpIds), uv);
+}
+
+vec4 sample_bindless_tex_cube_lod(TexSmpIdPair ids, vec3 uv, float lod)
+{
+  if (ids == NO_TEXTURE_ID)
+    return vec4(1.0f);
+
+  const uvec2 texSmpIds = unpack_tex_smp_id_pair(ids);
+  return textureLod(BINDLESS_CUBE_SAMPLER(texSmpIds), uv, lod);
 }
 
 vec4 sample_bindless_tex_bicubic(TexSmpIdPair ids, vec2 uv)
