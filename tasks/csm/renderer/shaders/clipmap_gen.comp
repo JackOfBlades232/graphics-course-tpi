@@ -232,11 +232,20 @@ void main(void)
       }
     }
 
-    rh += disp / totw;
+    if (constants.drawTerrainSplattedDetail == 0)
+    {
+      color = vec3(0.2, 0.8, 0.5);
+      matData = vec3(float(MATERIAL_DIFFUSE), 0.f, 0.f);
+      n = baseN;
+    }
+    else
+    {
+      rh += disp / totw;
+      color /= totw;
+      matData /= totw;
+      n = normalize(n / totw);
+    }
     h = to_abs_height(rh);
-    color /= totw;
-    matData /= totw;
-    n = normalize(n / totw);
   }
 
   imageStore(geom[params.level], destImageCoord, vec4(h));

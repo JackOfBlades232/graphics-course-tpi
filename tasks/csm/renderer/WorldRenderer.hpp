@@ -184,6 +184,7 @@ private:
   bool wireframe = false;
   bool drawScene = true;
   bool drawTerrain = true;
+  bool drawTerrainSplattedDetail = true;
   bool doSatCulling = true;
   bool enableSkybox = true;
   bool doTonemapping = true;
@@ -217,5 +218,11 @@ private:
     auto tonemapper = std::make_unique<T>();
     tonemapperComps[size_t(technique)] = tonemapper.get();
     rcomponents.emplace_back(std::move(tonemapper));
+  }
+
+  void invalidateClipmap()
+  {
+    if (terrain)
+      constantsData.toroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   }
 };

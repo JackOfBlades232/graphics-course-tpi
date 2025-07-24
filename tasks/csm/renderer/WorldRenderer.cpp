@@ -242,7 +242,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         uint32_t(i));
     }
 
-    constantsData.toroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+    invalidateClipmap();
   }
   else
   {
@@ -504,6 +504,7 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.cullingMode = doSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
 
     constantsData.useSkybox = skybox.has_value() && enableSkybox;
+    constantsData.drawTerrainSplattedDetail = terrain.has_value() && drawTerrainSplattedDetail;
 
     constantsData.useTonemapping = doTonemapping;
     constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
@@ -1041,6 +1042,12 @@ void WorldRenderer::drawGui()
 
       ImGui::Checkbox("Draw scene", &drawScene);
       ImGui::Checkbox("Draw terrain", &drawTerrain);
+      if (drawTerrain)
+      {
+        ImGui::Checkbox("Draw terrain splatted details", &drawTerrainSplattedDetail);
+        if (ImGui::Button("Invalidate clipmap"))
+          invalidateClipmap();
+      }
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
@@ -1260,6 +1267,7 @@ void WorldRenderer::loadDebugConfig()
   wireframe = unwrap(reader.read<bool>());
   drawScene = unwrap(reader.read<bool>());
   drawTerrain = unwrap(reader.read<bool>());
+  drawTerrainSplattedDetail = unwrap(reader.read<bool>());
   doSatCulling = unwrap(reader.read<bool>());
   enableSkybox = unwrap(reader.read<bool>());
   doTonemapping = unwrap(reader.read<bool>());
@@ -1312,6 +1320,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(wireframe));
   ETNA_VERIFY(writer.write(drawScene));
   ETNA_VERIFY(writer.write(drawTerrain));
+  ETNA_VERIFY(writer.write(drawTerrainSplattedDetail));
   ETNA_VERIFY(writer.write(doSatCulling));
   ETNA_VERIFY(writer.write(enableSkybox));
   ETNA_VERIFY(writer.write(doTonemapping));
