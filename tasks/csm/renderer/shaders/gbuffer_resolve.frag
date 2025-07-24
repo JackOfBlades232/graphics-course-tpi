@@ -5,6 +5,7 @@
 #include "lights.h"
 #include "materials.h"
 #include "constants.h"
+#include "skybox.h"
 
 
 layout(location = 0) out vec4 out_fragColor;
@@ -14,16 +15,22 @@ layout(binding = 1, set = 0) uniform light_data_t
   UniformLights lights;
 };
 
+layout(binding = 2, set = 0) uniform sampler2D gbufAlbedo;
+layout(binding = 3, set = 0) uniform sampler2D gbufMaterial;
+layout(binding = 4, set = 0) uniform sampler2D gbufNormal;
+
+layout(binding = 5, set = 0) uniform sampler2D gbufDepth;
+
+layout(binding = 7, set = 0) uniform skybox_t
+{
+  SkyboxSourceData skybox;
+};
 layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
 };
 
-layout(binding = 0, set = 1) uniform sampler2D gbufAlbedo;
-layout(binding = 1, set = 1) uniform sampler2D gbufMaterial;
-layout(binding = 2, set = 1) uniform sampler2D gbufNormal;
-
-layout(binding = 8, set = 1) uniform sampler2D gbufDepth;
+#include "bindless.glsl.inc"
 
 layout(location = 0) in VS_OUT
 {
@@ -142,21 +149,25 @@ void main(void)
 {
   // Unpack gbuffer
   const float depth = texture(gbufDepth, surf.texCoord).x;
-  if (depth > 0.9999999f)
-  {
-    out_fragColor = vec4(vec3(0.f), 1.f);
-    return;
-  }
 
   const mat4 invView = inverse(constants.mView);
   const vec3 camPos = invView[3].xyz / invView[3].w;
 
+  const vec3 pos = depth_and_tc_to_pos(depth, surf.texCoord);
+  const vec3 viewVec = normalize(camPos - pos);
+
+  if (depth > 0.999999f)
+  {
+    if (constants.useSkybox == 0)
+      out_fragColor = vec4(0.f, 0.f, 0.f, 1.f);
+    else
+      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, -vec3(viewVec));
+    return;
+  }
+
   const vec3 albedo = texture(gbufAlbedo, surf.texCoord).xyz;
   const vec4 matData = texture(gbufMaterial, surf.texCoord);
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
-
-  const vec3 pos = depth_and_tc_to_pos(depth, surf.texCoord);
-  const vec3 viewVec = normalize(camPos - pos);
 
   const uint mat = uint(matData.x); 
 

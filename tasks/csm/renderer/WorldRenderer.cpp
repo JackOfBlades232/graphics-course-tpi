@@ -114,6 +114,17 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
 
+  stubUniBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = 16,
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .name = "stub_uniform"});
+  stubStorageBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = 16,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "stub_storage"});
+
   for (auto& component : rcomponents)
     component->allocateResources(resolution);
 }
@@ -137,7 +148,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .size = sizeof(sceneMgr->getTerrainData()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "terrain"});
+      .name = "terrain_data"});
 
     memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
 
@@ -234,7 +245,29 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     constantsData.toroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   }
   else
+  {
     spdlog::info("JB_terrain: terrain not present");
+  }
+
+  if (sceneMgr->hasSkybox())
+  {
+    spdlog::info("JB_skybox: skybox loaded!");
+
+    skybox.emplace(SkyboxRenderingData{});
+
+    memcpy(&skybox->sourceData, &sceneMgr->getSkyboxData(), sizeof(sceneMgr->getSkyboxData()));
+    skybox->source = ctx.createBuffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getSkyboxData()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "skybox_data"});
+
+    memcpy(skybox->source.map(), &skybox->sourceData, sizeof(skybox->sourceData));
+  }
+  else
+  {
+    spdlog::info("JB_skybox: skybox not present");
+  }
 
   auto fragProgInfo = etna::get_shader_program("static_mesh");
   auto compProgInfo = etna::get_shader_program("clipmap_gen");
@@ -254,8 +287,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   for (size_t i = 0; i < sceneMgr->getTextures().size(); ++i)
   {
     const auto& tex = sceneMgr->getTextures()[i];
-    texBindings.emplace_back(
-      etna::Binding{0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal), uint32_t(i)});
+    etna::Image::ViewParams vps{};
+    if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
+      vps.type = vk::ImageViewType::eCube;
+    texBindings.emplace_back(etna::Binding{
+      0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
     registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", i, tex.getName()));
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
@@ -466,6 +502,8 @@ void WorldRenderer::update(const FramePacket& packet)
 
   {
     constantsData.cullingMode = doSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
+
+    constantsData.useSkybox = skybox.has_value() && enableSkybox;
 
     constantsData.useTonemapping = doTonemapping;
     constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
@@ -761,28 +799,27 @@ void WorldRenderer::renderWorld(
         gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(0),
         cmd_buf,
         {etna::Binding{1, lights->get().genBinding()},
-         etna::Binding{8, constants->get().genBinding()}});
-
-      auto gbufSet = etna::create_descriptor_set(
-        gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(1),
-        cmd_buf,
-        {etna::Binding{
-           0, gbufAlbedo.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
-           1,
+           2, gbufAlbedo.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+         etna::Binding{
+           3,
            gbufMaterial.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
-           2, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           4, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
-           8,
-           mainViewDepth.genBinding(
-             defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}});
+           5,
+           mainViewDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+         etna::Binding{7, (skybox ? skybox->source : stubUniBuffer).genBinding()},
+         etna::Binding{8, constants->get().genBinding()}});
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
         gbufferResolver->pipelineLayout(),
         0,
-        {set.getVkSet(), gbufSet.getVkSet()},
+        {set.getVkSet(),
+         materialParamsDsetFrag.getVkSet(),
+         bindlessTexturesDsetFrag.getVkSet(),
+         bindlessSamplersDsetFrag.getVkSet()},
         {});
 
       gbufferResolver->render(cmd_buf, hdrTarget.get(), hdrTarget.getView({}));
@@ -1005,6 +1042,7 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Draw scene", &drawScene);
       ImGui::Checkbox("Draw terrain", &drawTerrain);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
+      ImGui::Checkbox("Enable skybox", &enableSkybox);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
       {
@@ -1223,6 +1261,7 @@ void WorldRenderer::loadDebugConfig()
   drawScene = unwrap(reader.read<bool>());
   drawTerrain = unwrap(reader.read<bool>());
   doSatCulling = unwrap(reader.read<bool>());
+  enableSkybox = unwrap(reader.read<bool>());
   doTonemapping = unwrap(reader.read<bool>());
   useSharedMemForTonemapping = unwrap(reader.read<bool>());
   histEqTonemappingRegW = unwrap(reader.read<float>());
@@ -1274,6 +1313,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(drawScene));
   ETNA_VERIFY(writer.write(drawTerrain));
   ETNA_VERIFY(writer.write(doSatCulling));
+  ETNA_VERIFY(writer.write(enableSkybox));
   ETNA_VERIFY(writer.write(doTonemapping));
   ETNA_VERIFY(writer.write(useSharedMemForTonemapping));
   ETNA_VERIFY(writer.write(histEqTonemappingRegW));

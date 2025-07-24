@@ -4,6 +4,7 @@
 #include "etna/Assert.hpp"
 
 #include <JB_terrain/JbTerrain.hpp>
+#include <JB_skybox/JbSkybox.hpp>
 
 #include <render_utils/Common.hpp>
 
@@ -875,6 +876,15 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     }
   }
 
+  int cubemapLoadedId = -1;
+
+  if (auto skyboxExt = jb_skybox_parse_desc(model))
+  {
+    auto& data = skyboxData.emplace();
+    cubemapLoadedId = skyboxExt->cubemap;
+    data.cubemapTexSmp = idPairForTexture(cubemapLoadedId);
+  }
+
   {
     textures.reserve(model.images.size());
     for (size_t i = 0; i < model.images.size(); ++i)
@@ -887,27 +897,80 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
           TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE); // @TODO: support or graciously err
 
       // Needed until it's pruned for usage
-      auto format = requiredImageFormats[i] == vk::Format::eUndefined ? vk::Format::eR8G8B8A8Unorm
-                                                                      : requiredImageFormats[i];
+      const auto format = requiredImageFormats[i] == vk::Format::eUndefined
+        ? vk::Format::eR8G8B8A8Unorm
+        : requiredImageFormats[i];
 
-      etna::Image img = etna::get_context().createImage(etna::Image::CreateInfo{
-        .extent = {uint32_t(loadedImg.width), uint32_t(loadedImg.height), 1},
-        .name = loadedImg.uri,
-        .format = format,
-        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-          vk::ImageUsageFlagBits::eTransferDst,
-        .mipLevels = mip_count_for_dims(uint32_t(loadedImg.width), uint32_t(loadedImg.height))});
+      etna::Image img;
 
-      // @TODO: batch uploads, or make a streaming thread, this hangs hard on start
-      transferHelper.uploadImage(
-        *oneShotCommands,
-        img,
-        0,
-        0,
-        {(const std::byte*)loadedImg.image.data(), loadedImg.image.size()});
+      if (skyboxData && cubemapLoadedId >= 0 && model.textures[cubemapLoadedId].source == int(i))
+      {
+        const uint32_t side = uint32_t(loadedImg.width) / 4;
 
-      loadedImg.image.clear();
-      loadedImg.image.shrink_to_fit();
+        std::array<std::vector<std::byte>, 6> imageDatas{};
+        std::array bases{
+          glm::uvec2{2 * side, side},
+          glm::uvec2{0, side},
+          glm::uvec2{side, 0},
+          glm::uvec2{side, 2 * side},
+          glm::uvec2{side, side},
+          glm::uvec2{3 * side, side}};
+
+        for (size_t i = 0; i < 6; ++i)
+        {
+          auto& data = imageDatas[i];
+          const auto& base = bases[i];
+
+          data.resize(side * side * 4);
+          size_t dstId = 0;
+          for (uint32_t y = base.y; y < base.y + side; ++y)
+            for (uint32_t x = base.x; x < base.x + side; ++x)
+            {
+              memcpy(
+                data.data() + dstId,
+                (const std::byte*)loadedImg.image.data() + (y * uint32_t(loadedImg.width) + x) * 4,
+                4);
+              dstId += 4;
+            }
+        }
+
+        loadedImg.image.clear();
+        loadedImg.image.shrink_to_fit();
+
+        img = etna::get_context().createImage(etna::Image::CreateInfo{
+          .extent = {side, side, 1},
+          .name = loadedImg.uri,
+          .format = format,
+          .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+            vk::ImageUsageFlagBits::eTransferDst,
+          .layers = 6,
+          .mipLevels = mip_count_for_dims(side, side),
+          .flags = vk::ImageCreateFlagBits::eCubeCompatible});
+
+        for (size_t i = 0; i < 6; ++i)
+          transferHelper.uploadImage(*oneShotCommands, img, 0, uint32_t(i), imageDatas[i]);
+      }
+      else
+      {
+        img = etna::get_context().createImage(etna::Image::CreateInfo{
+          .extent = {uint32_t(loadedImg.width), uint32_t(loadedImg.height), 1},
+          .name = loadedImg.uri,
+          .format = format,
+          .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+            vk::ImageUsageFlagBits::eTransferDst,
+          .mipLevels = mip_count_for_dims(uint32_t(loadedImg.width), uint32_t(loadedImg.height))});
+
+        // @TODO: batch uploads, or make a streaming thread, this hangs hard on start
+        transferHelper.uploadImage(
+          *oneShotCommands,
+          img,
+          0,
+          0,
+          {(const std::byte*)loadedImg.image.data(), loadedImg.image.size()});
+
+        loadedImg.image.clear();
+        loadedImg.image.shrink_to_fit();
+      }
 
       textures.push_back(std::move(img));
     }

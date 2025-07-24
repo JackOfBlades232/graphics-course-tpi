@@ -17,6 +17,8 @@
 #include <wsi/Mouse.hpp>
 
 #include <constants.h>
+#include <terrain.h>
+#include <skybox.h>
 
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
@@ -91,6 +93,12 @@ private:
     bool needToroidalUpdate = false;
   };
 
+  struct SkyboxRenderingData
+  {
+    etna::Buffer source{};
+    SkyboxSourceData sourceData{};
+  };
+
   enum class TonemappingTechnique
   {
     HISTOGRAM_EQ = 0,
@@ -126,12 +134,16 @@ private:
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
 
   std::optional<TerrainRenderingData> terrain{};
+  std::optional<SkyboxRenderingData> skybox{};
 
   // @TODO: tweakable
   etna::Buffer culledInstancesBuf;
 
   // @TODO: unify with one in scene manager
   etna::Sampler defaultSampler;
+
+  etna::Buffer stubUniBuffer;
+  etna::Buffer stubStorageBuffer;
 
   etna::PersistentDescriptorSet materialParamsDsetFrag, bindlessTexturesDsetFrag,
     bindlessSamplersDsetFrag;
@@ -173,6 +185,7 @@ private:
   bool drawScene = true;
   bool drawTerrain = true;
   bool doSatCulling = true;
+  bool enableSkybox = true;
   bool doTonemapping = true;
   bool useSharedMemForTonemapping = false;
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;

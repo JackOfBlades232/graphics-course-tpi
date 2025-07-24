@@ -3381,7 +3381,8 @@
   "extensionsUsed": [
     "KHR_materials_pbrSpecularGlossiness",
     "KHR_lights_punctual",
-    "JB_terrain"
+    "JB_terrain",
+    "JB_skybox"
   ],
   "images": [
     {
@@ -3431,6 +3432,9 @@
     },
     {
       "uri": "textures/terrain/sand/desert-rocks1-Normal-ogl.png"
+    },
+    {
+      "uri": "textures/skybox.png"
     }
   ],
   "materials": [
@@ -3980,6 +3984,11 @@
           "scale": [5.0, 5.0]
         }
       ]
+    },
+    "JB_skybox": {
+      "cubemap": {
+        "index": 16
+      }
     }
   },
   "meshes": [
@@ -6410,6 +6419,12 @@
       "minFilter": 9984,
       "wrapS": 33071,
       "wrapT": 33071
+    },
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 33071,
+      "wrapT": 33071
     }
   ],
   "scene": 0,
@@ -6485,6 +6500,10 @@
     {
       "sampler": 1,
       "source": 15
+    },
+    {
+      "sampler": 2,
+      "source": 16
     }
   ]
 }

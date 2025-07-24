@@ -20,6 +20,7 @@
 #include <geometry.h>
 #include <draw.h>
 #include <terrain.h>
+#include <skybox.h>
 
 struct RenderElement
 {
@@ -93,14 +94,22 @@ public:
     return *terrainData;
   }
 
+  bool hasSkybox() const { return skyboxData.has_value(); }
+  const SkyboxSourceData& getSkyboxData() const
+  {
+    ETNA_ASSERT(hasSkybox());
+    return *skyboxData;
+  }
+
   // For imgui, kinda hacky
   UniformLights& lightsRW() { return *lightsData; }
 
-  static constexpr std::array<std::string_view, 4> SUPPORTED_EXTENSIONS = {
+  static constexpr std::array<std::string_view, 5> SUPPORTED_EXTENSIONS = {
     "KHR_lights_punctual",
     "KHR_materials_pbrSpecularGlossiness",
     "KHR_mesh_quantization",
-    "JB_terrain"};
+    "JB_terrain",
+    "JB_skybox"};
 
 private:
   std::optional<tinygltf::Model> loadModel(std::filesystem::path path);
@@ -177,6 +186,7 @@ private:
   std::unique_ptr<UniformLights> lightsData{};
 
   std::optional<TerrainSourceData> terrainData{};
+  std::optional<SkyboxSourceData> skyboxData{};
 
   // @TODO: do we support reentrability in selectScene?
   std::vector<etna::Image> textures{};

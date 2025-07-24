@@ -963,7 +963,8 @@
   ],
   "extensionsUsed": [
     "KHR_materials_transmission",
-    "KHR_lights_punctual"
+    "KHR_lights_punctual",
+    "JB_skybox"
   ],
   "extensions": {
     "KHR_lights_punctual": {
@@ -1022,6 +1023,11 @@
           "type": "point"
         }
       ]
+    },
+    "JB_skybox": {
+      "cubemap": {
+        "index": 12
+      }
     }
   },
   "images": [
@@ -1060,6 +1066,9 @@
     },
     {
       "uri": "textures/material_11_baseColor.png"
+    },
+    {
+      "uri": "textures/skybox.png"
     }
   ],
   "materials": [
@@ -1993,6 +2002,12 @@
       "minFilter": 9987,
       "wrapS": 10497,
       "wrapT": 10497
+    },
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 33071,
+      "wrapT": 33071
     }
   ],
   "scene": 0,
@@ -2052,6 +2067,10 @@
     {
       "sampler": 0,
       "source": 11
+    },
+    {
+      "sampler": 1,
+      "source": 12
     }
   ]
 }
