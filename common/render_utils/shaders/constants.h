@@ -31,8 +31,9 @@ struct Constants
   float acesExposure;
 
   shader_uint useSkybox;
+  shader_uint drawTerrainSplattedDetail;
 
-  shader_uint pad1_, pad2_, pad3_;
+  shader_uint pad1_;
 };
 
 #endif // CONSTANTS_H_INCLUDED
