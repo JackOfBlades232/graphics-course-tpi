@@ -1044,8 +1044,9 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Draw terrain", &drawTerrain);
       if (drawTerrain)
       {
+        const bool prevDetailOn = drawTerrainSplattedDetail;
         ImGui::Checkbox("Draw terrain splatted details", &drawTerrainSplattedDetail);
-        if (ImGui::Button("Invalidate clipmap"))
+        if (prevDetailOn != drawTerrainSplattedDetail)
           invalidateClipmap();
       }
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
