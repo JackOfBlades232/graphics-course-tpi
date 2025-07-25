@@ -51,7 +51,8 @@ float sample_rel_height_uv(vec2 uv, vec2 worldUv)
   relHeight += TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
 
   // @TODO seed
-  relHeight +=
+  // @TEST
+  relHeight += 0.f *
     simplex_noise(worldUv * TERRAIN_NOISE_PERIOD) *
     TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
 
@@ -225,9 +226,9 @@ void main(void)
           }
         }
 
-        color += detCol;
-        matData += detMatdata;
-        n += detNorm;
+        color += detCol * w;
+        matData += detMatdata * w;
+        n += detNorm * w;
         totw += w;
       }
     }

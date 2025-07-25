@@ -22,7 +22,7 @@ public:
   Renderer(glm::uvec2 resolution, const Config& config);
   ~Renderer();
 
-  void initVulkan(std::span<const char*> instance_extensions);
+  void initVulkan(const char *app_name, std::span<const char*> instance_extensions);
   void initFrameDelivery(vk::UniqueSurfaceKHR surface, ResolutionProvider res_provider);
   void recreateSwapchain(glm::uvec2 res);
   void loadScene(std::filesystem::path path);

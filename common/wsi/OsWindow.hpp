@@ -41,6 +41,8 @@ public:
     // Use this to save the new resolution and recreate various
     // resolution-dependent resources while the window is being resized.
     OsWindowResizeCb resizeCb = {};
+
+    std::string name = "<sample>";
   };
 
   OsWindow(const OsWindow&) = delete;

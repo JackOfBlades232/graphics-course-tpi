@@ -26,12 +26,14 @@ App::App(const char* scene_name, std::span<const char* const> argv)
   glm::uvec2 initialRes = {1280, 720};
   mainWindow = windowing.createWindow(OsWindow::CreateInfo{
     .resolution = initialRes,
-  });
+    .resizeable = true,
+    // @TODO: provide some refresh capability while resizing, and check if we need spec on-resize
+    .name = std::string{NAME}});
 
   render.reset(new Renderer{initialRes, cfg});
 
   auto instExts = windowing.getRequiredVulkanInstanceExtensions();
-  render->initVulkan(instExts);
+  render->initVulkan(NAME.data(), instExts);
 
   auto surface = mainWindow->createVkSurface(etna::get_context().getInstance());
 
