@@ -57,7 +57,7 @@ struct TerrainSourceData
 #define TERRAIN_CHUNK_TESSELLATION_FACTOR 64
 #define TERRAIN_NORMAL_SAMPLING_PIXEL_OFFS 0.01f
 
-#define TERRAIN_DETAIL_LEVEL_FALLOFF 0.01f
+#define TERRAIN_DETAIL_LEVEL_FALLOFF 0.001f
 
 // @TODO: sort out maths around toroidal, now it's kinda hacky
 

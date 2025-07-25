@@ -16,6 +16,8 @@ public:
 
   void run();
 
+  static constexpr std::string_view NAME = "JB-renderer[csm]";
+
 private:
   void processInput(float dt);
   void drawFrame();

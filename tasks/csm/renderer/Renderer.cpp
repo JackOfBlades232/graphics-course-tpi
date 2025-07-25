@@ -15,7 +15,7 @@ Renderer::Renderer(glm::uvec2 res, const Config& config)
 {
 }
 
-void Renderer::initVulkan(std::span<const char*> instance_extensions)
+void Renderer::initVulkan(const char* app_name, std::span<const char*> instance_extensions)
 {
   std::vector<const char*> instanceExtensions;
 
@@ -32,7 +32,7 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
     .runtimeDescriptorArray = true};
 
   etna::initialize(etna::InitParams{
-    .applicationName = "renderer",
+    .applicationName = app_name,
     .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
     .instanceExtensions = instanceExtensions,
     .deviceExtensions = deviceExtensions,
@@ -62,10 +62,7 @@ void Renderer::initFrameDelivery(vk::UniqueSurfaceKHR a_surface, ResolutionProvi
   });
 
   auto [w, h] = window->recreateSwapchain(etna::Window::DesiredProperties{
-    .resolution = {resolution.x, resolution.y},
-    .vsync = useVsync,
-    .autoGamma = false
-  });
+    .resolution = {resolution.x, resolution.y}, .vsync = useVsync, .autoGamma = false});
 
   resolution = {w, h};
 
@@ -90,7 +87,9 @@ void Renderer::debugInput(const Keyboard& kb, const Mouse& ms, bool mouse_captur
   if (kb[KeyboardKey::kB] == ButtonState::Falling)
   {
     const int retval = std::system("cd " GRAPHICS_COURSE_ROOT "/build"
-                                   " && cmake --build . --target renderer_shaders");
+                                   " && cmake --build . --target renderer_shaders"
+                                   " && cmake --build . --target render_utils_shaders"
+                                   " && cmake --build . --target render_components_shaders");
     if (retval != 0)
       spdlog::warn("Shader recompilation returned a non-zero return code!");
     else
@@ -164,16 +163,24 @@ void Renderer::drawFrame()
       nextSwapchainImage = std::nullopt;
   }
 
+  etna::end_frame();
+
   if (!nextSwapchainImage && resolutionProvider() != glm::uvec2{0, 0})
   {
+    auto newResolution = resolutionProvider();
     auto [w, h] = window->recreateSwapchain(etna::Window::DesiredProperties{
-      .resolution = {resolution.x, resolution.y},
-      .vsync = useVsync,
-    });
-    ETNA_VERIFY((resolution == glm::uvec2{w, h}));
-  }
+      .resolution = {newResolution.x, newResolution.y}, .vsync = useVsync, .autoGamma = false});
 
-  etna::end_frame();
+    if (resolution != glm::uvec2{w, h})
+    {
+      ETNA_CHECK_VK_RESULT(etna::get_context().getDevice().waitIdle());
+      resolution = {w, h};
+      worldRenderer->allocateResources(resolution);
+      worldRenderer->setupPipelines(window->getCurrentFormat()); // Recreate PostfxRenderers
+    }
+
+    spdlog::info("Swapchain was recreated with resolution ({}, {})", w, h);
+  }
 }
 
 Renderer::~Renderer()

@@ -3973,13 +3973,13 @@
       "details" : [
         {
           "name": "grass",
-          "relHeightRange": [0.29, 1.0],
+          "relHeightRange": [0.2995, 1.0],
           "material": 19,
           "scale": [5.0, 5.0]
         },
         {
           "name": "sand",
-          "relHeightRange": [0.0, 0.31],
+          "relHeightRange": [0.0, 0.3005],
           "material": 20,
           "scale": [5.0, 5.0]
         }
