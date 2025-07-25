@@ -207,9 +207,9 @@ void main(void)
       if (w > SHADER_EPSILON)
       {
         // @TODO: bring this back into one call
-        const vec3 detCol = get_pixel_albedo_lod(source.details[i].matId, uv, 0.f).xyz;
-        const vec3 detMatdata = get_pixel_matdata_lod(source.details[i].matId, uv, 0.f);
-        const vec3 detNorm = get_pixel_normal_lod(source.details[i].matId, baseN, tang, uv, 0.f);
+        const vec3 detCol = get_pixel_albedo_lod(source.details[i].matId, uv, float(params.level)).xyz;
+        const vec3 detMatdata = get_pixel_matdata_lod(source.details[i].matId, uv, float(params.level));
+        const vec3 detNorm = get_pixel_normal_lod(source.details[i].matId, baseN, tang, uv, float(params.level));
 
         {
           const uint matId = source.details[i].matId;
@@ -220,7 +220,7 @@ void main(void)
 
             if (dispTexId != NO_TEXTURE_ID && abs(dispCoeff) > SHADER_EPSILON)
             {
-              disp += sample_bindless_tex_lod(dispTexId, uv, 0.f).x * dispCoeff;
+              disp += sample_bindless_tex_lod(dispTexId, uv, float(params.level)).x * dispCoeff;
             }
           }
         }
