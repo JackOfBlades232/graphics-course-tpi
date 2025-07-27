@@ -156,7 +156,7 @@ void main(void)
   const vec3 pos = depth_and_tc_to_pos(depth, surf.texCoord);
   const vec3 viewVec = normalize(camPos - pos);
 
-  if (depth > 0.9999999f)
+  if (depth >= 1.f)
   {
     if (constants.useSkybox == 0)
       out_fragColor = vec4(0.f, 0.f, 0.f, 1.f);

@@ -43,31 +43,35 @@ struct TerrainSourceData
 // @TODO: tweakable
 #define CLIPMAP_RESOLUTION 2048
 #define CLIPMAP_HALF_RESOLUTION (CLIPMAP_RESOLUTION / 2)
-#define CLIPMAP_EXTENT_STEP 5.f
-#define CLIPMAP_UPDATE_MIN_DPOS 0.1f
+#define CLIPMAP_EXTENT_STEP 10.f
 
-// @TODO: tweakable?
+#define CLIPMAP_LEVEL_WSIZE(level_) (CLIPMAP_EXTENT_STEP * float(1u << (level_)) * 2.f)
+
 #define TERRAIN_CHUNKS_LEVEL_DIM 4
 #define TERRAIN_FIRST_LEVEL_CHUNKS (TERRAIN_CHUNKS_LEVEL_DIM * TERRAIN_CHUNKS_LEVEL_DIM)
 #define TERRAIN_OTHER_LEVELS_CHUNKS (TERRAIN_FIRST_LEVEL_CHUNKS - (TERRAIN_FIRST_LEVEL_CHUNKS / 4))
 
-// @TODO: not only tweakable, but dependent on data
-#define TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE 0.001f
-#define TERRAIN_NOISE_PERIOD 0.25f
 #define TERRAIN_CHUNK_TESSELLATION_FACTOR 64
 #define TERRAIN_NORMAL_SAMPLING_PIXEL_OFFS 0.01f
 
 #define TERRAIN_DETAIL_LEVEL_FALLOFF 0.001f
 
-// @TODO: sort out maths around toroidal, now it's kinda hacky
+#define CLIMPAP_UPDATE_GRID_SIZE                                                                   \
+  (CLIPMAP_LEVEL_WSIZE(CLIPMAP_LEVEL_COUNT - 1) /                                                  \
+   float(TERRAIN_CHUNK_TESSELLATION_FACTOR * TERRAIN_CHUNKS_LEVEL_DIM))
 
+shader_inline shader_vec2 snap_to_toroidal_update_grid(shader_vec2 pos)
+{
+  return shader_floor(pos / CLIMPAP_UPDATE_GRID_SIZE + 0.5f) * CLIMPAP_UPDATE_GRID_SIZE;
+}
+
+// @TODO: now offset should be snapped, remove redundant calculations
 shader_inline shader_ivec2 calculate_toroidal_dims(shader_vec2 w_offset, shader_uint level)
 {
-  const float worldSize = 2.f * CLIPMAP_EXTENT_STEP * float(1 << level);
-  const float imageSize = float(CLIPMAP_RESOLUTION * (1 << level));
+  const float worldSize = CLIPMAP_LEVEL_WSIZE(level);
+  const float imageSize = float(CLIPMAP_RESOLUTION);
   const shader_vec2 levelUvOffset = shader_clamp(w_offset / worldSize, -1.f, 1.f);
-  shader_ivec2 pixelOffsetRaw = shader_ivec2(round_from_zero(levelUvOffset * imageSize));
-  pixelOffsetRaw += shader_sign(pixelOffsetRaw);
+  shader_ivec2 pixelOffsetRaw = shader_ivec2(levelUvOffset * imageSize);
   return -shader_clamp(
     pixelOffsetRaw,
     -shader_ivec2(CLIPMAP_RESOLUTION, CLIPMAP_RESOLUTION),

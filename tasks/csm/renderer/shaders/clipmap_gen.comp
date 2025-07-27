@@ -47,14 +47,13 @@ float sample_rel_height_uv(vec2 uv, vec2 worldUv)
     relHeight = sample_bindless_tex_bicubic_lod(source.heightmapTexSmp, uv, 0.f).x;
 
   // @TEMP just scale back into [0, 1]
-  relHeight *= 1.f - 2.f * TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
-  relHeight += TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
+  relHeight *= 1.f - 2.f * constants.terrainNoiseRelHeightAmp;
+  relHeight += constants.terrainNoiseRelHeightAmp;
 
   // @TODO seed
-  // @TEST
-  relHeight += 0.f *
-    simplex_noise(worldUv * TERRAIN_NOISE_PERIOD) *
-    TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
+  relHeight +=
+    simplex_noise(worldUv * constants.terrainNoisePeriod) *
+    constants.terrainNoiseRelHeightAmp;
 
   return relHeight;
 }
@@ -108,8 +107,8 @@ void main(void)
 {
   const uint pix = gl_GlobalInvocationID.x;
 
-  const vec2 worldOffset = constants.toroidalOffset.xz;
-  const vec2 worldPos = constants.toroidalUpdatePlayerWorldPos.xz;
+  const vec2 worldOffset = constants.toroidalOffset;
+  const vec2 worldPos = constants.toroidalUpdatePlayerWorldPos;
 
   ivec2 dims = calculate_toroidal_dims(worldOffset, params.level);
 

@@ -15,6 +15,11 @@ layout(binding = 2, set = 0) readonly buffer bboxes_t
   BBox bboxes[];
 };
 
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
 BBox get_inst_bbox(const CullableInstance inst)
 {
   if ((inst.flags & TERRAIN_CHUNK_INSTANCE_FLAG) != 0)
@@ -23,14 +28,14 @@ BBox get_inst_bbox(const CullableInstance inst)
     return bboxes[inst.commandId];
 }
 
-mat4 get_inst_matrix(const CullableInstance inst, const vec3 w_pos)
+mat4 get_inst_matrix(const CullableInstance inst)
 {
   // @TODO: if it is a bottleneck, do faster aabb correct culling for chunks,
   // as they are always axis aligned
 
-  // Bboxes are already world-space for chunks relative to player.
+  // Bboxes are already world-space for chunks relative to toroidal center.
   if ((inst.flags & TERRAIN_CHUNK_INSTANCE_FLAG) != 0)
-    return translation(vec3(w_pos.x, 0.f, w_pos.z));
+    return translation(vec3(constants.toroidalUpdatePlayerWorldPos.x, 0.f, constants.toroidalUpdatePlayerWorldPos.y));
   else
     return instanceMatrices[inst.instId];
 }

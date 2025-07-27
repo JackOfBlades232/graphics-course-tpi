@@ -9,11 +9,6 @@
 
 #include "instancing.glsl.inc"
 
-layout(binding = 8, set = 0) uniform constants_t
-{
-  Constants constants;
-};
-
 const uvec2 edges[] = {
   uvec2(0, 1), uvec2(1, 2), uvec2(2, 3), uvec2(0, 3),
   uvec2(4, 5), uvec2(5, 6), uvec2(6, 7), uvec2(4, 7),
@@ -22,7 +17,7 @@ const uvec2 edges[] = {
 void main()
 {
   const CullableInstance inst = allInstances[gl_InstanceIndex];
-  const mat4 instMat = get_inst_matrix(inst, constants.playerWorldPos);
+  const mat4 instMat = get_inst_matrix(inst);
   const BBox bbox = get_inst_bbox(inst);
 
   const vec4 vs[8] = {

@@ -14,12 +14,17 @@ struct Constants
   shader_vec3 playerWorldPos;
   CullingMode cullingMode;
 
-  shader_vec3 toroidalOffset;
+  shader_vec2 toroidalOffset;
+  shader_vec2 toroidalUpdatePlayerWorldPos;
+
+  float terrainNoiseRelHeightAmp;
+  float terrainNoisePeriod;
+
+  shader_uint drawTerrainSplattedDetail;
+
+  shader_uint useSkybox;
 
   shader_uint useTonemapping;
-
-  shader_vec3 toroidalUpdatePlayerWorldPos;
-
   shader_uint useSharedMemForTonemapping;
 
   float histEqTonemappingRegW;
@@ -30,10 +35,7 @@ struct Constants
   // @TODO: try getting exposure from histogram instead
   float acesExposure;
 
-  shader_uint useSkybox;
-  shader_uint drawTerrainSplattedDetail;
-
-  shader_uint pad1_;
+  shader_uint pad1_, pad2_, pad3_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

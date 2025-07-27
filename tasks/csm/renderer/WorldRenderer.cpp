@@ -238,7 +238,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         uint32_t(i));
     }
 
-    invalidateClipmap();
+    queueClipmapInvalidation();
   }
   else
   {
@@ -485,12 +485,25 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.playerWorldPos = packet.mainCam.position;
     if (terrain)
     {
-      constantsData.toroidalOffset =
-        constantsData.playerWorldPos - constantsData.toroidalUpdatePlayerWorldPos;
-      const float xzDisp =
-        glm::length(glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z});
-      if (xzDisp >= CLIPMAP_UPDATE_MIN_DPOS)
+      if (terrain->invalidateClipmapRequested)
       {
+        constantsData.toroidalUpdatePlayerWorldPos = snap_to_toroidal_update_grid(
+          XZ(constantsData.playerWorldPos) - glm::vec2{CLIPMAP_LEVEL_WSIZE(CLIPMAP_LEVEL_COUNT)});
+        terrain->invalidateClipmapRequested = false;
+      }
+
+      const auto toroidalOffsetRaw =
+        XZ(constantsData.playerWorldPos) - constantsData.toroidalUpdatePlayerWorldPos;
+      const float disp = std::max(glm::abs(toroidalOffsetRaw.x), glm::abs(toroidalOffsetRaw.y));
+      if (disp >= CLIMPAP_UPDATE_GRID_SIZE)
+      {
+        const auto oldToroidalUpdatePos = std::exchange(
+          constantsData.toroidalUpdatePlayerWorldPos,
+          snap_to_toroidal_update_grid(
+            constantsData.toroidalUpdatePlayerWorldPos + toroidalOffsetRaw));
+        constantsData.toroidalOffset =
+          constantsData.toroidalUpdatePlayerWorldPos - oldToroidalUpdatePos;
+
         terrain->needToroidalUpdate = true;
       }
     }
@@ -501,6 +514,9 @@ void WorldRenderer::update(const FramePacket& packet)
 
     constantsData.useSkybox = skybox.has_value() && enableSkybox;
     constantsData.drawTerrainSplattedDetail = terrain.has_value() && drawTerrainSplattedDetail;
+
+    constantsData.terrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
+    constantsData.terrainNoisePeriod = terrainNoisePeriod;
 
     constantsData.useTonemapping = doTonemapping;
     constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
@@ -530,15 +546,6 @@ void WorldRenderer::renderWorld(
     initialTransition = false;
   }
 
-  // @NOTE done here to make it to the gpu frame. A bit hacky.
-  bool updateClipmap = false;
-  if (terrain && terrain->needToroidalUpdate)
-  {
-    updateClipmap = true;
-    terrain->needToroidalUpdate = false;
-    constantsData.toroidalUpdatePlayerWorldPos = constantsData.playerWorldPos;
-  }
-
   memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
   memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
 
@@ -547,9 +554,11 @@ void WorldRenderer::renderWorld(
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
 
-    if (updateClipmap)
+    if (terrain && terrain->needToroidalUpdate)
     {
       ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
+
+      terrain->needToroidalUpdate = false;
 
       auto programInfo = etna::get_shader_program("clipmap_gen");
       std::vector<etna::Binding> bindings{};
@@ -582,11 +591,12 @@ void WorldRenderer::renderWorld(
       cmd_buf.bindPipeline(
         vk::PipelineBindPoint::eCompute, generateClipmapPipeline.getVkPipeline());
 
-      const auto xzOffset =
-        glm::vec2{constantsData.toroidalOffset.x, constantsData.toroidalOffset.z};
       for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
       {
-        const auto dims = calculate_toroidal_dims(xzOffset, shader_uint(i));
+        const auto dims = calculate_toroidal_dims(constantsData.toroidalOffset, shader_uint(i));
+        ETNA_ASSERT(
+          glm::abs(dims) % glm::ivec2(1 << (CLIPMAP_LEVEL_COUNT - 1 - i)) == glm::ivec2(0, 0));
+
         cmd_buf.pushConstants<shader_uint>(
           generateClipmapPipeline.getVkPipelineLayout(),
           vk::ShaderStageFlagBits::eCompute,
@@ -884,15 +894,13 @@ void WorldRenderer::drawGui()
     if (terrain)
     {
       ImGui::Text(
-        "Last toroidal update pos: [%.3f, %.3f, %.3f]",
+        "Last toroidal update pos: [%.3f, %.3f]",
         constantsData.toroidalUpdatePlayerWorldPos.x,
-        constantsData.toroidalUpdatePlayerWorldPos.y,
-        constantsData.toroidalUpdatePlayerWorldPos.z);
+        constantsData.toroidalUpdatePlayerWorldPos.y);
       ImGui::Text(
-        "Toroidal offset: [%.3f, %.3f, %.3f]",
+        "Toroidal offset: [%.3f, %.3f]",
         constantsData.toroidalOffset.x,
-        constantsData.toroidalOffset.y,
-        constantsData.toroidalOffset.z);
+        constantsData.toroidalOffset.y);
     }
     ImGui::End();
   }
@@ -1043,7 +1051,9 @@ void WorldRenderer::drawGui()
         const bool prevDetailOn = drawTerrainSplattedDetail;
         ImGui::Checkbox("Draw terrain splatted details", &drawTerrainSplattedDetail);
         if (prevDetailOn != drawTerrainSplattedDetail)
-          invalidateClipmap();
+          queueClipmapInvalidation();
+        ImGui::SliderFloat("Terrain noise rel amplitude", &terrainNoiseRelHeightAmp, 0.f, 0.2f);
+        ImGui::SliderFloat("Terrain noise period", &terrainNoisePeriod, 0.0001f, 2.f);
       }
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
@@ -1269,6 +1279,8 @@ void WorldRenderer::loadDebugConfig()
   enableSkybox = unwrap(reader.read<bool>());
   doTonemapping = unwrap(reader.read<bool>());
   useSharedMemForTonemapping = unwrap(reader.read<bool>());
+  terrainNoiseRelHeightAmp = unwrap(reader.read<float>());
+  terrainNoisePeriod = unwrap(reader.read<float>());
   histEqTonemappingRegW = unwrap(reader.read<float>());
   histEqTonemappingRefinedW = unwrap(reader.read<float>());
   histEqTonemappingMinAdmissibleLum = unwrap(reader.read<float>());
@@ -1322,6 +1334,8 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(enableSkybox));
   ETNA_VERIFY(writer.write(doTonemapping));
   ETNA_VERIFY(writer.write(useSharedMemForTonemapping));
+  ETNA_VERIFY(writer.write(terrainNoiseRelHeightAmp));
+  ETNA_VERIFY(writer.write(terrainNoisePeriod));
   ETNA_VERIFY(writer.write(histEqTonemappingRegW));
   ETNA_VERIFY(writer.write(histEqTonemappingRefinedW));
   ETNA_VERIFY(writer.write(histEqTonemappingMinAdmissibleLum));

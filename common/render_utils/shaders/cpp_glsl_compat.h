@@ -44,6 +44,8 @@ using shader_bool = glm::uint;
 #define shader_log glm::log
 #define shader_exp glm::exp
 
+#define XZ(v_) (shader_vec2((v_).x, (v_).z))
+
 #else
 
 #define shader_int int
@@ -72,6 +74,8 @@ using shader_bool = glm::uint;
 #define shader_abs abs
 #define shader_log log
 #define shader_exp exp
+
+#define XZ(v_) ((v_).xz)
 
 // @TODO: route to glm::translate for cpp
 shader_mat4 translation(shader_vec3 offs)
