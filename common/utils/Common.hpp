@@ -14,7 +14,7 @@ inline T unwrap(std::optional<T>&& opt)
 template <class T>
 inline T next_pot_pow(T val)
 {
-  return T(ceil(log2f(float(val))));
+  return T(ceilf(log2f(float(val))));
 }
 
 template <class T>

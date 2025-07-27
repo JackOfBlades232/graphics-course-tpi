@@ -19,10 +19,13 @@ struct BitonicSortName<float>
   static constexpr std::string_view name = "bitonic_sort_float";
 };
 
+// @TODO: fix msvc and restore
+#define BITONIC_SORTER_CONSTRAINT(T_) //requires(requires() { detail::BitonicSortName<T_>::name; })
+
 } // namespace detail
 
 template <class T>
-  requires(requires() { detail::BitonicSortName<T>::name; })
+BITONIC_SORTER_CONSTRAINT(T)
 class BitonicSorter
 {
 public:
