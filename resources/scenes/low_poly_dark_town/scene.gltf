@@ -3966,22 +3966,22 @@
         "index" : 7
       },
       "range" : [
-        -1300.0, 1300.0,
-        -39.0, 81.0,
-        -1300.0, 1300.0
+        -512.0, 512.0,
+        -22.0, 35.0,
+        -512.0, 512.0
       ],
       "details" : [
         {
           "name": "grass",
           "relHeightRange": [0.2995, 1.0],
           "material": 19,
-          "scale": [5.0, 5.0]
+          "scale": [25.0, 25.0]
         },
         {
           "name": "sand",
           "relHeightRange": [0.0, 0.3005],
           "material": 20,
-          "scale": [5.0, 5.0]
+          "scale": [25.0, 25.0]
         }
       ]
     },
@@ -6417,8 +6417,8 @@
     {
       "magFilter": 9728,
       "minFilter": 9984,
-      "wrapS": 33071,
-      "wrapT": 33071
+      "wrapS": 33648,
+      "wrapT": 33648
     },
     {
       "magFilter": 9729,

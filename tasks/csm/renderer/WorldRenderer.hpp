@@ -91,6 +91,7 @@ private:
     etna::Sampler clipmapSampler{};
 
     bool needToroidalUpdate = false;
+    bool invalidateClipmapRequested = false;
   };
 
   struct SkyboxRenderingData
@@ -189,6 +190,9 @@ private:
   bool enableSkybox = true;
   bool doTonemapping = true;
   bool useSharedMemForTonemapping = false;
+  // @TODO: graduate to JB_terrain
+  float terrainNoiseRelHeightAmp = 0.001f;
+  float terrainNoisePeriod = 0.25f;
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
@@ -220,9 +224,9 @@ private:
     rcomponents.emplace_back(std::move(tonemapper));
   }
 
-  void invalidateClipmap()
+  void queueClipmapInvalidation()
   {
     if (terrain)
-      constantsData.toroidalUpdatePlayerWorldPos = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+      terrain->invalidateClipmapRequested = true;
   }
 };

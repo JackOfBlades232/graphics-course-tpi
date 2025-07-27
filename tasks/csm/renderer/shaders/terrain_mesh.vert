@@ -44,7 +44,7 @@ void main(void)
     vec3(bbox.max.x, 0.f, bbox.min.z)};
 
   const vec3 wPos = vs[gl_VertexIndex] +
-    vec3(constants.playerWorldPos.x, 0.f, constants.playerWorldPos.z);
+    vec3(constants.toroidalUpdatePlayerWorldPos.x, 0.f, constants.toroidalUpdatePlayerWorldPos.y);
 
   vOut.chunkId = inst.instId - params.chunksInstBase; 
 

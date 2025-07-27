@@ -1,8 +1,6 @@
 #ifndef TERRAIN_MESH_H_INCLUDED
 #define TERRAIN_MESH_H_INCLUDED
 
-#endif // TERRAIN_MESH_H_INCLUDED
-
 layout(binding = 2, set = 0) uniform sampler2D geomClipmap[CLIPMAP_LEVEL_COUNT];
 layout(binding = 3, set = 0) uniform sampler2D normalClipmap[CLIPMAP_LEVEL_COUNT];
 layout(binding = 4, set = 0) uniform sampler2D albedoClipmap[CLIPMAP_LEVEL_COUNT];
@@ -48,8 +46,7 @@ vec2 get_toroidal_uv(vec2 w_rel_point, uint level)
   const vec2 uvFlat = uvToCenter + 0.5f;
   const vec2 uvClamped = clamp(fract(uvFlat), 0.0001f, 0.9999f);
 
-  const vec2 toroidalScrolloff =
-    fract(constants.toroidalUpdatePlayerWorldPos.xz / size) - 0.5f;
+  const vec2 toroidalScrolloff = fract(constants.toroidalUpdatePlayerWorldPos / size) - 0.5f;
 
   return fract(uvClamped + toroidalScrolloff);
 }
@@ -151,3 +148,5 @@ vec3 sample_matdata_clipmap(vec2 w_rel_point)
 
   return val;
 }
+
+#endif // TERRAIN_MESH_H_INCLUDED

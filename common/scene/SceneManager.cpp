@@ -407,11 +407,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       glm::vec3 chunkExtent = {};
 
       // @TODO: more accurate? This is very conservative just ot not calculate heights.
-      // This is also not 100% proof because bicubic interpolation in theory can cause
-      // high points to be extruded beyond BICUBIC_HMAP_TOLERANCE and lead to false
-      // negatives while culling.
-      constexpr float BICUBIC_HMAP_TOLERANCE = 0.1f;
-      const float totalTolerance = BICUBIC_HMAP_TOLERANCE + TERRAIN_NOISE_REL_HEIGHT_AMPLITUDE;
+      const float totalTolerance = 1.f;
       const float baseRange = terrainData->rangeMax.y - terrainData->rangeMin.y;
       const float rangeAdjustment = totalTolerance * baseRange;
       chunkCoord.y = terrainData->rangeMin.y - rangeAdjustment;
