@@ -2,6 +2,7 @@
 
 #include <etna/Vulkan.hpp>
 #include <etna/Etna.hpp>
+#include <etna/GlobalContext.hpp>
 
 
 void emit_barriers(
@@ -34,8 +35,8 @@ void gen_mips(vk::CommandBuffer cmd_buf, etna::Image& img)
 {
   // @TODO: handle 3d textures?
   auto [w, h, _] = img.getExtent();
-  uint32_t mipCount = img.getMipLevelCount();
-  uint32_t layerCount = img.getLayerCount();
+  uint32_t mipCount = uint32_t(img.getMipLevelCount());
+  uint32_t layerCount = uint32_t(img.getLayerCount());
 
   // Initial barrier
   etna::set_state(
@@ -100,4 +101,21 @@ void gen_mips(vk::CommandBuffer cmd_buf, etna::Image& img)
         .image = img.get(),
         .subresourceRange = {vk::ImageAspectFlagBits::eColor, level - 1, 1, 0, layerCount}}});
   }
+}
+
+etna::Buffer create_buffer(etna::Buffer::CreateInfo&& info)
+{
+  auto minfo = std::move(info);
+  minfo.size = std::max(minfo.size, vk::DeviceSize{1}); // Vma won't do empty allocs
+  return etna::get_context().createBuffer(std::move(minfo));
+}
+
+etna::Image create_image(etna::Image::CreateInfo&& info)
+{
+  auto minfo = std::move(info);
+  minfo.extent = {
+    std::max(minfo.extent.width, uint32_t{1}),
+    std::max(minfo.extent.height, uint32_t{1}),
+    std::max(minfo.extent.depth, uint32_t{1})};
+  return etna::get_context().createImage(std::move(minfo));
 }

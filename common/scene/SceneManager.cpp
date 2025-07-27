@@ -617,28 +617,28 @@ void SceneManager::uploadData(
   std::span<const CullableInstance> instances,
   std::span<const Material> material_params)
 {
-  unifiedVbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+  unifiedVbuf = create_buffer(etna::Buffer::CreateInfo{
     .size = vertices.size_bytes(),
     .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "unifiedVbuf",
   });
 
-  unifiedIbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+  unifiedIbuf = create_buffer(etna::Buffer::CreateInfo{
     .size = indices.size_bytes(),
     .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "unifiedIbuf",
   });
 
-  matricesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+  matricesBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = instance_matrices.size_bytes(),
     .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "matricesBuf",
   });
 
-  indirectDrawBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+  indirectDrawBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = draw_commands.size_bytes(),
     .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer |
       vk::BufferUsageFlagBits::eIndirectBuffer,
@@ -646,14 +646,14 @@ void SceneManager::uploadData(
     .name = "indirectDrawBuf",
   });
 
-  bboxesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+  bboxesBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = boxes.size_bytes(),
     .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "bboxesBuf",
   });
 
-  instancesBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+  instancesBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = instances.size_bytes(),
     .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
@@ -661,7 +661,7 @@ void SceneManager::uploadData(
   });
 
   // @TODO: it isn't big, maybe make uniform?
-  materialParamsBuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+  materialParamsBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = material_params.size_bytes(),
     .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
@@ -916,10 +916,10 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
           glm::uvec2{side, side},
           glm::uvec2{3 * side, side}};
 
-        for (size_t i = 0; i < 6; ++i)
+        for (size_t j = 0; j < 6; ++j)
         {
-          auto& data = imageDatas[i];
-          const auto& base = bases[i];
+          auto& data = imageDatas[j];
+          const auto& base = bases[j];
 
           data.resize(side * side * 4);
           size_t dstId = 0;
@@ -937,7 +937,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
         loadedImg.image.clear();
         loadedImg.image.shrink_to_fit();
 
-        img = etna::get_context().createImage(etna::Image::CreateInfo{
+        img = create_image(etna::Image::CreateInfo{
           .extent = {side, side, 1},
           .name = loadedImg.uri,
           .format = format,
@@ -947,12 +947,12 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
           .mipLevels = mip_count_for_dims(side, side),
           .flags = vk::ImageCreateFlagBits::eCubeCompatible});
 
-        for (size_t i = 0; i < 6; ++i)
-          transferHelper.uploadImage(*oneShotCommands, img, 0, uint32_t(i), imageDatas[i]);
+        for (size_t j = 0; j < 6; ++j)
+          transferHelper.uploadImage(*oneShotCommands, img, 0, uint32_t(j), imageDatas[j]);
       }
       else
       {
-        img = etna::get_context().createImage(etna::Image::CreateInfo{
+        img = create_image(etna::Image::CreateInfo{
           .extent = {uint32_t(loadedImg.width), uint32_t(loadedImg.height), 1},
           .name = loadedImg.uri,
           .format = format,

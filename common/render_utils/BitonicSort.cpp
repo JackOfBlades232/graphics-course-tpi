@@ -9,7 +9,7 @@
 #include <etna/GlobalContext.hpp>
 
 template <class T>
-  requires(requires() { detail::BitonicSortName<T>::name; })
+BITONIC_SORTER_CONSTRAINT(T)
 BitonicSorter<T>::BitonicSorter()
 {
   constexpr std::string_view sorterName = detail::BitonicSortName<T>::name;
@@ -33,7 +33,7 @@ static void emit_barrier(vk::CommandBuffer cmd_buf, const vk::BufferMemoryBarrie
 }
 
 template <class T>
-  requires(requires() { detail::BitonicSortName<T>::name; })
+BITONIC_SORTER_CONSTRAINT(T)
 void BitonicSorter<T>::sortPotImpl(
   vk::CommandBuffer cmd_buf,
   etna::Buffer& buffer,

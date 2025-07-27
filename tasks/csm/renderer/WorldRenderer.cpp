@@ -51,8 +51,6 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 {
   resolution = swapchain_resolution;
 
-  auto& ctx = etna::get_context();
-
   // @TODO: tighter format
   createManagedImage(
     hdrTarget,
@@ -97,15 +95,15 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
     .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
 
-  constants.emplace(wc, [&ctx](size_t) {
-    return ctx.createBuffer(etna::Buffer::CreateInfo{
+  constants.emplace(wc, [](size_t) {
+    return create_buffer(etna::Buffer::CreateInfo{
       .size = sizeof(constantsData),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
       .name = "constants"});
   });
-  lights.emplace(wc, [&ctx](size_t) {
-    return ctx.createBuffer(etna::Buffer::CreateInfo{
+  lights.emplace(wc, [](size_t) {
+    return create_buffer(etna::Buffer::CreateInfo{
       .size = sizeof(sceneMgr->getLights()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
@@ -114,12 +112,12 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
 
-  stubUniBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+  stubUniBuffer = create_buffer(etna::Buffer::CreateInfo{
     .size = 16,
     .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
     .name = "stub_uniform"});
-  stubStorageBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+  stubStorageBuffer = create_buffer(etna::Buffer::CreateInfo{
     .size = 16,
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
@@ -133,8 +131,6 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 {
   // @TODO: make recallable, i.e. implement cleanup
 
-  auto& ctx = etna::get_context();
-
   sceneMgr->selectScene(path, cfg.testMultiplexScene ? cfg.testMultiplexing : SceneMultiplexing{});
 
   if (sceneMgr->hasTerrain())
@@ -144,7 +140,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     terrain.emplace(TerrainRenderingData{});
 
     memcpy(&terrain->sourceData, &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
-    terrain->source = ctx.createBuffer(etna::Buffer::CreateInfo{
+    terrain->source = create_buffer(etna::Buffer::CreateInfo{
       .size = sizeof(sceneMgr->getTerrainData()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
@@ -256,7 +252,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     skybox.emplace(SkyboxRenderingData{});
 
     memcpy(&skybox->sourceData, &sceneMgr->getSkyboxData(), sizeof(sceneMgr->getSkyboxData()));
-    skybox->source = ctx.createBuffer(etna::Buffer::CreateInfo{
+    skybox->source = create_buffer(etna::Buffer::CreateInfo{
       .size = sizeof(sceneMgr->getSkyboxData()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
@@ -310,7 +306,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   bindlessSamplersDsetComp = etna::create_persistent_descriptor_set(
     compProgInfo.getDescriptorLayoutId(3), std::move(smpBindings));
 
-  culledInstancesBuf = ctx.createBuffer(etna::Buffer::CreateInfo{
+  culledInstancesBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance),
     .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
@@ -1153,7 +1149,7 @@ void WorldRenderer::drawGui()
 
 void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci)
 {
-  dst = etna::get_context().createImage(std::move(ci));
+  dst = create_image(std::move(ci));
   registerManagedImage(dst);
 }
 
