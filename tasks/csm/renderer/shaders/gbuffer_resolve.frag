@@ -153,7 +153,7 @@ void main(void)
   const mat4 invView = inverse(constants.mView);
   const vec3 camPos = invView[3].xyz / invView[3].w;
 
-  const vec3 pos = depth_and_tc_to_pos(depth, surf.texCoord);
+  const vec3 pos = depth_and_tc_to_pos(min(depth, 1.f), surf.texCoord);
   const vec3 viewVec = normalize(camPos - pos);
 
   if (depth >= 1.f)
@@ -161,7 +161,7 @@ void main(void)
     if (constants.useSkybox == 0)
       out_fragColor = vec4(0.f, 0.f, 0.f, 1.f);
     else
-      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, -vec3(viewVec));
+      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, -viewVec);
     return;
   }
 
