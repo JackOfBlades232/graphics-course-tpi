@@ -10,7 +10,7 @@ struct Camera
   glm::quat rotation;
   float fov{60};
   float zNear{0.01f};
-  float zFar{100000.f};
+  float zFar{10000.f};
 
   void lookAt(glm::vec3 from, glm::vec3 to, glm::vec3 up)
   {
