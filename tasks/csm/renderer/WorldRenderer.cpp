@@ -1202,9 +1202,9 @@ void WorldRenderer::registerManagedImage(
           std::max(currentDebugTexColorRange.x, currentDebugTexColorRange.y);
 
         currentDebugTexMip =
-          glm::clamp(currentDebugTexMip, 0u, uint32_t(img.getMipLevelCount() - 1));
+          uint32_t(glm::clamp(int32_t(currentDebugTexMip), 0, int32_t(img.getMipLevelCount() - 1)));
         currentDebugTexLayer =
-          glm::clamp(currentDebugTexLayer, 0u, uint32_t(img.getLayerCount() - 1));
+          uint32_t(glm::clamp(int32_t(currentDebugTexLayer), 0, int32_t(img.getLayerCount() - 1)));
       }});
 }
 
