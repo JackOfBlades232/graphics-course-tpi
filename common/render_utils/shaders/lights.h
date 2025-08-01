@@ -35,9 +35,9 @@ struct DirectionalLight
   float intensity;
 };
 
-#define POINT_LIGHT_BUF_SIZE 256
-#define SPOT_LIGHT_BUF_SIZE 64
-#define DIRECTIONAL_LIGHT_BUF_SIZE 32
+#define POINT_LIGHT_BUF_SIZE 272
+#define SPOT_LIGHT_BUF_SIZE 72
+#define DIRECTIONAL_LIGHT_BUF_SIZE 1
 
 struct UniformLights
 {
@@ -47,7 +47,7 @@ struct UniformLights
   shader_uint pointLightsCount;
   shader_uint spotLightsCount;
   shader_uint directionalLightsCount;
-  shader_uint pad0;
+  shader_uint pad_;
 };
 
 #endif // LIGHTS_H_INCLUDED
