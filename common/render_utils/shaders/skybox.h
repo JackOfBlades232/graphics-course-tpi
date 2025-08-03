@@ -7,6 +7,7 @@
 struct SkyboxSourceData
 {
   TexSmpIdPair cubemapTexSmp;
+  shader_uint pad1_, pad2_, pad3_;
 };
 
 #endif // SKYBOX_H_INCLUDED

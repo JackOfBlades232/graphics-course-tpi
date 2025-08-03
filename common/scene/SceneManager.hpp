@@ -42,6 +42,8 @@ struct SceneMultiplexing
   glm::vec3 offsets = {};
 };
 
+using CsmCascades = std::array<etna::Image, CSM_CASCADE_COUNT>;
+
 class SceneManager
 {
 public:
@@ -80,6 +82,13 @@ public:
 
   std::span<const etna::Image> getTextures() const { return textures; }
   std::span<const etna::Sampler> getSamplers() const { return samplers; }
+
+  std::span<const etna::Image> getPointLightMaps() const { return pointLightMaps; }
+  std::span<const etna::Image> getSpotLightMaps() const { return spotLightMaps; }
+  std::span<const etna::Image> getDirectionalLightCsmCascades() const
+  {
+    return directionalLightCsmCascades;
+  }
 
   const etna::Buffer& getInstanceMatricesBuf() const { return matricesBuf; }
   const etna::Buffer& getIndirectCommandsBuf() const { return indirectDrawBuf; }
@@ -146,15 +155,22 @@ private:
     size_t firstTerrainCommand;
   };
 
-  using ProcessedLights = std::unique_ptr<UniformLights>;
+  struct ProcessedLights
+  {
+    std::unique_ptr<UniformLights> desc;
+    std::span<const etna::Image> pointLightShadowmaps;
+    std::span<const etna::Image> spotLightShadowmaps;
+    std::span<const etna::Image> directionalLightCsmCascadeMaps{};
+  };
 
   ProcessedMeshes processMeshes(
     const tinygltf::Model& model, std::span<const MaterialId> material_remapping) const;
 
+  // @TODO: restore const, somehow
   ProcessedLights processLights(
     const tinygltf::Model& model,
     std::span<glm::mat4> instances,
-    std::span<uint32_t> instance_mapping) const;
+    std::span<uint32_t> instance_mapping);
 
   void uploadData(
     std::span<const Vertex> vertices,
@@ -191,6 +207,9 @@ private:
   // @TODO: do we support reentrability in selectScene?
   std::vector<etna::Image> textures{};
   std::vector<etna::Sampler> samplers{};
+  std::span<const etna::Image> pointLightMaps{};
+  std::span<const etna::Image> spotLightMaps{};
+  std::span<const etna::Image> directionalLightCsmCascades{}; // @TODO: should be an mdspan
 
   etna::Buffer unifiedVbuf;
   etna::Buffer unifiedIbuf;
