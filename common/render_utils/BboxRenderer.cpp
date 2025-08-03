@@ -42,6 +42,7 @@ void BboxRenderer::render(
   const etna::Buffer& instances,
   const etna::Buffer& bboxes,
   const etna::Buffer& constants,
+  const etna::Buffer& view_params,
   uint32_t instance_count)
 {
   auto programInfo = etna::get_shader_program(programId);
@@ -51,7 +52,8 @@ void BboxRenderer::render(
     {etna::Binding{0, matrices.genBinding()},
      etna::Binding{1, instances.genBinding()},
      etna::Binding{2, bboxes.genBinding()},
-     etna::Binding{8, constants.genBinding()}});
+     etna::Binding{8, constants.genBinding()},
+     etna::Binding{9, view_params.genBinding()}});
 
   etna::RenderTargetState renderTargets(
     cmd_buf,

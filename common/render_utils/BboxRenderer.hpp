@@ -27,6 +27,7 @@ public:
     const etna::Buffer& instances,
     const etna::Buffer& bboxes,
     const etna::Buffer& constants,
+    const etna::Buffer& view_params,
     uint32_t instance_count);
 
 private:

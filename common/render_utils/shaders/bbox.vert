@@ -33,5 +33,5 @@ void main()
   const uvec2 edge = edges[gl_VertexIndex / 2];
   const uint vid = (gl_VertexIndex % 2 == 1) ? edge.y : edge.x;
 
-  gl_Position = constants.mProjView * instMat * vs[vid];
+  gl_Position = viewParams.mProjView * instMat * vs[vid];
 }

@@ -29,6 +29,10 @@ layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
 };
+layout(binding = 9, set = 0) uniform view_params_t
+{
+  ViewParams viewParams;
+};
 
 #include "bindless.glsl.inc"
 
@@ -40,7 +44,7 @@ layout(location = 0) in VS_OUT
 vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 {
   const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
-  const vec4 posHom = inverse(constants.mProjView) * cameraToScreen;
+  const vec4 posHom = inverse(viewParams.mProjView) * cameraToScreen;
   return posHom.xyz / posHom.w;
 }
 
@@ -150,7 +154,7 @@ void main(void)
   // Unpack gbuffer
   const float depth = texture(gbufDepth, surf.texCoord).x;
 
-  const mat4 invView = inverse(constants.mView);
+  const mat4 invView = inverse(viewParams.mView);
   const vec3 camPos = invView[3].xyz / invView[3].w;
 
   const vec3 pos = depth_and_tc_to_pos(min(depth, 1.f), surf.texCoord);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ITonemapper.hpp"
+#include "DebugDrawer.hpp"
 
 #include <render_utils/PostfxRenderer.hpp>
 #include <etna/GraphicsPipeline.hpp>

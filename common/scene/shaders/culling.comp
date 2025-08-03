@@ -27,13 +27,13 @@ bool point_is_in_frustum(vec3 p)
 
 vec3 world_to_clip(vec4 v)
 {
-  const vec4 hom = constants.mProjView * v;
+  const vec4 hom = viewParams.mProjView * v;
   return (hom / hom.w).xyz;
 }
 
 vec3 world_to_view(vec4 v)
 {
-  return (constants.mView * v).xyz;
+  return (viewParams.mView * v).xyz;
 }
 
 vec2 project_frustum_onto_ax(
@@ -109,10 +109,10 @@ bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
       bbase + (bx + by + bz) * 0.5f, e * 0.5f,
       bx / e.x, by / e.y, bz / e.z};
 
-    const float xNear = constants.viewFrustum.nearX;
-    const float yNear = constants.viewFrustum.nearY;
-    const float zNear = constants.viewFrustum.nearZ;
-    const float zFar = constants.viewFrustum.farZ;
+    const float xNear = viewParams.viewFrustum.nearX;
+    const float yNear = viewParams.viewFrustum.nearY;
+    const float zNear = viewParams.viewFrustum.nearZ;
+    const float zFar = viewParams.viewFrustum.farZ;
    
     // Frustum Z normal
     {

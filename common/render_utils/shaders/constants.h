@@ -8,9 +8,6 @@
 
 struct Constants
 {
-  shader_mat4 mProjView;
-  shader_mat4 mView;
-  ViewFrustum viewFrustum;
   shader_vec3 playerWorldPos;
   CullingMode cullingMode;
 

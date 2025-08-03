@@ -20,6 +20,11 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
+layout(binding = 9, set = 0) uniform view_params_t
+{
+  ViewParams viewParams;
+};
+
 BBox get_inst_bbox(const CullableInstance inst)
 {
   if ((inst.flags & TERRAIN_CHUNK_INSTANCE_FLAG) != 0)

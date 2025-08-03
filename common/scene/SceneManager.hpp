@@ -216,8 +216,8 @@ private:
 
   // @TODO: drag out into WR to be tweakable
   etna::Buffer matricesBuf;
-  etna::Buffer indirectDrawBuf;
   etna::Buffer bboxesBuf;
+  etna::Buffer indirectDrawBuf;
   etna::Buffer instancesBuf;
   etna::Buffer materialParamsBuf;
 

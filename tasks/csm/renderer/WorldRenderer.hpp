@@ -11,6 +11,8 @@
 #include <render_utils/BitonicSort.hpp>
 #include <render_utils/BboxRenderer.hpp>
 #include <render_utils/QuadRenderer.hpp>
+
+#include <scene/ViewContext.hpp>
 #include <scene/SceneManager.hpp>
 
 #include <wsi/Keyboard.hpp>
@@ -116,11 +118,14 @@ private:
 private:
   std::unique_ptr<SceneManager> sceneMgr;
 
+  ViewContextManager* viewCtxMgr;
+
+  Camera mainCam;
+  std::optional<ViewContext> mainViewContext;
+
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
   MeshPipeline staticMeshPipeline{};
   MeshPipeline terrainMeshPipeline{};
-  etna::ComputePipeline cullingPipeline{};
-  etna::ComputePipeline resetIndirectCommandsPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
@@ -136,9 +141,6 @@ private:
 
   std::optional<TerrainRenderingData> terrain{};
   std::optional<SkyboxRenderingData> skybox{};
-
-  // @TODO: tweakable
-  etna::Buffer culledInstancesBuf;
 
   // @TODO: unify with one in scene manager
   etna::Sampler defaultSampler;
@@ -214,6 +216,15 @@ private:
   shader_uint hdrImagePixelCount() const
   {
     return hdrTarget.getExtent().width * hdrTarget.getExtent().height;
+  }
+
+  float aspect() const { return float(resolution.x) / float(resolution.y); }
+
+  void registerViewContextManager()
+  {
+    auto mgr = std::make_unique<ViewContextManager>(wc, *sceneMgr);
+    viewCtxMgr = mgr.get();
+    rcomponents.emplace_back(std::move(mgr));
   }
 
   template <std::derived_from<ITonemapper> T>

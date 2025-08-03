@@ -39,6 +39,8 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   , wc{wc}
   , cfg{config}
 {
+  registerViewContextManager();
+
   registerTonemapper<HistogramEqTonemapper>(TonemappingTechnique::HISTOGRAM_EQ);
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
   registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
@@ -132,6 +134,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   // @TODO: make recallable, i.e. implement cleanup
 
   sceneMgr->selectScene(path, cfg.testMultiplexScene ? cfg.testMultiplexing : SceneMultiplexing{});
+  mainViewContext.emplace(viewCtxMgr->alloc("main"));
 
   if (sceneMgr->hasTerrain())
   {
@@ -305,13 +308,6 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     etna::create_persistent_descriptor_set(fragProgInfo.getDescriptorLayoutId(3), smpBindings);
   bindlessSamplersDsetComp = etna::create_persistent_descriptor_set(
     compProgInfo.getDescriptorLayoutId(3), std::move(smpBindings));
-
-  culledInstancesBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "culledInstancesBuf",
-  });
 }
 
 void WorldRenderer::loadShaders()
@@ -325,9 +321,6 @@ void WorldRenderer::loadShaders()
      RENDERER_SHADERS_ROOT "terrain_mesh.vert.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
-  etna::create_program("culling", {RENDERER_SHADERS_ROOT "culling.comp.spv"});
-  etna::create_program(
-    "reset_indirect_commands", {RENDERER_SHADERS_ROOT "reset_indirect_commands.comp.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
 
   for (auto& component : rcomponents)
@@ -429,10 +422,6 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   staticMeshPipeline = MeshPipeline{pipelineManager, "static_mesh", meshPipelineCreateInfo};
   terrainMeshPipeline = MeshPipeline{pipelineManager, "terrain_mesh", terrainPipelineCreateInfo};
 
-  cullingPipeline = pipelineManager.createComputePipeline("culling", {});
-  resetIndirectCommandsPipeline =
-    pipelineManager.createComputePipeline("reset_indirect_commands", {});
-
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
@@ -458,27 +447,13 @@ void WorldRenderer::update(const FramePacket& packet)
 {
   ZoneScoped;
 
-  const float aspect = float(resolution.x) / float(resolution.y);
-
-  // calc camera matrix
-  {
-    const auto proj = packet.mainCam.projTm(aspect);
-    constantsData.mView = packet.mainCam.viewTm();
-    constantsData.mProjView = proj * constantsData.mView;
-  }
-
-  // pass frustum dimensions
-  {
-    constantsData.viewFrustum.nearY =
-      glm::tan(glm::radians(packet.mainCam.fov * 0.5f)) * packet.mainCam.zNear;
-    constantsData.viewFrustum.nearX = aspect * constantsData.viewFrustum.nearY;
-    constantsData.viewFrustum.nearZ = packet.mainCam.zNear;
-    constantsData.viewFrustum.farZ = packet.mainCam.zFar;
-  }
-
   {
     dt = prevTime >= 0.f ? (packet.currentTime - prevTime) : 0.f;
     prevTime = packet.currentTime;
+  }
+
+  {
+    mainCam = packet.mainCam;
   }
 
   {
@@ -610,99 +585,9 @@ void WorldRenderer::renderWorld(
       }
     }
 
-    emit_barriers(
-      cmd_buf,
-      {vk::BufferMemoryBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
-        .srcAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
-        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-        .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-        .size = sceneMgr->getIndirectCommands().size_bytes()}});
+    mainViewContext->update(view_params_for_cam(mainCam, aspect()));
 
-    {
-      ETNA_PROFILE_GPU(cmd_buf, reset);
-      auto programInfo = etna::get_shader_program("reset_indirect_commands");
-      auto set = etna::create_descriptor_set(
-        programInfo.getDescriptorLayoutId(0),
-        cmd_buf,
-        {etna::Binding{0, sceneMgr->getIndirectCommandsBuf().genBinding()}});
-      cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eCompute,
-        resetIndirectCommandsPipeline.getVkPipelineLayout(),
-        0,
-        {set.getVkSet()},
-        {});
-      cmd_buf.bindPipeline(
-        vk::PipelineBindPoint::eCompute, resetIndirectCommandsPipeline.getVkPipeline());
-
-      cmd_buf.dispatch(
-        get_linear_wg_count(uint32_t(sceneMgr->getIndirectCommands().size()), BASE_WORK_GROUP_SIZE),
-        1,
-        1);
-    }
-
-    emit_barriers(
-      cmd_buf,
-      {vk::BufferMemoryBarrier2{
-         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-         .dstAccessMask =
-           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-         .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-         .size = sceneMgr->getIndirectCommands().size_bytes()},
-       vk::BufferMemoryBarrier2{
-         .srcStageMask = vk::PipelineStageFlagBits2::eVertexShader,
-         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-         .buffer = culledInstancesBuf.get(),
-         .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance)}});
-
-    {
-      ETNA_PROFILE_GPU(cmd_buf, culling);
-
-      auto programInfo = etna::get_shader_program("culling");
-      auto set = etna::create_descriptor_set(
-        programInfo.getDescriptorLayoutId(0),
-        cmd_buf,
-        {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
-         etna::Binding{1, sceneMgr->getInstancesBuf().genBinding()},
-         etna::Binding{2, sceneMgr->getBboxesBuf().genBinding()},
-         etna::Binding{3, culledInstancesBuf.genBinding()},
-         etna::Binding{4, sceneMgr->getIndirectCommandsBuf().genBinding()},
-         etna::Binding{8, constants->get().genBinding()}});
-
-      cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eCompute,
-        cullingPipeline.getVkPipelineLayout(),
-        0,
-        {set.getVkSet()},
-        {});
-      cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, cullingPipeline.getVkPipeline());
-
-      cmd_buf.dispatch(
-        get_linear_wg_count(uint32_t(sceneMgr->getInstances().size()), BASE_WORK_GROUP_SIZE), 1, 1);
-    }
-
-    emit_barriers(
-      cmd_buf,
-      {vk::BufferMemoryBarrier2{
-         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-         .srcAccessMask =
-           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-         .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
-         .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
-         .buffer = sceneMgr->getIndirectCommandsBuf().get(),
-         .size = sceneMgr->getIndirectCommands().size_bytes()},
-       vk::BufferMemoryBarrier2{
-         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-         .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
-         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-         .buffer = culledInstancesBuf.get(),
-         .size = sceneMgr->getInstances().size() * sizeof(DrawableInstance)}});
+    viewCtxMgr->cullForView(cmd_buf, *mainViewContext, constants->get());
 
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
@@ -726,8 +611,8 @@ void WorldRenderer::renderWorld(
           programInfo.getDescriptorLayoutId(0),
           cmd_buf,
           {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
-           etna::Binding{1, culledInstancesBuf.genBinding()},
-           etna::Binding{8, constants->get().genBinding()}});
+           etna::Binding{1, mainViewContext->culledInstancesBuf.genBinding()},
+           etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()}});
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics,
           pipe.getVkPipelineLayout(),
@@ -746,7 +631,7 @@ void WorldRenderer::renderWorld(
         auto [offset, count] = sceneMgr->getSceneObjectsIndirectCommandsSubrange();
 
         cmd_buf.drawIndexedIndirect(
-          sceneMgr->getIndirectCommandsBuf().get(), offset, count, sizeof(IndirectCommand));
+          mainViewContext->indirectDrawBuf.get(), offset, count, sizeof(IndirectCommand));
       }
 
       if (terrain && drawTerrain)
@@ -763,7 +648,7 @@ void WorldRenderer::renderWorld(
           terrain->albedoLevelsSamplerBindings.size() +
           terrain->matdataLevelsSamplerBindings.size() + 4);
         bindings.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
-        bindings.emplace_back(1, culledInstancesBuf.genBinding());
+        bindings.emplace_back(1, mainViewContext->culledInstancesBuf.genBinding());
         for (const auto& b : terrain->geometryLevelsSamplerBindings)
           bindings.push_back(b);
         for (const auto& b : terrain->normalLevelsSamplerBindings)
@@ -774,6 +659,7 @@ void WorldRenderer::renderWorld(
           bindings.push_back(b);
         bindings.emplace_back(7, terrain->source.genBinding());
         bindings.emplace_back(8, constants->get().genBinding());
+        bindings.emplace_back(9, mainViewContext->viewParamsBuf.get().genBinding());
 
         auto set =
           etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
@@ -792,7 +678,7 @@ void WorldRenderer::renderWorld(
           shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance));
 
         cmd_buf.drawIndexedIndirect(
-          sceneMgr->getIndirectCommandsBuf().get(),
+          mainViewContext->indirectDrawBuf.get(),
           offset * sizeof(IndirectCommand),
           count,
           sizeof(IndirectCommand));
@@ -817,7 +703,8 @@ void WorldRenderer::renderWorld(
            5,
            mainViewDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{7, (skybox ? skybox->source : stubUniBuffer).genBinding()},
-         etna::Binding{8, constants->get().genBinding()}});
+         etna::Binding{8, constants->get().genBinding()},
+         etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()}});
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
@@ -852,6 +739,7 @@ void WorldRenderer::renderWorld(
           sceneMgr->getInstancesBuf(),
           sceneMgr->getBboxesBuf(),
           constants->get(),
+          mainViewContext->viewParamsBuf.get(),
           uint32_t(sceneMgr->getInstances().size()));
       }
 
