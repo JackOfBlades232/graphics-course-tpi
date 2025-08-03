@@ -1,5 +1,7 @@
 #pragma once
 
+#include <geometry.h>
+
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
@@ -45,3 +47,26 @@ struct Camera
     return glm::perspectiveLH_ZO(-glm::radians(fov), aspect, zNear, zFar);
   }
 };
+
+inline ViewParams view_params_for_cam(const Camera& cam, float aspect)
+{
+  ViewParams params{};
+
+  // calc camera matrix
+  {
+    const auto proj = cam.projTm(aspect);
+    params.mView = cam.viewTm();
+    params.mProjView = proj * params.mView;
+  }
+
+  // pass frustum dimensions
+  {
+    params.viewFrustum.nearY =
+      glm::tan(glm::radians(cam.fov * 0.5f)) * cam.zNear;
+    params.viewFrustum.nearX = aspect * params.viewFrustum.nearY;
+    params.viewFrustum.nearZ = cam.zNear;
+    params.viewFrustum.farZ = cam.zFar;
+  }
+
+  return params;
+}

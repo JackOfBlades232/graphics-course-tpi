@@ -694,11 +694,11 @@ void SceneManager::uploadData(
 
   indirectDrawBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = draw_commands.size_bytes(),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer |
-      vk::BufferUsageFlagBits::eIndirectBuffer,
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc |
+      vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "indirectDrawBuf",
-  });
+  }),
 
   bboxesBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = boxes.size_bytes(),

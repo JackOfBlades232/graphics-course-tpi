@@ -26,6 +26,13 @@ struct ViewFrustum
   shader_float farZ;
 };
 
+struct ViewParams
+{
+  shader_mat4 mProjView;
+  shader_mat4 mView;
+  ViewFrustum viewFrustum;
+};
+
 #ifdef __cplusplus
 
 enum class CullingMode : shader_uint

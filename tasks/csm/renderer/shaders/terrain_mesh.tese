@@ -13,6 +13,10 @@ layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
 };
+layout(binding = 9, set = 0) uniform view_params_t
+{
+  ViewParams viewParams;
+};
 
 #include "terrain_mesh.glsl.inc"
 
@@ -34,5 +38,5 @@ void main(void)
   teOut.wPos = vec3(pointXZ.x, sample_geom_clipmap(wOffsetFromClipmapCenter), pointXZ.y);
   teOut.texCoord = wOffsetFromClipmapCenter; // Special for clipmap sampling
 
-  gl_Position = constants.mProjView * vec4(teOut.wPos, 1.f);
+  gl_Position = viewParams.mProjView * vec4(teOut.wPos, 1.f);
 }
