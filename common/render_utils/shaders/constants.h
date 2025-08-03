@@ -35,7 +35,7 @@ struct Constants
   // @TODO: try getting exposure from histogram instead
   float acesExposure;
 
-  shader_uint pad1_, pad2_, pad3_;
+  shader_uint pad1_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

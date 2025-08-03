@@ -466,9 +466,9 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 SceneManager::ProcessedLights SceneManager::processLights(
   const tinygltf::Model& model,
   std::span<glm::mat4> instances,
-  std::span<uint32_t> instance_mapping) const
+  std::span<uint32_t> instance_mapping)
 {
-  ProcessedLights lights = std::make_unique<UniformLights>();
+  auto lights = std::make_unique<UniformLights>();
   memset(lights.get(), 0, sizeof(lights));
 
   // @TODO: more optimal, no allocations/copies
@@ -601,7 +601,65 @@ SceneManager::ProcessedLights SceneManager::processLights(
     directionalLights.data(),
     directionalLights.size() * sizeof(directionalLights[0]));
 
-  return lights;
+  const SmpId shadowSamplerId = SmpId(samplers.size());
+  samplers.emplace_back(etna::Sampler::CreateInfo{
+    .filter = vk::Filter::eNearest,
+    .addressMode = vk::SamplerAddressMode::eClampToEdge,
+    .name = "<shadowmap_sampler>"});
+
+  auto nextShadowTexSmpId = [&, this] {
+    ETNA_ASSERT(textures.size() <= 65535);
+    return pack_tex_smp_id_pair(TexId{uint16_t(textures.size())}, SmpId{uint16_t(shadowSamplerId)});
+  };
+
+  for (uint32_t i = 0; i < lights->pointLightsCount; ++i)
+  {
+    lights->pointLights[i].shadowmap = nextShadowTexSmpId();
+    textures.emplace_back(create_image(etna::Image::CreateInfo{
+      .extent = {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION, 1},
+      .name = fmt::format("pointlight_shadowmap{}", i),
+      .format = vk::Format::eD16Unorm,
+      .imageUsage =
+        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment,
+      .layers = 6,
+      .flags = vk::ImageCreateFlagBits::eCubeCompatible}));
+  }
+  std::span<const etna::Image> pointLightShadowmaps{
+    textures.end() - lights->pointLightsCount, textures.end()};
+
+  for (uint32_t i = 0; i < lights->spotLightsCount; ++i)
+  {
+    lights->spotLights[i].shadowmap = nextShadowTexSmpId();
+    textures.emplace_back(create_image(etna::Image::CreateInfo{
+      .extent = {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION, 1},
+      .name = fmt::format("spotlight_shadowmap{}", i),
+      .format = vk::Format::eD16Unorm,
+      .imageUsage =
+        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
+  }
+  std::span<const etna::Image> spotLightShadowmaps{
+    textures.end() - lights->spotLightsCount, textures.end()};
+
+  for (uint32_t i = 0; i < lights->directionalLightsCount; ++i)
+  {
+    // @TODO: this is piggy as fuck, should be a layered image. Improve the bindless system!
+    for (uint32_t j = 0; j < CSM_CASCADE_COUNT; ++j)
+    {
+      lights->directionalLights[i].shadowmapCascades[j].map = nextShadowTexSmpId();
+      textures.emplace_back(create_image(etna::Image::CreateInfo{
+        .extent = {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION, 1},
+        .name = fmt::format("directional{}_csm_shadowmap[{}]", i, j),
+        .format = vk::Format::eD16Unorm,
+        .imageUsage =
+          vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
+    }
+  }
+  // @NOTE ub
+  std::span<const etna::Image> directionalLightCsmCascadeMaps{
+    textures.end() - lights->directionalLightsCount, textures.end()};
+
+  return {
+    std::move(lights), pointLightShadowmaps, spotLightShadowmaps, directionalLightCsmCascadeMaps};
 }
 
 void SceneManager::uploadData(
@@ -1024,7 +1082,11 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
 
-  lightsData = processLights(model, instanceMatrices, instLights);
+  auto [ld, plm, slm, dlcsm] = processLights(model, instanceMatrices, instLights);
+  lightsData = std::move(ld);
+  pointLightMaps = plm;
+  spotLightMaps = slm;
+  directionalLightCsmCascades = dlcsm;
 
   auto [verts, inds, relems, meshs, commands, bboxs, insts, firstTerrainCommand] =
     processMeshes(model, materialRemapping);
