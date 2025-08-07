@@ -26,12 +26,29 @@
 WorldRenderer::MeshPipeline::MeshPipeline(
   etna::PipelineManager& pipeman,
   const char* prog_name,
+  const char* vertex_prog_name,
   const etna::GraphicsPipeline::CreateInfo& ci)
-  : mainPipeline{pipeman.createGraphicsPipeline(prog_name, ci)}
 {
-  auto wci = ci;
-  wci.rasterizationConfig.polygonMode = vk::PolygonMode::eLine;
-  wireframePipeline = pipeman.createGraphicsPipeline(prog_name, wci);
+  pipelines[size_t(SceneRenderingPass::COLOR)] = pipeman.createGraphicsPipeline(prog_name, ci);
+  programs[size_t(SceneRenderingPass::COLOR)].emplace(etna::get_shader_program(prog_name));
+
+  {
+    auto wci = ci;
+    wci.rasterizationConfig.polygonMode = vk::PolygonMode::eLine;
+    pipelines[size_t(SceneRenderingPass::WIRE_COLOR)] =
+      pipeman.createGraphicsPipeline(prog_name, wci);
+    programs[size_t(SceneRenderingPass::WIRE_COLOR)].emplace(etna::get_shader_program(prog_name));
+  }
+
+  {
+    auto sci = ci;
+    sci.blendingConfig.attachments = {};
+    sci.fragmentShaderOutput.colorAttachmentFormats = {};
+    sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
+    pipelines[size_t(SceneRenderingPass::SHADOW)] =
+      pipeman.createGraphicsPipeline(vertex_prog_name, sci);
+    programs[size_t(SceneRenderingPass::COLOR)].emplace(etna::get_shader_program(vertex_prog_name));
+  }
 }
 
 WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
@@ -315,10 +332,16 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "static_mesh",
     {RENDERER_SHADERS_ROOT "static_mesh.frag.spv", RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+  etna::create_program("static_shadow", {RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
   etna::create_program(
     "terrain_mesh",
     {RENDERER_SHADERS_ROOT "terrain_mesh.frag.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.vert.spv",
+     RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
+     RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
+  etna::create_program(
+    "terrain_shadow",
+    {RENDERER_SHADERS_ROOT "terrain_mesh.vert.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
@@ -419,8 +442,10 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
     };
 
-  staticMeshPipeline = MeshPipeline{pipelineManager, "static_mesh", meshPipelineCreateInfo};
-  terrainMeshPipeline = MeshPipeline{pipelineManager, "terrain_mesh", terrainPipelineCreateInfo};
+  staticMeshPipeline.emplace(
+    pipelineManager, "static_mesh", "static_shadow", meshPipelineCreateInfo);
+  terrainMeshPipeline.emplace(
+    pipelineManager, "terrain_mesh", "terrain_shadow", terrainPipelineCreateInfo);
 
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
 
@@ -500,6 +525,106 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.histEqTonemappingMinAdmissibleLum = histEqTonemappingMinAdmissibleLum;
     constantsData.histEqTonemappingMaxAdmissibleLum = histEqTonemappingMaxAdmissibleLum;
     constantsData.acesExposure = acesExposure;
+  }
+}
+
+void WorldRenderer::renderScene(
+  vk::CommandBuffer cmd_buf,
+  ViewContext& ctx,
+  const ViewParams& params,
+  etna::RenderTargetState::CreateInfo rpass_info,
+  SceneRenderingPass pass)
+{
+  ctx.update(params);
+  viewCtxMgr->cullForView(cmd_buf, ctx, constants->get());
+
+  {
+    ETNA_PROFILE_GPU(cmd_buf, renderScene);
+
+    etna::RenderTargetState renderTargets{cmd_buf, rpass_info};
+
+    if (drawScene)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
+
+      auto programInfo = staticMeshPipeline->getProg(pass);
+      const auto& pipe = staticMeshPipeline->get(pass);
+
+      auto set = etna::create_descriptor_set(
+        programInfo.getDescriptorLayoutId(0),
+        cmd_buf,
+        {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
+         etna::Binding{1, ctx.culledInstancesBuf.genBinding()},
+         etna::Binding{9, ctx.viewParamsBuf.get().genBinding()}});
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        pipe.getVkPipelineLayout(),
+        0,
+        {set.getVkSet(),
+         materialParamsDsetFrag.getVkSet(),
+         bindlessTexturesDsetFrag.getVkSet(),
+         bindlessSamplersDsetFrag.getVkSet()},
+        {});
+
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
+
+      cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
+      cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
+
+      auto [offset, count] = sceneMgr->getSceneObjectsIndirectCommandsSubrange();
+
+      cmd_buf.drawIndexedIndirect(
+        ctx.indirectDrawBuf.get(), offset, count, sizeof(IndirectCommand));
+    }
+
+    if (terrain && drawTerrain)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, terrain);
+
+      auto programInfo = terrainMeshPipeline->getProg(pass);
+      const auto& pipe = terrainMeshPipeline->get(pass);
+
+      std::vector<etna::Binding> bindings{};
+      bindings.reserve(
+        terrain->geometryLevelsSamplerBindings.size() +
+        terrain->normalLevelsSamplerBindings.size() + terrain->albedoLevelsSamplerBindings.size() +
+        terrain->matdataLevelsSamplerBindings.size() + 4);
+      bindings.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
+      bindings.emplace_back(1, ctx.culledInstancesBuf.genBinding());
+      for (const auto& b : terrain->geometryLevelsSamplerBindings)
+        bindings.push_back(b);
+      for (const auto& b : terrain->normalLevelsSamplerBindings)
+        bindings.push_back(b);
+      for (const auto& b : terrain->albedoLevelsSamplerBindings)
+        bindings.push_back(b);
+      for (const auto& b : terrain->matdataLevelsSamplerBindings)
+        bindings.push_back(b);
+      bindings.emplace_back(7, terrain->source.genBinding());
+      bindings.emplace_back(8, constants->get().genBinding());
+      bindings.emplace_back(9, ctx.viewParamsBuf.get().genBinding());
+
+      auto set =
+        etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
+
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, {set.getVkSet()}, {});
+
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
+
+      auto [offset, count] = sceneMgr->getTerrainIndirectCommandsSubrange();
+
+      cmd_buf.pushConstants<shader_uint>(
+        pipe.getVkPipelineLayout(),
+        vk::ShaderStageFlagBits::eVertex,
+        0,
+        shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance));
+
+      cmd_buf.drawIndexedIndirect(
+        ctx.indirectDrawBuf.get(),
+        offset * sizeof(IndirectCommand),
+        count,
+        sizeof(IndirectCommand));
+    }
   }
 }
 
@@ -585,104 +710,19 @@ void WorldRenderer::renderWorld(
       }
     }
 
-    mainViewContext->update(view_params_for_cam(mainCam, aspect()));
-
-    viewCtxMgr->cullForView(cmd_buf, *mainViewContext, constants->get());
-
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
 
-      etna::RenderTargetState renderTargets{
+      renderScene(
         cmd_buf,
-        {{0, 0}, {resolution.x, resolution.y}},
-        {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
-         {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
-         {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
-        {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}};
-
-      if (drawScene)
-      {
-        ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
-
-        auto programInfo = etna::get_shader_program("static_mesh");
-        const auto& pipe = staticMeshPipeline.get(wireframe);
-
-        auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
-          cmd_buf,
-          {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
-           etna::Binding{1, mainViewContext->culledInstancesBuf.genBinding()},
-           etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()}});
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics,
-          pipe.getVkPipelineLayout(),
-          0,
-          {set.getVkSet(),
-           materialParamsDsetFrag.getVkSet(),
-           bindlessTexturesDsetFrag.getVkSet(),
-           bindlessSamplersDsetFrag.getVkSet()},
-          {});
-
-        cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
-
-        cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
-        cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
-
-        auto [offset, count] = sceneMgr->getSceneObjectsIndirectCommandsSubrange();
-
-        cmd_buf.drawIndexedIndirect(
-          mainViewContext->indirectDrawBuf.get(), offset, count, sizeof(IndirectCommand));
-      }
-
-      if (terrain && drawTerrain)
-      {
-        ETNA_PROFILE_GPU(cmd_buf, terrain);
-
-        auto programInfo = etna::get_shader_program("terrain_mesh");
-        const auto& pipe = terrainMeshPipeline.get(wireframe);
-
-        std::vector<etna::Binding> bindings{};
-        bindings.reserve(
-          terrain->geometryLevelsSamplerBindings.size() +
-          terrain->normalLevelsSamplerBindings.size() +
-          terrain->albedoLevelsSamplerBindings.size() +
-          terrain->matdataLevelsSamplerBindings.size() + 4);
-        bindings.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
-        bindings.emplace_back(1, mainViewContext->culledInstancesBuf.genBinding());
-        for (const auto& b : terrain->geometryLevelsSamplerBindings)
-          bindings.push_back(b);
-        for (const auto& b : terrain->normalLevelsSamplerBindings)
-          bindings.push_back(b);
-        for (const auto& b : terrain->albedoLevelsSamplerBindings)
-          bindings.push_back(b);
-        for (const auto& b : terrain->matdataLevelsSamplerBindings)
-          bindings.push_back(b);
-        bindings.emplace_back(7, terrain->source.genBinding());
-        bindings.emplace_back(8, constants->get().genBinding());
-        bindings.emplace_back(9, mainViewContext->viewParamsBuf.get().genBinding());
-
-        auto set =
-          etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
-
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, {set.getVkSet()}, {});
-
-        cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
-
-        auto [offset, count] = sceneMgr->getTerrainIndirectCommandsSubrange();
-
-        cmd_buf.pushConstants<shader_uint>(
-          pipe.getVkPipelineLayout(),
-          vk::ShaderStageFlagBits::eVertex,
-          0,
-          shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance));
-
-        cmd_buf.drawIndexedIndirect(
-          mainViewContext->indirectDrawBuf.get(),
-          offset * sizeof(IndirectCommand),
-          count,
-          sizeof(IndirectCommand));
-      }
+        *mainViewContext,
+        view_params_for_cam(mainCam, aspect()),
+        {{{0, 0}, {resolution.x, resolution.y}},
+         {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
+          {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
+          {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
+         {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}},
+        wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR);
     }
 
     {

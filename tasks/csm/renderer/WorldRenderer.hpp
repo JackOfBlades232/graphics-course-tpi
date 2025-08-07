@@ -27,6 +27,7 @@
 #include <etna/Buffer.hpp>
 #include <etna/GraphicsPipeline.hpp>
 #include <etna/ComputePipeline.hpp>
+#include <etna/RenderTargetStates.hpp>
 #include <glm/glm.hpp>
 
 #include <unordered_map>
@@ -52,23 +53,37 @@ public:
     vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
 
 private:
+  enum class SceneRenderingPass
+  {
+    SHADOW,
+    COLOR,
+    WIRE_COLOR,
+
+    COUNT
+  };
+
+  static constexpr size_t SCENE_RPASS_COUNT = size_t(SceneRenderingPass::COUNT);
+
   struct MeshPipeline
   {
-    etna::GraphicsPipeline mainPipeline;
-    etna::GraphicsPipeline wireframePipeline;
+    etna::GraphicsPipeline pipelines[SCENE_RPASS_COUNT];
+    std::optional<etna::ShaderProgramInfo> programs[SCENE_RPASS_COUNT];
 
     MeshPipeline(
       etna::PipelineManager& pipeman,
       const char* prog_name,
+      const char* vertex_prog_name,
       const etna::GraphicsPipeline::CreateInfo& ci);
 
     MeshPipeline() = default;
-    MeshPipeline(MeshPipeline&&) = default;
-    MeshPipeline& operator=(MeshPipeline&&) = default;
 
-    const etna::GraphicsPipeline& get(bool wf) const
+    const etna::GraphicsPipeline& get(SceneRenderingPass pass) const
     {
-      return wf ? wireframePipeline : mainPipeline;
+      return pipelines[size_t(pass)];
+    }
+    const etna::ShaderProgramInfo& getProg(SceneRenderingPass pass) const
+    {
+      return *programs[size_t(pass)];
     }
   };
 
@@ -124,8 +139,8 @@ private:
   std::optional<ViewContext> mainViewContext;
 
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
-  MeshPipeline staticMeshPipeline{};
-  MeshPipeline terrainMeshPipeline{};
+  std::optional<MeshPipeline> staticMeshPipeline{};
+  std::optional<MeshPipeline> terrainMeshPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
@@ -202,6 +217,13 @@ private:
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
 
 private:
+  void renderScene(
+    vk::CommandBuffer cmd_buf,
+    ViewContext& ctx,
+    const ViewParams& params,
+    etna::RenderTargetState::CreateInfo rpass_info,
+    SceneRenderingPass pass);
+
   void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
   void registerManagedImage(
     const etna::Image& img, std::optional<std::string> name_override = std::nullopt);
