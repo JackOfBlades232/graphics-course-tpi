@@ -12,6 +12,7 @@ target_link_libraries(renderer
 target_add_shaders(renderer
   shaders/gbuffer_resolve.frag
   shaders/clipmap_gen.comp
+  shaders/calculate_light_mats.comp
   shaders/static_mesh.vert
   shaders/static_mesh.frag
   shaders/terrain_mesh.vert

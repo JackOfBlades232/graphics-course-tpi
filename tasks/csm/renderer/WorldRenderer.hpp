@@ -55,7 +55,7 @@ public:
 private:
   enum class SceneRenderingPass
   {
-    SHADOW,
+    DEPTH,
     COLOR,
     WIRE_COLOR,
 
@@ -142,6 +142,7 @@ private:
   std::optional<MeshPipeline> staticMeshPipeline{};
   std::optional<MeshPipeline> terrainMeshPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
+  etna::ComputePipeline calcLightMatsPipeline{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
 
@@ -151,8 +152,14 @@ private:
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image mainViewDepth;
 
+  etna::Buffer lightMatricesBuf;
+
   std::optional<etna::GpuSharedResource<etna::Buffer>> constants;
   std::optional<etna::GpuSharedResource<etna::Buffer>> lights;
+
+  std::vector<std::array<ViewContext, 6>> pointLightViews{};
+  std::vector<ViewContext> spotLightViews{};
+  std::vector<std::array<ViewContext, CSM_CASCADE_COUNT>> directionalLightCascadeViews{};
 
   std::optional<TerrainRenderingData> terrain{};
   std::optional<SkyboxRenderingData> skybox{};

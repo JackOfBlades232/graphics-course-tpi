@@ -15,11 +15,16 @@ layout(binding = 1, set = 0) uniform light_data_t
   UniformLights lights;
 };
 
-layout(binding = 2, set = 0) uniform sampler2D gbufAlbedo;
-layout(binding = 3, set = 0) uniform sampler2D gbufMaterial;
-layout(binding = 4, set = 0) uniform sampler2D gbufNormal;
+layout(binding = 2, set = 0) readonly buffer light_mats_t
+{
+  LightMatrices mats;
+};
 
-layout(binding = 5, set = 0) uniform sampler2D gbufDepth;
+layout(binding = 3, set = 0) uniform sampler2D gbufAlbedo;
+layout(binding = 4, set = 0) uniform sampler2D gbufMaterial;
+layout(binding = 5, set = 0) uniform sampler2D gbufNormal;
+
+layout(binding = 6, set = 0) uniform sampler2D gbufDepth;
 
 layout(binding = 7, set = 0) uniform skybox_t
 {
@@ -142,11 +147,11 @@ float calculate_attenuation(vec3 pos, vec3 lightPos, float range)
   return max(min(1.f - pow(dist / range, 4), 1.f), 0.f) / pow(dist, 2.f);
 }
 
-float calculate_angular_attenuation(float cosine, float lightAngleScale, float lightAngleOffset)
+float calculate_angular_attenuation(float cosine, float inner_cos, float outer_cos)
 {
-  float angularAttenuation = clamp(cosine * lightAngleScale + lightAngleOffset, 0.f, 1.f);
-  angularAttenuation *= angularAttenuation;
-  return angularAttenuation;
+  float angularAttenuation = clamp((cosine - inner_cos) / (outer_cos - inner_cos), 0.f, 1.f);
+  angularAttenuation = pow(angularAttenuation, 2.5f);
+  return 1.f - angularAttenuation;
 }
 
 void main(void)
@@ -207,6 +212,8 @@ void main(void)
       calculate_attenuation(pos, lights.pointLights[i].position, lights.pointLights[i].range);
     const vec3 lightDir = normalize(lights.pointLights[i].position - pos);
     const vec3 lightColor = lightIntensity * lightAttenuation;
+    if (length(lightColor) < SHADER_EPSILON)
+      continue;
 
     if (mat == MATERIAL_PBR)
       color += calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightColor);
@@ -223,22 +230,30 @@ void main(void)
     const vec3 lightDir = normalize(lights.spotLights[i].direction);
     const vec3 fromPosDir = normalize(lights.spotLights[i].position - pos);
 
-    // @TODO: this can be precalculated on cpu, left here to have a dumb imgui setting
-    const float lightAngleScale =
-      1.f / max(0.001f, cos(lights.spotLights[i].innerConeAngle) - cos(lights.spotLights[i].outerConeAngle));
-    const float lightAngleOffset = -cos(lights.spotLights[i].outerConeAngle) * lightAngleScale;
-
     const float lightAngularAttenuation = calculate_angular_attenuation(
       dot(lightDir, -fromPosDir),
-      lightAngleScale,
-      lightAngleOffset);
+      cos(lights.spotLights[i].innerConeAngle * 0.5f),
+      cos(lights.spotLights[i].outerConeAngle * 0.5f));
 
     const vec3 lightColor = lightIntensity * lightAttenuation * lightAngularAttenuation;
+    if (length(lightColor) < SHADER_EPSILON)
+      continue;
+
+    const vec4 posLightClipSpace = mats.spotLightMats[i] * vec4(pos, 1.f);
+    const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
+    const vec2 shadowUv = vec2(-posLightSpaceNDC.x, posLightSpaceNDC.y) * 0.5f + 0.5f;
+
+    const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x + 0.0001f;
+
+    const float shadow = (
+      shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
+      shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
+      lDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
 
     if (mat == MATERIAL_PBR)
-      color += calculate_pbr(normal, fromPosDir, viewVec, matData.y, matData.z, albedo, lightColor);
+      color += shadow * calculate_pbr(normal, fromPosDir, viewVec, matData.y, matData.z, albedo, lightColor);
     else if (mat == MATERIAL_DIFFUSE)
-      color += calculate_diffuse(normal, fromPosDir, albedo, lightColor);
+      color += shadow * calculate_diffuse(normal, fromPosDir, albedo, lightColor);
   }
 
   out_fragColor = vec4(color, 1.0f);
