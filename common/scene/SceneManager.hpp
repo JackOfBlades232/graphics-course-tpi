@@ -83,6 +83,9 @@ public:
   std::span<const etna::Image> getTextures() const { return textures; }
   std::span<const etna::Sampler> getSamplers() const { return samplers; }
 
+  const etna::Image& getTex(TexId tid) const { return textures[size_t(tid)]; }
+  const etna::Sampler& getSmp(SmpId sid) const { return samplers[size_t(sid)]; }
+
   std::span<const etna::Image> getPointLightMaps() const { return pointLightMaps; }
   std::span<const etna::Image> getSpotLightMaps() const { return spotLightMaps; }
   std::span<const etna::Image> getDirectionalLightCsmCascades() const

@@ -65,4 +65,11 @@ struct UniformLights
   shader_uint pad_;
 };
 
+struct LightMatrices
+{
+  shader_mat4 pointLightMats[POINT_LIGHT_BUF_SIZE][6];
+  shader_mat4 spotLightMats[SPOT_LIGHT_BUF_SIZE];
+  shader_mat4 directionalLightMats[DIRECTIONAL_LIGHT_BUF_SIZE][CSM_CASCADE_COUNT];
+};
+
 #endif // LIGHTS_H_INCLUDED

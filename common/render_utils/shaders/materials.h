@@ -26,9 +26,20 @@ enum class TexSmpIdPair : uint32_t
   INVALID = uint32_t(-1)
 };
 
+struct TexSmpIdPairUnpacked
+{
+  TexId tid;
+  SmpId sid;
+};
+
 inline TexSmpIdPair pack_tex_smp_id_pair(TexId tid, SmpId sid)
 {
   return TexSmpIdPair{(uint32_t(sid) << 16) | uint32_t(tid)};
+}
+
+inline TexSmpIdPairUnpacked unpack_tex_smp_id_pair(TexSmpIdPair packed)
+{
+  return {TexId(uint32_t(packed) & 0xFFFF), SmpId((uint32_t(packed) >> 16) & 0xFFFF)};
 }
 
 enum class MaterialId : uint32_t
@@ -54,11 +65,11 @@ enum class MaterialId : uint32_t
 #define MATERIAL_PBR MaterialType(1)
 #define MATERIAL_DIFFUSE MaterialType(2)
 
-uvec2 unpack_tex_smp_id_pair(TexSmpIdPair packed) 
+shader_uvec2 unpack_tex_smp_id_pair(TexSmpIdPair packed)
 {
-  const uint t = packed & 0xFFFF;
-  const uint s = (packed >> 16) & 0xFFFF;
-  return uvec2(t, s);
+  const shader_uint t = shader_uint(packed) & 0xFFFF;
+  const shader_uint s = (shader_uint(packed) >> 16) & 0xFFFF;
+  return shader_uvec2(t, s);
 }
 
 #endif
@@ -71,21 +82,21 @@ struct Material
   MaterialType mat;
 
   // Common
-  TexSmpIdPair normalTexSmp; 
-  
+  TexSmpIdPair normalTexSmp;
+
   // PBR
   shader_uint baseColorFactor;
   float metalnessFactor;
   float roughnessFactor;
-  TexSmpIdPair baseColorTexSmp; 
-  TexSmpIdPair metalnessRoughnessTexSmp; 
+  TexSmpIdPair baseColorTexSmp;
+  TexSmpIdPair metalnessRoughnessTexSmp;
 
   // Diffuse @NOTE: can be aliased w/ PBR
   shader_uint diffuseColorFactor;
-  //shader_uint specularFactor;
-  //float glossinessFactor;
-  TexSmpIdPair diffuseTexSmp; 
-  //TexSmpIdPair specularGlossinessTexSmp; 
+  // shader_uint specularFactor;
+  // float glossinessFactor;
+  TexSmpIdPair diffuseTexSmp;
+  // TexSmpIdPair specularGlossinessTexSmp;
 
   TexSmpIdPair heightDisplacementTexSmp;
   float displacementCoeff;

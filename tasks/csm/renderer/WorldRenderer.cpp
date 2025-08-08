@@ -45,9 +45,11 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.blendingConfig.attachments = {};
     sci.fragmentShaderOutput.colorAttachmentFormats = {};
     sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
-    pipelines[size_t(SceneRenderingPass::SHADOW)] =
+    // @TODO: position lights so that they are not in geometry (or restore culling?)
+    sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eNone;
+    pipelines[size_t(SceneRenderingPass::DEPTH)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
-    programs[size_t(SceneRenderingPass::COLOR)].emplace(etna::get_shader_program(vertex_prog_name));
+    programs[size_t(SceneRenderingPass::DEPTH)].emplace(etna::get_shader_program(vertex_prog_name));
   }
 }
 
@@ -131,6 +133,12 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
 
+  lightMatricesBuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = sizeof(LightMatrices),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "light_matrices"});
+
   stubUniBuffer = create_buffer(etna::Buffer::CreateInfo{
     .size = 16,
     .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
@@ -146,12 +154,45 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     component->allocateResources(resolution);
 }
 
+// @TODO: pull out
+template <class T, size_t N, size_t... Is, class F>
+static std::array<T, N> array_make_impl(std::index_sequence<Is...>, F&& make)
+{
+  return {((void)Is, make())...};
+}
+
+template <class T, size_t N, class F>
+static std::array<T, N> array_make(F&& make)
+{
+  return array_make_impl<T, N>(std::make_index_sequence<N>{}, std::forward<F>(make));
+}
+
 void WorldRenderer::loadScene(std::filesystem::path path)
 {
   // @TODO: make recallable, i.e. implement cleanup
 
   sceneMgr->selectScene(path, cfg.testMultiplexScene ? cfg.testMultiplexing : SceneMultiplexing{});
+
   mainViewContext.emplace(viewCtxMgr->alloc("main"));
+
+  pointLightViews.reserve(sceneMgr->getLights().pointLightsCount);
+  spotLightViews.reserve(sceneMgr->getLights().spotLightsCount);
+  directionalLightCascadeViews.reserve(sceneMgr->getLights().directionalLightsCount);
+
+  for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
+  {
+    pointLightViews.emplace_back(array_make<ViewContext, 6>(
+      [this, i] { return viewCtxMgr->alloc(fmt::format("point{}", i).c_str()); }));
+  }
+  for (size_t i = 0; i < sceneMgr->getLights().spotLightsCount; ++i)
+  {
+    spotLightViews.emplace_back(viewCtxMgr->alloc(fmt::format("spot{}", i).c_str()));
+  }
+  for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
+  {
+    directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>(
+      [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
+  }
 
   if (sceneMgr->hasTerrain())
   {
@@ -345,6 +386,8 @@ void WorldRenderer::loadShaders()
      RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
+  etna::create_program(
+    "calculate_light_mats", {RENDERER_SHADERS_ROOT "calculate_light_mats.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -448,6 +491,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     pipelineManager, "terrain_mesh", "terrain_shadow", terrainPipelineCreateInfo);
 
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
+  calcLightMatsPipeline = pipelineManager.createComputePipeline("calculate_light_mats", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -535,6 +579,10 @@ void WorldRenderer::renderScene(
   etna::RenderTargetState::CreateInfo rpass_info,
   SceneRenderingPass pass)
 {
+  const auto passHasFragmentStage = [](SceneRenderingPass p) {
+    return p == SceneRenderingPass::COLOR || p == SceneRenderingPass::WIRE_COLOR;
+  };
+
   ctx.update(params);
   viewCtxMgr->cullForView(cmd_buf, ctx, constants->get());
 
@@ -556,15 +604,17 @@ void WorldRenderer::renderScene(
         {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
          etna::Binding{1, ctx.culledInstancesBuf.genBinding()},
          etna::Binding{9, ctx.viewParamsBuf.get().genBinding()}});
+      std::vector vkSets{set.getVkSet()};
+
+      if (passHasFragmentStage(pass))
+      {
+        vkSets.push_back(materialParamsDsetFrag.getVkSet());
+        vkSets.push_back(bindlessTexturesDsetFrag.getVkSet());
+        vkSets.push_back(bindlessSamplersDsetFrag.getVkSet());
+      }
+
       cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
-        pipe.getVkPipelineLayout(),
-        0,
-        {set.getVkSet(),
-         materialParamsDsetFrag.getVkSet(),
-         bindlessTexturesDsetFrag.getVkSet(),
-         bindlessSamplersDsetFrag.getVkSet()},
-        {});
+        vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, vkSets, {});
 
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
 
@@ -649,10 +699,50 @@ void WorldRenderer::renderWorld(
   memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
   memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
 
-  // @TODO pack culling & draw back into a renderScene method (will need for shadow maps)
-
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
+
+    {
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = lightMatricesBuf.get(),
+          .size = sizeof(LightMatrices)}});
+
+      auto programInfo = etna::get_shader_program("calculate_light_mats");
+      auto set = etna::create_descriptor_set(
+        programInfo.getDescriptorLayoutId(0),
+        cmd_buf,
+        {etna::Binding{0, lightMatricesBuf.genBinding()},
+         etna::Binding{1, lights->get().genBinding()},
+         etna::Binding{8, constants->get().genBinding()},
+         etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()}});
+
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eCompute,
+        calcLightMatsPipeline.getVkPipelineLayout(),
+        0,
+        {set.getVkSet()},
+        {});
+
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, calcLightMatsPipeline.getVkPipeline());
+      cmd_buf.dispatch(
+        get_linear_wg_count(sizeof(LightMatrices) / sizeof(glm::mat4), BASE_WORK_GROUP_SIZE), 1, 1);
+
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+          .buffer = lightMatricesBuf.get(),
+          .size = sizeof(LightMatrices)}});
+    }
 
     if (terrain && terrain->needToroidalUpdate)
     {
@@ -711,6 +801,51 @@ void WorldRenderer::renderWorld(
     }
 
     {
+      ETNA_PROFILE_GPU(cmd_buf, shadowmapGen);
+
+      const auto& lights = sceneMgr->getLights();
+
+      // @TODO: point
+
+      for (size_t i = 0; const auto& spot : std::span{lights.spotLights, lights.spotLightsCount})
+      {
+        const auto [tid, _] = unpack_tex_smp_id_pair(spot.shadowmap);
+        const auto& map = sceneMgr->getTex(tid);
+
+        // @TODO: pull stuff out
+        Camera cam{};
+        const auto up = std::max(fabsf(spot.direction.x), fabsf(spot.direction.z)) < SHADER_EPSILON
+          ? glm::vec3(0.f, 0.f, 1.f)
+          : glm::vec3(0.f, 1.f, 0.f);
+        cam.lookAt(spot.position, spot.position + spot.direction, up);
+        cam.fov = spot.outerConeAngle * 180.f / M_PI;
+        cam.zNear = 0.001f;
+        cam.zFar = spot.range + 0.001f;
+
+        renderScene(
+          cmd_buf,
+          spotLightViews[i],
+          view_params_for_cam(cam, 1.f),
+          {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
+           {},
+           {.image = map.get(), .view = map.getView({})}},
+          SceneRenderingPass::DEPTH);
+
+        etna::set_state(
+          cmd_buf,
+          map.get(),
+          vk::PipelineStageFlagBits2::eFragmentShader,
+          vk::AccessFlagBits2::eShaderRead,
+          vk::ImageLayout::eShaderReadOnlyOptimal,
+          vk::ImageAspectFlagBits::eDepth);
+
+        ++i;
+      }
+
+      // @TODO: dir
+    }
+
+    {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
 
       renderScene(
@@ -732,15 +867,16 @@ void WorldRenderer::renderWorld(
         gbufferResolver->shaderProgramInfo().getDescriptorLayoutId(0),
         cmd_buf,
         {etna::Binding{1, lights->get().genBinding()},
+         etna::Binding{2, lightMatricesBuf.genBinding()},
          etna::Binding{
-           2, gbufAlbedo.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           3, gbufAlbedo.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
-           3,
+           4,
            gbufMaterial.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
-           4, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           5, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
-           5,
+           6,
            mainViewDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{7, (skybox ? skybox->source : stubUniBuffer).genBinding()},
          etna::Binding{8, constants->get().genBinding()},
