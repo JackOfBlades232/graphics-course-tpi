@@ -805,7 +805,51 @@ void WorldRenderer::renderWorld(
 
       const auto& lights = sceneMgr->getLights();
 
-      // @TODO: point
+      // @TODO: cull lights outside of frustum. Maybe also draw sm-s on demand?
+
+      for (size_t i = 0; const auto& point : std::span{lights.pointLights, lights.pointLightsCount})
+      {
+        const auto [tid, _] = unpack_tex_smp_id_pair(point.shadowmap);
+        const auto& map = sceneMgr->getTex(tid);
+
+        constexpr std::array FACE_DIRS{
+          glm::vec3{1.f, 0.f, 0.f},
+          glm::vec3{-1.f, 0.f, 0.f},
+          glm::vec3{0.f, 1.f, 0.f},
+          glm::vec3{0.f, -1.f, 0.f},
+          glm::vec3{0.f, 0.f, -1.f},
+          glm::vec3{0.f, 0.f, 1.f},
+        };
+        constexpr std::array FACE_UPS{
+          glm::vec3{0.f, 1.f, 0.f},
+          glm::vec3{0.f, 1.f, 0.f},
+          glm::vec3{0.f, 0.f, 1.f},
+          glm::vec3{0.f, 0.f, -1.f},
+          glm::vec3{0.f, 1.f, 0.f},
+          glm::vec3{0.f, 1.f, 0.f},
+        };
+
+        for (size_t j = 0; j < 6; ++j)
+        {
+          Camera cam{};
+          cam.lookAt(point.position, point.position + FACE_DIRS[j], FACE_UPS[j]);
+          cam.fov = 90.f;
+          cam.zNear = 0.001f;
+          cam.zFar = point.range + 0.001f;
+
+          renderScene(
+            cmd_buf,
+            pointLightViews[i][j],
+            view_params_for_cam(cam, 1.f),
+            {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
+             {},
+             {.image = map.get(),
+              .view = map.getView({.baseLayer = uint32_t(j), .layerCount = 1u})}},
+            SceneRenderingPass::DEPTH);
+        }
+
+        ++i;
+      }
 
       for (size_t i = 0; const auto& spot : std::span{lights.spotLights, lights.spotLightsCount})
       {
@@ -974,20 +1018,18 @@ void WorldRenderer::drawGui()
     {
       ImGui::Begin("Lights");
 
-      const bool prevDirVal = directionalLightsAreOn;
-      const bool prevPointVal = pointLightsAreOn;
-      const bool prevSpotVal = spotLightsAreOn;
-
-      ImGui::Checkbox("Enable directional lights", &directionalLightsAreOn);
-      ImGui::Checkbox("Enable point lights", &pointLightsAreOn);
-      ImGui::Checkbox("Enable spot lights", &spotLightsAreOn);
-
-      if (directionalLightsAreOn != prevDirVal)
-        setAllDirLightsIntensity(directionalLightsAreOn ? 1.f : 0.f);
-      if (pointLightsAreOn != prevPointVal)
-        setAllPointLightsIntensity(pointLightsAreOn ? 1.f : 0.f);
-      if (spotLightsAreOn != prevSpotVal)
-        setAllSpotLightsIntensity(spotLightsAreOn ? 1.f : 0.f);
+      if (ImGui::Button("Turn on all directional lights"))
+        setAllDirLightsIntensity(1.f);
+      else if (ImGui::Button("Turn off all directional lights"))
+        setAllDirLightsIntensity(0.f);
+      if (ImGui::Button("Turn on all point lights"))
+        setAllPointLightsIntensity(1.f);
+      else if (ImGui::Button("Turn off all point lights"))
+        setAllPointLightsIntensity(0.f);
+      if (ImGui::Button("Turn on all spot lights"))
+        setAllSpotLightsIntensity(1.f);
+      else if (ImGui::Button("Turn off all spot lights"))
+        setAllSpotLightsIntensity(0.f);
 
       // @TODO: not static
       static enum LType

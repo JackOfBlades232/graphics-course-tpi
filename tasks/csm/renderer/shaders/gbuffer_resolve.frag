@@ -46,6 +46,8 @@ layout(location = 0) in VS_OUT
   vec2 texCoord;
 } surf;
 
+const float SHADOW_BIAS = 0.00002f;
+
 vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 {
   const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
@@ -215,10 +217,24 @@ void main(void)
     if (length(lightColor) < SHADER_EPSILON)
       continue;
 
+    const vec3 sampleDir = -vec3(lightDir.x, lightDir.y, -lightDir.z);
+    const float lDepth = sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sampleDir, 0.f).x + SHADOW_BIAS;
+
+    // @TODO: pull out?
+    const uint faceIdx =
+      abs(sampleDir.x) > abs(sampleDir.y) && abs(sampleDir.x) > abs(sampleDir.z) ? (sampleDir.x > 0.f ? 0 : 1) :
+      abs(sampleDir.y) > abs(sampleDir.z) ? (sampleDir.y > 0.f ? 2 : 3) :
+      (sampleDir.z > 0.f ? 4 : 5);
+
+    const vec4 posLightClipSpace = mats.pointLightMats[i][faceIdx] * vec4(pos, 1.f);
+    const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
+
+    const float shadow = lDepth < posLightSpaceNDC.z ? 0.f : 1.f;
+
     if (mat == MATERIAL_PBR)
-      color += calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightColor);
+      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightColor);
     else if (mat == MATERIAL_DIFFUSE)
-      color += calculate_diffuse(normal, lightDir, albedo, lightColor);
+      color += shadow * calculate_diffuse(normal, lightDir, albedo, lightColor);
   }
 
   for (uint i = 0; i < lights.spotLightsCount; ++i)
@@ -243,7 +259,7 @@ void main(void)
     const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
     const vec2 shadowUv = vec2(-posLightSpaceNDC.x, posLightSpaceNDC.y) * 0.5f + 0.5f;
 
-    const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x + 0.0001f;
+    const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x + SHADOW_BIAS;
 
     const float shadow = (
       shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||

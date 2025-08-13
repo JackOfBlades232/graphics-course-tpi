@@ -33,6 +33,23 @@ const uint POINT_MAT_CNT = POINT_LIGHT_BUF_SIZE * 6;
 const uint SPOT_MAT_CNT = SPOT_LIGHT_BUF_SIZE;
 const uint DIR_MAT_CNT = DIRECTIONAL_LIGHT_BUF_SIZE * CSM_CASCADE_COUNT;
 
+const vec3 POINT_FACE_DIRS[] = {
+  vec3(1.f, 0.f, 0.f),
+  vec3(-1.f, 0.f, 0.f),
+  vec3(0.f, 1.f, 0.f),
+  vec3(0.f, -1.f, 0.f),
+  vec3(0.f, 0.f, -1.f),
+  vec3(0.f, 0.f, 1.f)
+};
+const vec3 POINT_FACE_UPS[] = {
+  vec3(0.f, 1.f, 0.f),
+  vec3(0.f, 1.f, 0.f),
+  vec3(0.f, 0.f, 1.f),
+  vec3(0.f, 0.f, -1.f),
+  vec3(0.f, 1.f, 0.f),
+  vec3(0.f, 1.f, 0.f)
+};
+
 void main(void)
 {
   const uint idx = gl_GlobalInvocationID.x;
@@ -40,8 +57,30 @@ void main(void)
   {
     const uint iidx = idx;
     const uint lidx = iidx / 6;
-    const uint fidx = iidx - lidx;
-    // @TODO: remove? We don't need this for cube sampling
+    const uint fidx = iidx - lidx * 6;
+
+    const vec3 pos = lights.pointLights[lidx].position;
+    const vec3 front = POINT_FACE_DIRS[fidx];
+    const vec3 upReal = POINT_FACE_UPS[fidx];
+    const vec3 right = normalize(cross(front, upReal));
+    const vec3 up = normalize(cross(right, front));
+    const mat4 inverseView = mat4(
+      vec4(right, 0.f),
+      vec4(up, 0.f),
+      vec4(front, 0.f),
+      vec4(pos, 1.f));
+    const mat4 view = inverse(inverseView);
+    const float znear = 0.001f;
+    const float zfar = lights.pointLights[lidx].range + 0.001f;
+    const float invext = -1.f;
+    const float invZRng = 1.f / (zfar - znear);
+    const mat4 proj = mat4(
+      vec4(invext, 0.f, 0.f, 0.f),
+      vec4(0.f, invext, 0.f, 0.f),
+      vec4(0.f, 0.f, zfar * invZRng, 1.f),
+      vec4(0.f, 0.f, -znear * zfar * invZRng, 0.f));
+
+    mats.pointLightMats[lidx][fidx] = proj * view;
   }
   else if (idx < POINT_MAT_CNT + SPOT_MAT_CNT)
   {
