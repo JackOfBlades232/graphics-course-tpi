@@ -187,10 +187,6 @@ private:
   const Config& cfg;
 
   // @DEBUG
-  bool directionalLightsAreOn = true;
-  bool pointLightsAreOn = true;
-  bool spotLightsAreOn = true;
-
   std::unique_ptr<BboxRenderer> bboxRenderer{};
   std::unique_ptr<QuadRenderer> quadRenderer{};
 
