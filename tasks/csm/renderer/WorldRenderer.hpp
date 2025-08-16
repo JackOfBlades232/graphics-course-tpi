@@ -210,6 +210,9 @@ private:
   bool enableSkybox = true;
   bool doTonemapping = true;
   bool useSharedMemForTonemapping = false;
+  bool enablePointLightShadows = true;
+  bool enableSpotLightShadows = true;
+  bool enableDirectionalLightShadows = true;
   // @TODO: graduate to JB_terrain
   float terrainNoiseRelHeightAmp = 0.001f;
   float terrainNoisePeriod = 0.25f;

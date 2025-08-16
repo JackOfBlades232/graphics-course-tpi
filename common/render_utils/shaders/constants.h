@@ -24,6 +24,10 @@ struct Constants
   shader_uint useTonemapping;
   shader_uint useSharedMemForTonemapping;
 
+  shader_uint usePointLightShadows;
+  shader_uint useSpotLightShadows;
+  shader_uint useDirectionalLightShadows;
+
   float histEqTonemappingRegW;
   float histEqTonemappingRefinedW;
   float histEqTonemappingMinAdmissibleLum;
@@ -32,7 +36,7 @@ struct Constants
   // @TODO: try getting exposure from histogram instead
   float acesExposure;
 
-  shader_uint pad1_;
+  shader_uint pad1_, pad2_;
 };
 
 #endif // CONSTANTS_H_INCLUDED
