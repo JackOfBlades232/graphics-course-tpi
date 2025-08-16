@@ -46,7 +46,7 @@ layout(location = 0) in VS_OUT
   vec2 texCoord;
 } surf;
 
-const float SHADOW_BIAS = 0.00002f;
+const float SHADOW_BIAS = 0.00001f;
 
 vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 {
@@ -217,19 +217,24 @@ void main(void)
     if (length(lightColor) < SHADER_EPSILON)
       continue;
 
-    const vec3 sampleDir = -vec3(lightDir.x, lightDir.y, -lightDir.z);
-    const float lDepth = sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sampleDir, 0.f).x + SHADOW_BIAS;
+    float shadow = 1.f;
 
-    // @TODO: pull out?
-    const uint faceIdx =
-      abs(sampleDir.x) > abs(sampleDir.y) && abs(sampleDir.x) > abs(sampleDir.z) ? (sampleDir.x > 0.f ? 0 : 1) :
-      abs(sampleDir.y) > abs(sampleDir.z) ? (sampleDir.y > 0.f ? 2 : 3) :
-      (sampleDir.z > 0.f ? 4 : 5);
+    if (constants.usePointLightShadows != 0)
+    {
+      const vec3 sampleDir = -vec3(lightDir.x, lightDir.y, -lightDir.z);
+      const float lDepth = sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sampleDir, 0.f).x + SHADOW_BIAS;
 
-    const vec4 posLightClipSpace = mats.pointLightMats[i][faceIdx] * vec4(pos, 1.f);
-    const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
+      // @TODO: pull out?
+      const uint faceIdx =
+        abs(sampleDir.x) > abs(sampleDir.y) && abs(sampleDir.x) > abs(sampleDir.z) ? (sampleDir.x > 0.f ? 0 : 1) :
+        abs(sampleDir.y) > abs(sampleDir.z) ? (sampleDir.y > 0.f ? 2 : 3) :
+        (sampleDir.z > 0.f ? 4 : 5);
 
-    const float shadow = lDepth < posLightSpaceNDC.z ? 0.f : 1.f;
+      const vec4 posLightClipSpace = mats.pointLightMats[i][faceIdx] * vec4(pos, 1.f);
+      const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
+
+      shadow = lDepth < posLightSpaceNDC.z ? 0.f : 1.f;
+    }
 
     if (mat == MATERIAL_PBR)
       color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightColor);
@@ -255,16 +260,21 @@ void main(void)
     if (length(lightColor) < SHADER_EPSILON)
       continue;
 
-    const vec4 posLightClipSpace = mats.spotLightMats[i] * vec4(pos, 1.f);
-    const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
-    const vec2 shadowUv = vec2(-posLightSpaceNDC.x, posLightSpaceNDC.y) * 0.5f + 0.5f;
+    float shadow = 1.f;
 
-    const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x + SHADOW_BIAS;
+    if (constants.useSpotLightShadows != 0)
+    {
+      const vec4 posLightClipSpace = mats.spotLightMats[i] * vec4(pos, 1.f);
+      const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
+      const vec2 shadowUv = vec2(-posLightSpaceNDC.x, posLightSpaceNDC.y) * 0.5f + 0.5f;
 
-    const float shadow = (
-      shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
-      shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
-      lDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
+      const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x + SHADOW_BIAS;
+
+      shadow = (
+        shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
+        shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
+        lDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
+    }
 
     if (mat == MATERIAL_PBR)
       color += shadow * calculate_pbr(normal, fromPosDir, viewVec, matData.y, matData.z, albedo, lightColor);

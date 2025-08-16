@@ -559,6 +559,10 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.useSkybox = skybox.has_value() && enableSkybox;
     constantsData.drawTerrainSplattedDetail = terrain.has_value() && drawTerrainSplattedDetail;
 
+    constantsData.usePointLightShadows = enablePointLightShadows;
+    constantsData.useSpotLightShadows = enableSpotLightShadows;
+    constantsData.useDirectionalLightShadows = enableDirectionalLightShadows;
+
     constantsData.terrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
     constantsData.terrainNoisePeriod = terrainNoisePeriod;
 
@@ -807,83 +811,91 @@ void WorldRenderer::renderWorld(
 
       // @TODO: cull lights outside of frustum. Maybe also draw sm-s on demand?
 
-      for (size_t i = 0; const auto& point : std::span{lights.pointLights, lights.pointLightsCount})
+      if (enablePointLightShadows)
       {
-        const auto [tid, _] = unpack_tex_smp_id_pair(point.shadowmap);
-        const auto& map = sceneMgr->getTex(tid);
-
-        constexpr std::array FACE_DIRS{
-          glm::vec3{1.f, 0.f, 0.f},
-          glm::vec3{-1.f, 0.f, 0.f},
-          glm::vec3{0.f, 1.f, 0.f},
-          glm::vec3{0.f, -1.f, 0.f},
-          glm::vec3{0.f, 0.f, -1.f},
-          glm::vec3{0.f, 0.f, 1.f},
-        };
-        constexpr std::array FACE_UPS{
-          glm::vec3{0.f, 1.f, 0.f},
-          glm::vec3{0.f, 1.f, 0.f},
-          glm::vec3{0.f, 0.f, 1.f},
-          glm::vec3{0.f, 0.f, -1.f},
-          glm::vec3{0.f, 1.f, 0.f},
-          glm::vec3{0.f, 1.f, 0.f},
-        };
-
-        for (size_t j = 0; j < 6; ++j)
+        for (size_t i = 0;
+             const auto& point : std::span{lights.pointLights, lights.pointLightsCount})
         {
+          const auto [tid, _] = unpack_tex_smp_id_pair(point.shadowmap);
+          const auto& map = sceneMgr->getTex(tid);
+
+          constexpr std::array FACE_DIRS{
+            glm::vec3{1.f, 0.f, 0.f},
+            glm::vec3{-1.f, 0.f, 0.f},
+            glm::vec3{0.f, 1.f, 0.f},
+            glm::vec3{0.f, -1.f, 0.f},
+            glm::vec3{0.f, 0.f, -1.f},
+            glm::vec3{0.f, 0.f, 1.f},
+          };
+          constexpr std::array FACE_UPS{
+            glm::vec3{0.f, 1.f, 0.f},
+            glm::vec3{0.f, 1.f, 0.f},
+            glm::vec3{0.f, 0.f, 1.f},
+            glm::vec3{0.f, 0.f, -1.f},
+            glm::vec3{0.f, 1.f, 0.f},
+            glm::vec3{0.f, 1.f, 0.f},
+          };
+
+          for (size_t j = 0; j < 6; ++j)
+          {
+            Camera cam{};
+            cam.lookAt(point.position, point.position + FACE_DIRS[j], FACE_UPS[j]);
+            cam.fov = 90.f;
+            cam.zNear = 0.001f;
+            cam.zFar = point.range + 0.001f;
+
+            renderScene(
+              cmd_buf,
+              pointLightViews[i][j],
+              view_params_for_cam(cam, 1.f),
+              {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
+               {},
+               {.image = map.get(),
+                .view = map.getView({.baseLayer = uint32_t(j), .layerCount = 1u})}},
+              SceneRenderingPass::DEPTH);
+          }
+
+          ++i;
+        }
+      }
+
+      if (enableSpotLightShadows)
+      {
+        for (size_t i = 0; const auto& spot : std::span{lights.spotLights, lights.spotLightsCount})
+        {
+          const auto [tid, _] = unpack_tex_smp_id_pair(spot.shadowmap);
+          const auto& map = sceneMgr->getTex(tid);
+
+          // @TODO: pull stuff out
           Camera cam{};
-          cam.lookAt(point.position, point.position + FACE_DIRS[j], FACE_UPS[j]);
-          cam.fov = 90.f;
+          const auto up =
+            std::max(fabsf(spot.direction.x), fabsf(spot.direction.z)) < SHADER_EPSILON
+            ? glm::vec3(0.f, 0.f, 1.f)
+            : glm::vec3(0.f, 1.f, 0.f);
+          cam.lookAt(spot.position, spot.position + spot.direction, up);
+          cam.fov = spot.outerConeAngle * 180.f / M_PI;
           cam.zNear = 0.001f;
-          cam.zFar = point.range + 0.001f;
+          cam.zFar = spot.range + 0.001f;
 
           renderScene(
             cmd_buf,
-            pointLightViews[i][j],
+            spotLightViews[i],
             view_params_for_cam(cam, 1.f),
-            {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
+            {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
              {},
-             {.image = map.get(),
-              .view = map.getView({.baseLayer = uint32_t(j), .layerCount = 1u})}},
+             {.image = map.get(), .view = map.getView({})}},
             SceneRenderingPass::DEPTH);
+
+          etna::set_state(
+            cmd_buf,
+            map.get(),
+            vk::PipelineStageFlagBits2::eFragmentShader,
+            vk::AccessFlagBits2::eShaderRead,
+            vk::ImageLayout::eShaderReadOnlyOptimal,
+            vk::ImageAspectFlagBits::eDepth);
+
+          ++i;
         }
-
-        ++i;
-      }
-
-      for (size_t i = 0; const auto& spot : std::span{lights.spotLights, lights.spotLightsCount})
-      {
-        const auto [tid, _] = unpack_tex_smp_id_pair(spot.shadowmap);
-        const auto& map = sceneMgr->getTex(tid);
-
-        // @TODO: pull stuff out
-        Camera cam{};
-        const auto up = std::max(fabsf(spot.direction.x), fabsf(spot.direction.z)) < SHADER_EPSILON
-          ? glm::vec3(0.f, 0.f, 1.f)
-          : glm::vec3(0.f, 1.f, 0.f);
-        cam.lookAt(spot.position, spot.position + spot.direction, up);
-        cam.fov = spot.outerConeAngle * 180.f / M_PI;
-        cam.zNear = 0.001f;
-        cam.zFar = spot.range + 0.001f;
-
-        renderScene(
-          cmd_buf,
-          spotLightViews[i],
-          view_params_for_cam(cam, 1.f),
-          {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
-           {},
-           {.image = map.get(), .view = map.getView({})}},
-          SceneRenderingPass::DEPTH);
-
-        etna::set_state(
-          cmd_buf,
-          map.get(),
-          vk::PipelineStageFlagBits2::eFragmentShader,
-          vk::AccessFlagBits2::eShaderRead,
-          vk::ImageLayout::eShaderReadOnlyOptimal,
-          vk::ImageAspectFlagBits::eDepth);
-
-        ++i;
       }
 
       // @TODO: dir
@@ -1213,6 +1225,11 @@ void WorldRenderer::drawGui()
           ImGui::SliderFloat("Hardcoded exposure", &acesExposure, 0.f, 64.f);
         }
       }
+
+      ImGui::Checkbox("Enable point light shadows", &enablePointLightShadows);
+      ImGui::Checkbox("Enable spot light shadows", &enableSpotLightShadows);
+      ImGui::Checkbox("Enable directional light shadows", &enableDirectionalLightShadows);
+
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
 
@@ -1385,6 +1402,9 @@ void WorldRenderer::loadDebugConfig()
   enableSkybox = unwrap(reader.read<bool>());
   doTonemapping = unwrap(reader.read<bool>());
   useSharedMemForTonemapping = unwrap(reader.read<bool>());
+  enablePointLightShadows = unwrap(reader.read<bool>());
+  enableSpotLightShadows = unwrap(reader.read<bool>());
+  enableDirectionalLightShadows = unwrap(reader.read<bool>());
   terrainNoiseRelHeightAmp = unwrap(reader.read<float>());
   terrainNoisePeriod = unwrap(reader.read<float>());
   histEqTonemappingRegW = unwrap(reader.read<float>());
@@ -1440,6 +1460,9 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(enableSkybox));
   ETNA_VERIFY(writer.write(doTonemapping));
   ETNA_VERIFY(writer.write(useSharedMemForTonemapping));
+  ETNA_VERIFY(writer.write(enablePointLightShadows));
+  ETNA_VERIFY(writer.write(enableSpotLightShadows));
+  ETNA_VERIFY(writer.write(enableDirectionalLightShadows));
   ETNA_VERIFY(writer.write(terrainNoiseRelHeightAmp));
   ETNA_VERIFY(writer.write(terrainNoisePeriod));
   ETNA_VERIFY(writer.write(histEqTonemappingRegW));
