@@ -16,10 +16,13 @@
 #define POINT_SM_RESOLUTION 1024
 #define SPOT_SM_RESOLUTION 1024
 
+#define CSM_CORRIDOR_SIZE 100.f
+
 struct CascadeData
 {
   TexSmpIdPair map;
-  shader_uint pad1_, pad2_, pad3_;
+  float minX, maxX, minY, maxY, minZ, maxZ; // View plane space
+  shader_uint pad1_;
 };
 
 struct PointLight
@@ -71,5 +74,27 @@ struct LightMatrices
   shader_mat4 spotLightMats[SPOT_LIGHT_BUF_SIZE];
   shader_mat4 directionalLightMats[DIRECTIONAL_LIGHT_BUF_SIZE][CSM_CASCADE_COUNT];
 };
+
+#ifdef __cplusplus
+
+enum class ShadowTechnique
+{
+  HARD = 0,
+  PCF,
+  // @TODO: VSM, ESM
+
+  COUNT
+};
+
+#define SHADOW_TECHNIQUE_HARD ShadowTechnique::HARD
+#define SHADOW_TECHNIQUE_PCF ShadowTechnique::PCF
+
+#else
+
+#define ShadowTechnique shader_uint
+#define SHADOW_TECHNIQUE_HARD 0
+#define SHADOW_TECHNIQUE_PCF 1
+
+#endif
 
 #endif // LIGHTS_H_INCLUDED

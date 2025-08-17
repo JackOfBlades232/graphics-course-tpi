@@ -39,16 +39,14 @@ const vec3 POINT_FACE_DIRS[] = {
   vec3(0.f, 1.f, 0.f),
   vec3(0.f, -1.f, 0.f),
   vec3(0.f, 0.f, -1.f),
-  vec3(0.f, 0.f, 1.f)
-};
+  vec3(0.f, 0.f, 1.f)};
 const vec3 POINT_FACE_UPS[] = {
   vec3(0.f, 1.f, 0.f),
   vec3(0.f, 1.f, 0.f),
   vec3(0.f, 0.f, 1.f),
   vec3(0.f, 0.f, -1.f),
   vec3(0.f, 1.f, 0.f),
-  vec3(0.f, 1.f, 0.f)
-};
+  vec3(0.f, 1.f, 0.f)};
 
 void main(void)
 {
@@ -115,7 +113,46 @@ void main(void)
   {
     const uint iidx = idx - POINT_MAT_CNT - SPOT_MAT_CNT;
     const uint lidx = iidx / CSM_CASCADE_COUNT;
-    const uint cidx = iidx - lidx;
-    // @TODO
+    const uint cidx = iidx - lidx * CSM_CASCADE_COUNT;
+
+    const float minX = lights.directionalLights[lidx].shadowmapCascades[cidx].minX;
+    const float maxX = lights.directionalLights[lidx].shadowmapCascades[cidx].maxX;
+    const float minY = lights.directionalLights[lidx].shadowmapCascades[cidx].minY;
+    const float maxY = lights.directionalLights[lidx].shadowmapCascades[cidx].maxY;
+    const float minZ = lights.directionalLights[lidx].shadowmapCascades[cidx].minZ;
+    const float maxZ = lights.directionalLights[lidx].shadowmapCascades[cidx].maxZ;
+
+    const float xExt = (maxX - minX) * 0.5f;
+    const float yExt = (maxY - minY) * 0.5f;
+    const float xCenter = (maxX + minX) * 0.5f;
+    const float yCenter = (maxY + minY) * 0.5f;
+
+    const vec3 front = normalize(lights.directionalLights[lidx].direction);
+    const vec3 upReal =
+      max(abs(front.x), abs(front.z)) < SHADER_EPSILON ?
+      vec3(0.f, 0.f, 1.f) : vec3(0.f, 1.f, 0.f);
+    const vec3 right = normalize(cross(upReal, front));
+    const vec3 up = normalize(cross(front, right));
+
+    const float znear = minZ - CSM_CORRIDOR_SIZE - 0.001f;
+    const float zfar = maxZ + 0.001f;
+
+    const vec3 pos = right * xCenter + up * yCenter;
+
+    const mat4 inverseView = mat4(
+      vec4(right, 0.f),
+      vec4(up, 0.f),
+      vec4(front, 0.f),
+      vec4(pos, 1.f));
+    const mat4 view = inverse(inverseView);
+
+    const mat4 proj = mat4(
+      vec4(-1.f / xExt, 0.f, 0.f, 0.f),
+      vec4(0.f, -1.f / yExt, 0.f, 0.f),
+      vec4(0.f, 0.f, 1.f / (zfar - znear), 0.f),
+      vec4(0.f, 0.f, -znear / (zfar - znear), 1.f));
+
+    mats.directionalLightMats[lidx][cidx] = proj * view;
+    //mats.directionalLightMats[lidx][cidx] = view; // @TODO: this is not exact with position
   }
 }

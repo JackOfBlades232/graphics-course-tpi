@@ -3,6 +3,7 @@
 
 #include "cpp_glsl_compat.h"
 #include "geometry.h"
+#include "lights.h"
 
 #define BIG_EPSILON 0.001f
 
@@ -28,6 +29,10 @@ struct Constants
   shader_uint useSpotLightShadows;
   shader_uint useDirectionalLightShadows;
 
+  ShadowTechnique pointLightShadowsTechnique;
+  ShadowTechnique spotLightShadowsTechnique;
+  ShadowTechnique directionalLightShadowsTechnique;
+
   float histEqTonemappingRegW;
   float histEqTonemappingRefinedW;
   float histEqTonemappingMinAdmissibleLum;
@@ -35,6 +40,8 @@ struct Constants
 
   // @TODO: try getting exposure from histogram instead
   float acesExposure;
+
+  float csmSplitLambda;
 
   shader_uint pad1_, pad2_;
 };

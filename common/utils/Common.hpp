@@ -3,6 +3,7 @@
 #include <etna/Assert.hpp>
 
 #include <optional>
+#include <concepts>
 
 template <class T>
 inline T unwrap(std::optional<T>&& opt)
@@ -48,3 +49,16 @@ inline T div_enough(T val, T div)
 {
   return (val + div - T{1}) / div;
 }
+
+template <std::floating_point T>
+inline T snap_down(T v, T cell)
+{
+  return floor(v / cell) * cell;
+}
+
+template <std::floating_point T>
+inline T snap_up(T v, T cell)
+{
+  return ceil(v / cell) * cell;
+}
+

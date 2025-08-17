@@ -1,0 +1,11 @@
+1. Prepare the frustum split +
+2. Calculate view space viewports +
+3. Cpu matrix calculation +
+4. Gpu matrix calculation +
+5. Render cascades cpu side +
+6. Sample with matrix in resolve +
+7. PCF +
+8. PCF blending for cascades via manhattan thingy
+9. Optimize sm rendering with dirty lights
+10. Stabilize visuals
+
