@@ -36,20 +36,6 @@ vec3 world_to_view(vec4 v)
   return (viewParams.mView * v).xyz;
 }
 
-vec2 project_frustum_onto_ax(
-    float x_near, float y_near, float z_near, float z_far, vec3 m)
-{
-  const float p = x_near * abs(m.x) + y_near * abs(m.y);
-  const float nmd = z_near * m.z;
-  float frustumMin = nmd - p;
-  float frustumMax = nmd + p;
-  if (frustumMin < 0.f)
-    frustumMin *= z_far / z_near;
-  if (frustumMax > 0.f)
-    frustumMax *= z_far / z_near;
-  return vec2(frustumMin, frustumMax);
-}
-
 vec2 project_obb_onto_ax(
     vec3 c, vec3 x_ax, vec3 y_ax, vec3 z_ax, vec3 exts, vec3 m)
 {
@@ -61,6 +47,39 @@ vec2 project_obb_onto_ax(
   const float obbMin = mc - rad;
   const float obbMax = mc + rad;
   return vec2(obbMin, obbMax);
+}
+
+vec2 project_frustum_onto_ax(
+    float x_near, float y_near, float z_near, float z_far, vec3 m)
+{
+  if (viewParams.type == VIEW_TYPE_PERSPECTIVE)
+  {
+    const float p = x_near * abs(m.x) + y_near * abs(m.y);
+    const float nmd = z_near * m.z;
+    float frustumMin = nmd - p;
+    float frustumMax = nmd + p;
+    if (frustumMin < 0.f)
+      frustumMin *= z_far / z_near;
+    if (frustumMax > 0.f)
+      frustumMax *= z_far / z_near;
+    return vec2(frustumMin, frustumMax);
+  }
+  else // VIEW_TYPE_ORTHO
+  {
+    return project_obb_onto_ax(
+      vec3(
+        0.f,
+        0.f,
+        (viewParams.viewFrustum.nearZ + viewParams.viewFrustum.farZ) * 0.5f),
+      vec3(1.f, 0.f, 0.f),
+      vec3(0.f, 1.f, 0.f),
+      vec3(0.f, 0.f, 1.f),
+      vec3(
+        viewParams.viewFrustum.nearX,
+        viewParams.viewFrustum.nearY,
+        (viewParams.viewFrustum.farZ - viewParams.viewFrustum.nearZ) * 0.5f),
+      m);
+  }
 }
 
 bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
@@ -131,6 +150,7 @@ bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
     }
 
     // Frustum side normals
+    if (viewParams.type == VIEW_TYPE_PERSPECTIVE)
     {
       const vec3 ms[4] = {
         vec3(zNear, 0.f, xNear),
@@ -141,9 +161,24 @@ bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
       for (uint i = 0; i < 4; ++i)
       {
         const vec2 obbInterval = project_obb_onto_ax(
-            obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, ms[i]);
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, ms[i]);
         const vec2 frustumInterval = project_frustum_onto_ax(
-            xNear, yNear, zNear, zFar, ms[i]);
+          xNear, yNear, zNear, zFar, ms[i]);
+
+        if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
+          return false;
+      }
+    }
+    else // VIEW_TYPE_ORTHO
+    {
+      const vec3 ms[2] = {vec3(1.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f)};
+
+      for (uint i = 0; i < 2; ++i)
+      {
+        const vec2 obbInterval = project_obb_onto_ax(
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, ms[i]);
+        const vec2 frustumInterval = project_frustum_onto_ax(
+          xNear, yNear, zNear, zFar, ms[i]);
 
         if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
           return false;
@@ -178,9 +213,9 @@ bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
         const vec3 m = vec3(0.f, -axes[i].z, axes[i].y);
 
         const vec2 obbInterval = project_obb_onto_ax(
-            obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, m);
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, m);
         const vec2 frustumInterval = project_frustum_onto_ax(
-            xNear, yNear, zNear, zFar, m);
+          xNear, yNear, zNear, zFar, m);
 
         if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
           return false;
@@ -194,9 +229,9 @@ bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
         const vec3 m = vec3(axes[i].z, 0.f, -axes[i].x);
 
         const vec2 obbInterval = project_obb_onto_ax(
-            obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, m);
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, m);
         const vec2 frustumInterval = project_frustum_onto_ax(
-            xNear, yNear, zNear, zFar, m);
+          xNear, yNear, zNear, zFar, m);
 
         if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
           return false;
@@ -204,6 +239,7 @@ bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
     }
 
     // Frustum Edges x OBB axes
+    if (viewParams.type == VIEW_TYPE_PERSPECTIVE)
     {
       for (uint i = 0; i < 3; ++i)
       {
@@ -223,6 +259,18 @@ bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
           if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
             return false;
         }
+      }
+    }
+    else // VIEW_TYPE_ORTHO
+    {
+      for (uint i = 0; i < 3; ++i)
+      {
+        const vec3 m = cross(vec3(0.f, 0.f, 1.f), axes[i]);
+
+        const vec2 obbInterval = project_obb_onto_ax(
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, m);
+        const vec2 frustumInterval = project_frustum_onto_ax(
+          xNear, yNear, zNear, zFar, m);
       }
     }
 

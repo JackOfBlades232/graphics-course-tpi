@@ -46,7 +46,9 @@ layout(location = 0) in VS_OUT
   vec2 texCoord;
 } surf;
 
-const float SHADOW_BIAS = 0.00001f;
+const float POINT_SHADOW_BIAS = 0.000015f;
+const float SPOT_SHADOW_BIAS = 0.000015f;
+const float CSM_SHADOW_BIAS = 0.0002f;
 
 vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 {
@@ -166,6 +168,7 @@ void main(void)
 
   const vec3 pos = depth_and_tc_to_pos(min(depth, 1.f), surf.texCoord);
   const vec3 viewVec = normalize(camPos - pos);
+  const vec3 viewPos = (viewParams.mView * vec4(pos, 1.f)).xyz;
 
   if (depth >= 1.f)
   {
@@ -195,16 +198,89 @@ void main(void)
 
   vec3 color = ambient * albedo;
 
-  for (uint i = 0; i < lights.directionalLightsCount; ++i)
+  // For directional shadows
+  int cascade = -1;
+  float dirShBiasMult = 1.f;
+  if (constants.useDirectionalLightShadows != 0 && lights.directionalLightsCount > 0)
+  {
+    for (cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade)
+    {
+      float prevZ = cascade == 0 ? viewParams.viewFrustum.nearZ : get_frustum_split(viewParams, cascade - 1);
+      float nextZ = get_frustum_split(viewParams, cascade);
+
+      if (viewPos.z >= prevZ && viewPos.z <= nextZ)
+        break;
+    }
+
+    // @FEAT: should rather be shader asserted
+    if (cascade == CSM_CASCADE_COUNT)
+      --cascade;
+
+    // @TODO: sort out properly
+    dirShBiasMult = pow(float(cascade) + 0.5f, 3.0f);
+  }
+
+  // @TODO: take the cascade that we overlap w/, get the coeff from the overlap region (manhattan metric), and blend via that
+
+  for orthoLH_ZO(uint i = 0; i < lights.directionalLightsCount; ++i)
   {
     const vec3 lightIntensity = 
       lights.directionalLights[i].color * lights.directionalLights[i].intensity;
     const vec3 lightDir = -normalize(lights.directionalLights[i].direction);
 
+    float shadow = 1.f;
+
+    if (constants.useDirectionalLightShadows != 0)
+    {
+      const vec4 posLightClipSpace = mats.directionalLightMats[i][cascade] * vec4(pos, 1.f);
+      const vec3 posLightSpaceNDC = posLightClipSpace.xyz; // No perspective divide cuz ortho
+      const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
+
+      const float lDepth =
+        sample_bindless_tex_lod(lights.directionalLights[i].shadowmapCascades[cascade].map, shadowUv, 0.f).x +
+        CSM_SHADOW_BIAS * dirShBiasMult;
+
+      shadow = (
+        shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
+        shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
+        lDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
+
+      if (constants.directionalLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
+      {
+        const int gridDim = 4; // @TODO: make a param
+
+        const vec2 uvStep = vec2(1.f / CSM_CASCADE_RESOLUTION);
+        const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
+
+        float sampleCount = 1.f;
+
+        for (int y = 0; y < gridDim; ++y)
+          for (int x = 0; x < gridDim; ++x)
+          {
+            if (x == 0 && y == 0)
+              continue;
+
+            const float lsDepth =
+              sample_bindless_tex_lod(
+                lights.directionalLights[i].shadowmapCascades[cascade].map,
+                uvBase + uvStep * vec2(float(x), float(y)), 0.f).x +
+              CSM_SHADOW_BIAS * dirShBiasMult;
+
+            shadow += (
+              shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
+              shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
+              lsDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
+            sampleCount += 1.f;
+          }
+
+        shadow /= sampleCount;
+      }
+    }
+
     if (mat == MATERIAL_PBR)
-      color += calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightIntensity);
+      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightIntensity);
     else if (mat == MATERIAL_DIFFUSE)
-      color += calculate_diffuse(normal, lightDir, albedo, lightIntensity);
+      color += shadow * calculate_diffuse(normal, lightDir, albedo, lightIntensity);
   }
 
   for (uint i = 0; i < lights.pointLightsCount; ++i)
@@ -218,11 +294,13 @@ void main(void)
       continue;
 
     float shadow = 1.f;
+    
+    // @TODO: pcf
 
     if (constants.usePointLightShadows != 0)
     {
       const vec3 sampleDir = -vec3(lightDir.x, lightDir.y, -lightDir.z);
-      const float lDepth = sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sampleDir, 0.f).x + SHADOW_BIAS;
+      const float lDepth = sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sampleDir, 0.f).x + POINT_SHADOW_BIAS;
 
       // @TODO: pull out?
       const uint faceIdx =
@@ -234,6 +312,43 @@ void main(void)
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
 
       shadow = lDepth < posLightSpaceNDC.z ? 0.f : 1.f;
+
+      if (constants.pointLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
+      {
+        const int gridDim = 4; // @TODO: make a param
+
+        const float faceExt = 
+          (faceIdx == 0 || faceIdx == 1) ? abs(sampleDir.x) :
+          (faceIdx == 2 || faceIdx == 3) ? abs(sampleDir.y) :
+          abs(sampleDir.z);
+
+        const vec3 baseDir = sampleDir / faceExt;
+
+        // PCF is symmetrical => dir does not matter
+        const vec3 ud = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 2 || faceIdx == 3) ? vec3(1.f, 0.f, 0.f) : vec3(0.f, 1.f, 0.f));
+        const vec3 vd = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 4 || faceIdx == 5) ? vec3(1.f, 0.f, 0.f) : vec3(0.f, 0.f, 1.f));
+
+        float sampleCount = 1.f;
+
+        for (int y = 0; y < gridDim; ++y)
+          for (int x = 0; x < gridDim; ++x)
+          {
+            if (x == 0 && y == 0)
+              continue;
+
+            const vec3 sdir = normalize(baseDir + (float(x) - float(gridDim) * 0.5f) * ud + (float(y) - float(gridDim) * 0.5f) * vd);
+
+            const float lsDepth =
+              sample_bindless_tex_cube_lod(
+                lights.pointLights[i].shadowmap, sdir, 0.f).x +
+              POINT_SHADOW_BIAS;
+
+            shadow += lsDepth < posLightSpaceNDC.z ? 0.f : 1.f;
+            sampleCount += 1.f;
+          }
+
+        shadow /= sampleCount;
+      }
     }
 
     if (mat == MATERIAL_PBR)
@@ -261,6 +376,8 @@ void main(void)
       continue;
 
     float shadow = 1.f;
+    
+    // @TODO: pcf
 
     if (constants.useSpotLightShadows != 0)
     {
@@ -268,12 +385,44 @@ void main(void)
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
       const vec2 shadowUv = vec2(-posLightSpaceNDC.x, posLightSpaceNDC.y) * 0.5f + 0.5f;
 
-      const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x + SHADOW_BIAS;
+      const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x + SPOT_SHADOW_BIAS;
 
       shadow = (
         shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
         shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
         lDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
+
+      // @TODO: pull out
+      if (constants.spotLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
+      {
+        const int gridDim = 4; // @TODO: make a param
+
+        const vec2 uvStep = vec2(1.f / SPOT_SM_RESOLUTION);
+        const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
+
+        float sampleCount = 1.f;
+
+        for (int y = 0; y < gridDim; ++y)
+          for (int x = 0; x < gridDim; ++x)
+          {
+            if (x == 0 && y == 0)
+              continue;
+
+            const float lsDepth =
+              sample_bindless_tex_lod(
+                lights.spotLights[i].shadowmap,
+                uvBase + uvStep * vec2(float(x), float(y)), 0.f).x +
+              SPOT_SHADOW_BIAS;
+
+            shadow += (
+              shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
+              shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
+              lsDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
+            sampleCount += 1.f;
+          }
+
+        shadow /= sampleCount;
+      }
     }
 
     if (mat == MATERIAL_PBR)

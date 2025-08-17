@@ -130,6 +130,11 @@ private:
   static constexpr std::array<std::string_view, TONEMAPPING_TECHNIQUE_COUNT>
     TONEMAPPING_TECHNIQUE_NAMES = {"Histogram equalization", "Reinhard", "ACES"};
 
+  static constexpr size_t SHADOW_TECHNIQUE_COUNT = size_t(ShadowTechnique::COUNT);
+
+  static constexpr std::array<std::string_view, SHADOW_TECHNIQUE_COUNT> SHADOW_TECHNIQUE_NAMES = {
+    "Hard", "PCF"};
+
 private:
   std::unique_ptr<SceneManager> sceneMgr;
 
@@ -213,6 +218,9 @@ private:
   bool enablePointLightShadows = true;
   bool enableSpotLightShadows = true;
   bool enableDirectionalLightShadows = true;
+  ShadowTechnique pointLightShadowsTechnique = ShadowTechnique::PCF;
+  ShadowTechnique spotLightShadowsTechnique = ShadowTechnique::PCF;
+  ShadowTechnique directionalLightShadowsTechnique = ShadowTechnique::PCF;
   // @TODO: graduate to JB_terrain
   float terrainNoiseRelHeightAmp = 0.001f;
   float terrainNoisePeriod = 0.25f;
@@ -220,6 +228,7 @@ private:
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
   float acesExposure = 2.f;
+  float csmSplitLambda = 0.9985f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
 
 private:

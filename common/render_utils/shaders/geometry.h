@@ -2,6 +2,39 @@
 #define GEOMETRY_H_INCLUDED
 
 #include "cpp_glsl_compat.h"
+#include "lights.h"
+
+#ifdef __cplusplus
+
+enum class ViewType : shader_uint
+{
+  PERSPECTIVE = 0,
+  ORTHO = 1
+};
+
+enum class CullingMode : shader_uint
+{
+  PER_VERTEX = 0,
+  SAT = 1
+};
+
+#define VIEW_TYPE_PERSPECTIVE ViewType::PERSPECTIVE
+#define VIEW_TYPE_ORTHO ViewType::ORTHO
+
+#define CULLING_MODE_PER_VERTEX CullingMode::PER_VERTEX
+#define CULLING_MODE_SAT CullingMode::SAT
+
+#else
+
+#define ViewType shader_uint
+#define VIEW_TYPE_PERSPECTIVE 0
+#define VIEW_TYPE_ORTHO 1
+
+#define CullingMode shader_uint
+#define CULLING_MODE_PER_VERTEX 0
+#define CULLING_MODE_SAT 1
+
+#endif
 
 struct BBox
 {
@@ -31,24 +64,28 @@ struct ViewParams
   shader_mat4 mProjView;
   shader_mat4 mView;
   ViewFrustum viewFrustum;
+  shader_vec4 csmFrustumSplits[(CSM_CASCADE_COUNT - 1) / 4 + 1];
+  ViewType type;
+  shader_uint pad1_, pad2_, pad3_;
+
+  // @TEST
+  shader_mat4 mProj;
 };
 
-#ifdef __cplusplus
+#ifndef __cplusplus
 
-enum class CullingMode : shader_uint
+float get_frustum_split(in ViewParams p, uint i)
 {
-  PER_VERTEX = 0,
-  SAT = 1
-};
-
-#define CULLING_MODE_PER_VERTEX CullingMode::PER_VERTEX
-#define CULLING_MODE_SAT CullingMode::SAT
-
-#else
-
-#define CullingMode shader_uint
-#define CULLING_MODE_PER_VERTEX 0
-#define CULLING_MODE_SAT 1
+  uint comp = i % 4;
+  if (comp == 0)
+    return p.csmFrustumSplits[i / 4].x;
+  else if (comp == 1)
+    return p.csmFrustumSplits[i / 4].y;
+  else if (comp == 2)
+    return p.csmFrustumSplits[i / 4].z;
+  else
+    return p.csmFrustumSplits[i / 4].w;
+}
 
 #endif
 

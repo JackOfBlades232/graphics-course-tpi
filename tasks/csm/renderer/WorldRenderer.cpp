@@ -16,7 +16,13 @@
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Profiling.hpp>
 #include <etna/Etna.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/glm.hpp>
 #include <glm/ext.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <imgui.h>
 
 #include <cassert>
@@ -562,6 +568,9 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.usePointLightShadows = enablePointLightShadows;
     constantsData.useSpotLightShadows = enableSpotLightShadows;
     constantsData.useDirectionalLightShadows = enableDirectionalLightShadows;
+    constantsData.pointLightShadowsTechnique = pointLightShadowsTechnique;
+    constantsData.spotLightShadowsTechnique = spotLightShadowsTechnique;
+    constantsData.directionalLightShadowsTechnique = directionalLightShadowsTechnique;
 
     constantsData.terrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
     constantsData.terrainNoisePeriod = terrainNoisePeriod;
@@ -573,6 +582,78 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.histEqTonemappingMinAdmissibleLum = histEqTonemappingMinAdmissibleLum;
     constantsData.histEqTonemappingMaxAdmissibleLum = histEqTonemappingMaxAdmissibleLum;
     constantsData.acesExposure = acesExposure;
+
+    constantsData.csmSplitLambda = csmSplitLambda;
+  }
+
+  {
+    auto& lights = sceneMgr->lightsRW();
+    const auto mainViewParams = view_params_for_cam(mainCam, aspect(), csmSplitLambda);
+    const auto [xNear, yNear, zNear, zFar] = mainViewParams.viewFrustum;
+
+    const auto invView = glm::inverse(mainViewParams.mView);
+
+    const float* splits = reinterpret_cast<const float*>(mainViewParams.csmFrustumSplits);
+
+    for (int i = 0; i < CSM_CASCADE_COUNT; ++i)
+    {
+      const float zRangeMin = i == 0 ? zNear : splits[i - 1];
+      const float zRangeMax = splits[i];
+      const float xMin = xNear * zRangeMin / zNear;
+      const float xMax = xNear * zRangeMax / zNear;
+      const float yMin = yNear * zRangeMin / zNear;
+      const float yMax = yNear * zRangeMax / zNear;
+
+      const std::array subfrustumVerticesWorld{
+        invView * glm::vec4{xMin, yMin, zRangeMin, 1.f},
+        invView * glm::vec4{-xMin, yMin, zRangeMin, 1.f},
+        invView * glm::vec4{-xMin, -yMin, zRangeMin, 1.f},
+        invView * glm::vec4{xMin, -yMin, zRangeMin, 1.f},
+        invView * glm::vec4{xMax, yMax, zRangeMax, 1.f},
+        invView * glm::vec4{-xMax, yMax, zRangeMax, 1.f},
+        invView * glm::vec4{-xMax, -yMax, zRangeMax, 1.f},
+        invView * glm::vec4{xMax, -yMax, zRangeMax, 1.f}};
+
+      for (auto& dirl : std::span{lights.directionalLights, lights.directionalLightsCount})
+      {
+        auto& cascade = dirl.shadowmapCascades[i];
+        const auto mLightView =
+          glm::toMat4(glm::rotation(glm::normalize(dirl.direction), glm::vec3{0.f, 0.f, 1.f}));
+        cascade.minX = FLT_MAX;
+        cascade.maxX = -FLT_MAX;
+        cascade.minY = FLT_MAX;
+        cascade.maxY = -FLT_MAX;
+        cascade.minZ = FLT_MAX;
+        cascade.maxZ = -FLT_MAX;
+
+        for (const auto& v : subfrustumVerticesWorld)
+        {
+          const auto viewV = mLightView * v;
+          cascade.minX = std::min(cascade.minX, viewV.x);
+          cascade.maxX = std::max(cascade.maxX, viewV.x);
+          cascade.minY = std::min(cascade.minY, viewV.y);
+          cascade.maxY = std::max(cascade.maxY, viewV.y);
+          cascade.minZ = std::min(cascade.minZ, viewV.z);
+          cascade.maxZ = std::max(cascade.maxZ, viewV.z);
+        }
+
+        const float xExt = cascade.maxX - cascade.minX;
+        const float yExt = cascade.maxY - cascade.minY;
+
+        if (xExt > yExt)
+        {
+          cascade.minY -= 0.5f * (xExt - yExt);
+          cascade.maxY += 0.5f * (xExt - yExt);
+        }
+        else
+        {
+          cascade.minX -= 0.5f * (yExt - xExt);
+          cascade.maxX += 0.5f * (yExt - xExt);
+        }
+
+        // @TODO: try snapping to some grid to avoid rasterization artifacts
+      }
+    }
   }
 }
 
@@ -898,7 +979,66 @@ void WorldRenderer::renderWorld(
         }
       }
 
-      // @TODO: dir
+      if (enableDirectionalLightShadows)
+      {
+        for (size_t i = 0;
+             const auto& dirl : std::span{lights.directionalLights, lights.directionalLightsCount})
+        {
+          for (size_t j = 0; j < CSM_CASCADE_COUNT; ++j)
+          {
+            const auto [tid, _] = unpack_tex_smp_id_pair(dirl.shadowmapCascades[j].map);
+            const auto& map = sceneMgr->getTex(tid);
+
+            const auto minX = dirl.shadowmapCascades[j].minX;
+            const auto maxX = dirl.shadowmapCascades[j].maxX;
+            const auto minY = dirl.shadowmapCascades[j].minY;
+            const auto maxY = dirl.shadowmapCascades[j].maxY;
+            const auto minZ = dirl.shadowmapCascades[j].minZ;
+            const auto maxZ = dirl.shadowmapCascades[j].maxZ;
+
+            // @TODO: pull stuff out
+            OrthoCamera cam{};
+
+            cam.zNear = minZ - CSM_CORRIDOR_SIZE - 0.001f;
+            cam.zFar = maxZ + 0.001f;
+
+            const auto xExt = (maxX - minX) * 0.5f;
+            const auto yExt = (maxY - minY) * 0.5f;
+            const auto xCenter = (maxX + minX) * 0.5f;
+            const auto yCenter = (maxY + minY) * 0.5f;
+
+            const auto dir = glm::normalize(dirl.direction);
+            const auto up = std::max(fabsf(dir.x), fabsf(dir.z)) < SHADER_EPSILON
+              ? glm::vec3(0.f, 0.f, 1.f)
+              : glm::vec3(0.f, 1.f, 0.f);
+            // @TODO: fix this properly in spot lights too
+            const auto xdir = glm::normalize(glm::cross(up, dir));
+            const auto ydir = glm::normalize(glm::cross(dir, xdir));
+
+            const auto position = xdir * xCenter + ydir * yCenter;
+            cam.lookAt(position, position + dir, up);
+
+            renderScene(
+              cmd_buf,
+              directionalLightCascadeViews[i][j],
+              view_params_for_cam(cam, xExt, yExt),
+              {{{0, 0}, {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION}},
+               {},
+               {.image = map.get(), .view = map.getView({})}},
+              SceneRenderingPass::DEPTH);
+
+            etna::set_state(
+              cmd_buf,
+              map.get(),
+              vk::PipelineStageFlagBits2::eFragmentShader,
+              vk::AccessFlagBits2::eShaderRead,
+              vk::ImageLayout::eShaderReadOnlyOptimal,
+              vk::ImageAspectFlagBits::eDepth);
+          }
+
+          ++i;
+        }
+      }
     }
 
     {
@@ -907,7 +1047,7 @@ void WorldRenderer::renderWorld(
       renderScene(
         cmd_buf,
         *mainViewContext,
-        view_params_for_cam(mainCam, aspect()),
+        view_params_for_cam(mainCam, aspect(), csmSplitLambda),
         {{{0, 0}, {resolution.x, resolution.y}},
          {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
           {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
@@ -1226,9 +1366,36 @@ void WorldRenderer::drawGui()
         }
       }
 
+      auto shadowsTechDropdown = [&](const char* label, ShadowTechnique& tech) {
+        if (ImGui::BeginCombo(label, SHADOW_TECHNIQUE_NAMES[size_t(tech)].data()))
+        {
+          for (size_t i = 0; i < SHADOW_TECHNIQUE_COUNT; i++)
+          {
+            bool selected = tech == ShadowTechnique(i);
+            if (ImGui::Selectable(SHADOW_TECHNIQUE_NAMES[i].data(), selected))
+              tech = ShadowTechnique(i);
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::EndCombo();
+        }
+      };
+
       ImGui::Checkbox("Enable point light shadows", &enablePointLightShadows);
+      if (enablePointLightShadows)
+        shadowsTechDropdown("Point light shadows technique", pointLightShadowsTechnique);
+
       ImGui::Checkbox("Enable spot light shadows", &enableSpotLightShadows);
+      if (enableSpotLightShadows)
+        shadowsTechDropdown("Spot light shadows technique", spotLightShadowsTechnique);
+
       ImGui::Checkbox("Enable directional light shadows", &enableDirectionalLightShadows);
+      if (enableDirectionalLightShadows)
+      {
+        shadowsTechDropdown("Directional light shadows technique", directionalLightShadowsTechnique);
+        ImGui::SliderFloat("CSM split lambda", &csmSplitLambda, 0.f, 1.f);
+      }
 
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
@@ -1405,6 +1572,9 @@ void WorldRenderer::loadDebugConfig()
   enablePointLightShadows = unwrap(reader.read<bool>());
   enableSpotLightShadows = unwrap(reader.read<bool>());
   enableDirectionalLightShadows = unwrap(reader.read<bool>());
+  pointLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
+  spotLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
+  directionalLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
   terrainNoiseRelHeightAmp = unwrap(reader.read<float>());
   terrainNoisePeriod = unwrap(reader.read<float>());
   histEqTonemappingRegW = unwrap(reader.read<float>());
@@ -1412,6 +1582,7 @@ void WorldRenderer::loadDebugConfig()
   histEqTonemappingMinAdmissibleLum = unwrap(reader.read<float>());
   histEqTonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
   acesExposure = unwrap(reader.read<float>());
+  csmSplitLambda = unwrap(reader.read<float>());
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
 
   validate_hist_tonemapping_coeffs(
@@ -1463,6 +1634,9 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(enablePointLightShadows));
   ETNA_VERIFY(writer.write(enableSpotLightShadows));
   ETNA_VERIFY(writer.write(enableDirectionalLightShadows));
+  ETNA_VERIFY(writer.write(pointLightShadowsTechnique));
+  ETNA_VERIFY(writer.write(spotLightShadowsTechnique));
+  ETNA_VERIFY(writer.write(directionalLightShadowsTechnique));
   ETNA_VERIFY(writer.write(terrainNoiseRelHeightAmp));
   ETNA_VERIFY(writer.write(terrainNoisePeriod));
   ETNA_VERIFY(writer.write(histEqTonemappingRegW));
@@ -1470,6 +1644,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(histEqTonemappingMinAdmissibleLum));
   ETNA_VERIFY(writer.write(histEqTonemappingMaxAdmissibleLum));
   ETNA_VERIFY(writer.write(acesExposure));
+  ETNA_VERIFY(writer.write(csmSplitLambda));
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());

@@ -649,7 +649,7 @@ SceneManager::ProcessedLights SceneManager::processLights(
       textures.emplace_back(create_image(etna::Image::CreateInfo{
         .extent = {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION, 1},
         .name = fmt::format("directional{}_csm_shadowmap[{}]", i, j),
-        .format = vk::Format::eD16Unorm,
+        .format = vk::Format::eD32Sfloat,
         .imageUsage =
           vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
     }
