@@ -55,9 +55,10 @@ public:
 private:
   enum class SceneRenderingPass
   {
-    DEPTH,
     COLOR,
     WIRE_COLOR,
+    SHADOW,
+    SHADOW_FRONT_CULLED,
 
     COUNT
   };

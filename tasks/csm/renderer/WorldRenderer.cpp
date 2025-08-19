@@ -51,11 +51,21 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.blendingConfig.attachments = {};
     sci.fragmentShaderOutput.colorAttachmentFormats = {};
     sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
-    // @TODO: position lights so that they are not in geometry (or restore culling?)
     sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eNone;
-    pipelines[size_t(SceneRenderingPass::DEPTH)] =
+    pipelines[size_t(SceneRenderingPass::SHADOW)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
-    programs[size_t(SceneRenderingPass::DEPTH)].emplace(etna::get_shader_program(vertex_prog_name));
+    programs[size_t(SceneRenderingPass::SHADOW)].emplace(etna::get_shader_program(vertex_prog_name));
+  }
+
+  {
+    auto sci = ci;
+    sci.blendingConfig.attachments = {};
+    sci.fragmentShaderOutput.colorAttachmentFormats = {};
+    sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
+    sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eFront;
+    pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)] =
+      pipeman.createGraphicsPipeline(vertex_prog_name, sci);
+    programs[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)].emplace(etna::get_shader_program(vertex_prog_name));
   }
 }
 
@@ -933,7 +943,7 @@ void WorldRenderer::renderWorld(
                {},
                {.image = map.get(),
                 .view = map.getView({.baseLayer = uint32_t(j), .layerCount = 1u})}},
-              SceneRenderingPass::DEPTH);
+              SceneRenderingPass::SHADOW_FRONT_CULLED);
           }
 
           ++i;
@@ -965,7 +975,7 @@ void WorldRenderer::renderWorld(
             {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
              {},
              {.image = map.get(), .view = map.getView({})}},
-            SceneRenderingPass::DEPTH);
+            SceneRenderingPass::SHADOW_FRONT_CULLED);
 
           etna::set_state(
             cmd_buf,
@@ -1025,7 +1035,7 @@ void WorldRenderer::renderWorld(
               {{{0, 0}, {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION}},
                {},
                {.image = map.get(), .view = map.getView({})}},
-              SceneRenderingPass::DEPTH);
+              SceneRenderingPass::SHADOW);
 
             etna::set_state(
               cmd_buf,
