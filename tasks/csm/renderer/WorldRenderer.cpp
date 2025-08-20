@@ -51,7 +51,6 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.blendingConfig.attachments = {};
     sci.fragmentShaderOutput.colorAttachmentFormats = {};
     sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
-    sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eNone;
     pipelines[size_t(SceneRenderingPass::SHADOW)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
     programs[size_t(SceneRenderingPass::SHADOW)].emplace(etna::get_shader_program(vertex_prog_name));
