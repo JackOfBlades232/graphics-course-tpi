@@ -51,9 +51,12 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.blendingConfig.attachments = {};
     sci.fragmentShaderOutput.colorAttachmentFormats = {};
     sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
+    sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eBack;
+    sci.dynamicStates.push_back(vk::DynamicState::eDepthBias);
     pipelines[size_t(SceneRenderingPass::SHADOW)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
-    programs[size_t(SceneRenderingPass::SHADOW)].emplace(etna::get_shader_program(vertex_prog_name));
+    programs[size_t(SceneRenderingPass::SHADOW)].emplace(
+      etna::get_shader_program(vertex_prog_name));
   }
 
   {
@@ -62,9 +65,11 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.fragmentShaderOutput.colorAttachmentFormats = {};
     sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
     sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eFront;
+    // @TODO: apply bias too?
     pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
-    programs[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)].emplace(etna::get_shader_program(vertex_prog_name));
+    programs[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)].emplace(
+      etna::get_shader_program(vertex_prog_name));
   }
 }
 
@@ -580,6 +585,7 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.pointLightShadowsTechnique = pointLightShadowsTechnique;
     constantsData.spotLightShadowsTechnique = spotLightShadowsTechnique;
     constantsData.directionalLightShadowsTechnique = directionalLightShadowsTechnique;
+    constantsData.drawCascadesInSolidColor = drawCascadesInSolidColor;
 
     constantsData.terrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
     constantsData.terrainNoisePeriod = terrainNoisePeriod;
@@ -897,6 +903,16 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, shadowmapGen);
 
+      // @TODO: tweakable, different on light type/params
+      const float depthBiasConstantFactor = 1.25f;
+      const float depthBiasClamp = 0.f;
+      const float depthBiasSlopeFactor = 1.75f;
+
+      cmd_buf.setDepthBiasEnable(VK_TRUE);
+      cmd_buf.setDepthBias(depthBiasConstantFactor, depthBiasClamp, depthBiasSlopeFactor);
+
+      DEFER([&cmd_buf] { cmd_buf.setDepthBiasEnable(VK_FALSE); });
+
       const auto& lights = sceneMgr->getLights();
 
       // @TODO: cull lights outside of frustum. Maybe also draw sm-s on demand?
@@ -942,7 +958,7 @@ void WorldRenderer::renderWorld(
                {},
                {.image = map.get(),
                 .view = map.getView({.baseLayer = uint32_t(j), .layerCount = 1u})}},
-              SceneRenderingPass::SHADOW_FRONT_CULLED);
+              SceneRenderingPass::SHADOW);
           }
 
           ++i;
@@ -974,7 +990,7 @@ void WorldRenderer::renderWorld(
             {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
              {},
              {.image = map.get(), .view = map.getView({})}},
-            SceneRenderingPass::SHADOW_FRONT_CULLED);
+            SceneRenderingPass::SHADOW);
 
           etna::set_state(
             cmd_buf,
@@ -1402,9 +1418,12 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Enable directional light shadows", &enableDirectionalLightShadows);
       if (enableDirectionalLightShadows)
       {
-        shadowsTechDropdown("Directional light shadows technique", directionalLightShadowsTechnique);
+        shadowsTechDropdown(
+          "Directional light shadows technique", directionalLightShadowsTechnique);
         ImGui::SliderFloat("CSM split lambda", &csmSplitLambda, 0.f, 1.f);
       }
+
+      ImGui::Checkbox("Draw debug cascades", &drawCascadesInSolidColor);
 
       ImGui::Checkbox("Draw bounding boxes", &drawBboxes);
       ImGui::Checkbox("Wireframe", &wireframe);
@@ -1584,6 +1603,7 @@ void WorldRenderer::loadDebugConfig()
   pointLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
   spotLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
   directionalLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
+  drawCascadesInSolidColor = unwrap(reader.read<bool>());
   terrainNoiseRelHeightAmp = unwrap(reader.read<float>());
   terrainNoisePeriod = unwrap(reader.read<float>());
   histEqTonemappingRegW = unwrap(reader.read<float>());
@@ -1646,6 +1666,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(pointLightShadowsTechnique));
   ETNA_VERIFY(writer.write(spotLightShadowsTechnique));
   ETNA_VERIFY(writer.write(directionalLightShadowsTechnique));
+  ETNA_VERIFY(writer.write(drawCascadesInSolidColor));
   ETNA_VERIFY(writer.write(terrainNoiseRelHeightAmp));
   ETNA_VERIFY(writer.write(terrainNoisePeriod));
   ETNA_VERIFY(writer.write(histEqTonemappingRegW));

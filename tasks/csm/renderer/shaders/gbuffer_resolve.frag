@@ -46,19 +46,6 @@ layout(location = 0) in VS_OUT
   vec2 texCoord;
 } surf;
 
-const float POINT_SHADOW_BIAS_MIN = 0.01f;
-const float POINT_SHADOW_BIAS_MULT = 0.1f;
-const float SPOT_SHADOW_BIAS_MIN = 0.01f;
-const float SPOT_SHADOW_BIAS_MULT = 0.1f;
-// const float CSM_SHADOW_BIAS = 0.0002f;
-const float CSM_SHADOW_BIAS_PER_METER_MIN = 0.1f;
-const float CSM_SHADOW_BIAS_PER_METER_MULT = 1.f;
-
-float calc_depth_bias(vec3 snormal, vec3 ldir, float bmult, float bmin)
-{
-  return min(bmin, bmult * (1.f - dot(snormal, ldir)));
-}
-
 vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 {
   const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
@@ -225,6 +212,17 @@ void main(void)
       --cascade;
   }
 
+  if (constants.drawCascadesInSolidColor != 0)
+  {
+    const vec3 DEBUG_CASCADE_COLORS[3] = {
+      vec3(1.0, 0.94, 0.2),
+      vec3(1.0, 0.0, 1.0),
+      vec3(0.27, 0.51, 0.71)};
+
+    out_fragColor = vec4(DEBUG_CASCADE_COLORS[cascade % 3], 1.f);
+    return;
+  }
+
   // @TODO: take the cascade that we overlap w/, get the coeff from the overlap region (manhattan metric), and blend via that
 
   for (uint i = 0; i < lights.directionalLightsCount; ++i)
@@ -241,13 +239,8 @@ void main(void)
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz; // No perspective divide cuz ortho
       const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
 
-      const float cascadeBiasPerMeter = calc_depth_bias(normal, lightDir, CSM_SHADOW_BIAS_PER_METER_MULT, CSM_SHADOW_BIAS_PER_METER_MIN);
-      const float bias = cascadeBiasPerMeter * (1.f / float(CSM_CASCADE_RESOLUTION)) * max(
-        lights.directionalLights[i].shadowmapCascades[cascade].maxX - lights.directionalLights[i].shadowmapCascades[cascade].minX,
-        lights.directionalLights[i].shadowmapCascades[cascade].maxY - lights.directionalLights[i].shadowmapCascades[cascade].minY);
-
-      const float lDepth =
-        sample_bindless_tex_lod(lights.directionalLights[i].shadowmapCascades[cascade].map, shadowUv, 0.f).x + bias;
+      const float lDepth = sample_bindless_tex_lod(
+        lights.directionalLights[i].shadowmapCascades[cascade].map, shadowUv, 0.f).x;
 
       shadow = (
         shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
@@ -256,7 +249,7 @@ void main(void)
 
       if (constants.directionalLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
       {
-        const int gridDim = 4; // @TODO: make a param
+        const int gridDim = 3; // @TODO: make a param
 
         const vec2 uvStep = vec2(1.f / CSM_CASCADE_RESOLUTION);
         const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
@@ -269,11 +262,8 @@ void main(void)
             if (x == 0 && y == 0)
               continue;
 
-            const float lsDepth =
-              sample_bindless_tex_lod(
-                lights.directionalLights[i].shadowmapCascades[cascade].map,
-                uvBase + uvStep * vec2(float(x), float(y)), 0.f).x +
-              bias;
+            const float lsDepth = sample_bindless_tex_lod(
+              lights.directionalLights[i].shadowmapCascades[cascade].map, uvBase + uvStep * vec2(float(x), float(y)), 0.f).x;
 
             shadow += (
               shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
@@ -306,10 +296,8 @@ void main(void)
 
     if (constants.usePointLightShadows != 0)
     {
-      const float bias = calc_depth_bias(normal, lightDir, POINT_SHADOW_BIAS_MULT, POINT_SHADOW_BIAS_MIN) * (1.f / float(POINT_SM_RESOLUTION));
-
       const vec3 sampleDir = -vec3(lightDir.x, lightDir.y, -lightDir.z);
-      const float lDepth = sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sampleDir, 0.f).x + bias;
+      const float lDepth = sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sampleDir, 0.f).x;
 
       // @TODO: pull out?
       const uint faceIdx =
@@ -348,9 +336,7 @@ void main(void)
             const vec3 sdir = normalize(baseDir + (float(x) - float(gridDim) * 0.5f) * ud + (float(y) - float(gridDim) * 0.5f) * vd);
 
             const float lsDepth =
-              sample_bindless_tex_cube_lod(
-                lights.pointLights[i].shadowmap, sdir, 0.f).x +
-              bias;
+              sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sdir, 0.f).x;
 
             shadow += lsDepth < posLightSpaceNDC.z ? 0.f : 1.f;
             sampleCount += 1.f;
@@ -388,13 +374,11 @@ void main(void)
     
     if (constants.useSpotLightShadows != 0)
     {
-      const float bias = calc_depth_bias(normal, lightDir, SPOT_SHADOW_BIAS_MULT, SPOT_SHADOW_BIAS_MIN) * (1.f / float(SPOT_SM_RESOLUTION));
-
       const vec4 posLightClipSpace = mats.spotLightMats[i] * vec4(pos, 1.f);
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
       const vec2 shadowUv = vec2(-posLightSpaceNDC.x, posLightSpaceNDC.y) * 0.5f + 0.5f;
 
-      const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x + bias;
+      const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x;
 
       shadow = (
         shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
@@ -417,11 +401,8 @@ void main(void)
             if (x == 0 && y == 0)
               continue;
 
-            const float lsDepth =
-              sample_bindless_tex_lod(
-                lights.spotLights[i].shadowmap,
-                uvBase + uvStep * vec2(float(x), float(y)), 0.f).x +
-              bias;
+            const float lsDepth = sample_bindless_tex_lod(
+              lights.spotLights[i].shadowmap, uvBase + uvStep * vec2(float(x), float(y)), 0.f).x;
 
             shadow += (
               shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||

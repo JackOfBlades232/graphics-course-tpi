@@ -222,6 +222,7 @@ private:
   ShadowTechnique pointLightShadowsTechnique = ShadowTechnique::PCF;
   ShadowTechnique spotLightShadowsTechnique = ShadowTechnique::PCF;
   ShadowTechnique directionalLightShadowsTechnique = ShadowTechnique::PCF;
+  bool drawCascadesInSolidColor = false;
   // @TODO: graduate to JB_terrain
   float terrainNoiseRelHeightAmp = 0.001f;
   float terrainNoisePeriod = 0.25f;
