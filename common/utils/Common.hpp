@@ -62,3 +62,18 @@ inline T snap_up(T v, T cell)
   return ceil(v / cell) * cell;
 }
 
+namespace detail
+{
+
+template <class F>
+struct Defer
+{
+  F f;
+
+  Defer(F &&a_f) : f(std::move(a_f)) {}
+  ~Defer() { f(); }
+};
+
+#define DEFER(f_) detail::Defer defer ## __COUNTER__ {f_}
+
+}

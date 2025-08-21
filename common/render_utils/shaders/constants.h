@@ -33,6 +33,8 @@ struct Constants
   ShadowTechnique spotLightShadowsTechnique;
   ShadowTechnique directionalLightShadowsTechnique;
 
+  shader_uint drawCascadesInSolidColor;
+
   float histEqTonemappingRegW;
   float histEqTonemappingRefinedW;
   float histEqTonemappingMinAdmissibleLum;
@@ -43,7 +45,7 @@ struct Constants
 
   float csmSplitLambda;
 
-  shader_uint pad1_, pad2_;
+  shader_uint pad1_;
 };
 
 #endif // CONSTANTS_H_INCLUDED
