@@ -43,6 +43,7 @@ void Renderer::initVulkan(const char* app_name, std::span<const char*> instance_
           {.tessellationShader = true,
            .multiDrawIndirect = true,
            .drawIndirectFirstInstance = true,
+           .depthBiasClamp = true,
            .fillModeNonSolid = true}},
     .physicalDeviceIndexOverride = {},
     .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),

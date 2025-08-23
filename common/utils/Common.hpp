@@ -70,10 +70,29 @@ struct Defer
 {
   F f;
 
-  Defer(F &&a_f) : f(std::move(a_f)) {}
+  Defer(F&& a_f)
+    : f(std::move(a_f))
+  {
+  }
   ~Defer() { f(); }
 };
 
-#define DEFER(f_) detail::Defer defer ## __COUNTER__ {f_}
-
+template <class T, size_t N, size_t... Is, class F>
+static std::array<T, N> array_make_impl(std::index_sequence<Is...>, F&& make)
+{
+  return {((void)Is, make())...};
 }
+
+} // namespace detail
+
+template <class T, size_t N, class F>
+static std::array<T, N> array_make(F&& make)
+{
+  return detail::array_make_impl<T, N>(std::make_index_sequence<N>{}, std::forward<F>(make));
+}
+
+#define DEFER(f_)                                                                                  \
+  detail::Defer defer##__COUNTER__                                                                 \
+  {                                                                                                \
+    f_                                                                                             \
+  }

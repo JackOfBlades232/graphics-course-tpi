@@ -136,6 +136,21 @@ private:
   static constexpr std::array<std::string_view, SHADOW_TECHNIQUE_COUNT> SHADOW_TECHNIQUE_NAMES = {
     "Hard", "PCF"};
 
+  struct ShadowsSettings
+  {
+    bool enable = true;
+    bool depthBias = true;
+    bool frontFaceCull = false;
+    uint8_t pad1_{};
+    ShadowTechnique technique = ShadowTechnique::PCF;
+    float depthBiasConstantFactor = 1.25f;
+    float depthBiasClamp = 0.f;
+    float depthBiasSlopeFactor = 1.75f;
+
+    friend bool operator==(const ShadowsSettings &s1, const ShadowsSettings &s2) = default;
+    friend bool operator!=(const ShadowsSettings &s1, const ShadowsSettings &s2) = default;
+  };
+
 private:
   std::unique_ptr<SceneManager> sceneMgr;
 
@@ -166,6 +181,12 @@ private:
   std::vector<std::array<ViewContext, 6>> pointLightViews{};
   std::vector<ViewContext> spotLightViews{};
   std::vector<std::array<ViewContext, CSM_CASCADE_COUNT>> directionalLightCascadeViews{};
+
+  bool pointLightsSettingsDirty = true;
+  bool spotLightsSettingsDirty = true;
+  bool directionalLightsSettingsDirty = true;
+
+  UniformLights prevLights{};
 
   std::optional<TerrainRenderingData> terrain{};
   std::optional<SkyboxRenderingData> skybox{};
@@ -216,12 +237,9 @@ private:
   bool enableSkybox = true;
   bool doTonemapping = true;
   bool useSharedMemForTonemapping = false;
-  bool enablePointLightShadows = true;
-  bool enableSpotLightShadows = true;
-  bool enableDirectionalLightShadows = true;
-  ShadowTechnique pointLightShadowsTechnique = ShadowTechnique::PCF;
-  ShadowTechnique spotLightShadowsTechnique = ShadowTechnique::PCF;
-  ShadowTechnique directionalLightShadowsTechnique = ShadowTechnique::PCF;
+  ShadowsSettings pointLightShadowsSettings{};
+  ShadowsSettings spotLightShadowsSettings{};
+  ShadowsSettings directionalLightShadowsSettings{};
   bool drawCascadesInSolidColor = false;
   // @TODO: graduate to JB_terrain
   float terrainNoiseRelHeightAmp = 0.001f;
@@ -230,7 +248,7 @@ private:
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
   float acesExposure = 2.f;
-  float csmSplitLambda = 0.9985f;
+  float csmSplitLambda = 0.5f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
 
 private:
