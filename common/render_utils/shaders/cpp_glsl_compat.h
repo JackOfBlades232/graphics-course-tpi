@@ -43,6 +43,7 @@ using shader_bool = glm::uint;
 #define shader_abs glm::abs
 #define shader_log glm::log
 #define shader_exp glm::exp
+#define shader_length glm::length
 
 #define XZ(v_) (shader_vec2((v_).x, (v_).z))
 
@@ -74,6 +75,7 @@ using shader_bool = glm::uint;
 #define shader_abs abs
 #define shader_log log
 #define shader_exp exp
+#define shader_length length
 
 #define XZ(v_) ((v_).xz)
 
@@ -89,6 +91,9 @@ shader_mat4 translation(shader_vec3 offs)
 
 #define round_from_zero(x_) (shader_round((x_) + shader_sign(x_) * 0.5f))
 #define round_to_zero(x_) (shader_round((x_) - shader_sign(x_) * 0.5f))
+
+#define shader_feq(x_, y_) (shader_abs((x_) - (y_)) < SHADER_EPSILON)
+#define shader_veq(x_, y_) (shader_length((x_) - (y_)) < SHADER_EPSILON)
 
 #define SHADER_EPSILON 0.00001f
 #define SHADER_UINT_MAX 4294967295

@@ -65,7 +65,7 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.fragmentShaderOutput.colorAttachmentFormats = {};
     sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
     sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eFront;
-    // @TODO: apply bias too?
+    sci.dynamicStates.push_back(vk::DynamicState::eDepthBias);
     pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
     programs[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)].emplace(
@@ -152,6 +152,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   });
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
+  prevLights = {};
 
   lightMatricesBuf = create_buffer(etna::Buffer::CreateInfo{
     .size = sizeof(LightMatrices),
@@ -172,19 +173,6 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
   for (auto& component : rcomponents)
     component->allocateResources(resolution);
-}
-
-// @TODO: pull out
-template <class T, size_t N, size_t... Is, class F>
-static std::array<T, N> array_make_impl(std::index_sequence<Is...>, F&& make)
-{
-  return {((void)Is, make())...};
-}
-
-template <class T, size_t N, class F>
-static std::array<T, N> array_make(F&& make)
-{
-  return array_make_impl<T, N>(std::make_index_sequence<N>{}, std::forward<F>(make));
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -579,12 +567,13 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.useSkybox = skybox.has_value() && enableSkybox;
     constantsData.drawTerrainSplattedDetail = terrain.has_value() && drawTerrainSplattedDetail;
 
-    constantsData.usePointLightShadows = enablePointLightShadows;
-    constantsData.useSpotLightShadows = enableSpotLightShadows;
-    constantsData.useDirectionalLightShadows = enableDirectionalLightShadows;
-    constantsData.pointLightShadowsTechnique = pointLightShadowsTechnique;
-    constantsData.spotLightShadowsTechnique = spotLightShadowsTechnique;
-    constantsData.directionalLightShadowsTechnique = directionalLightShadowsTechnique;
+    constantsData.usePointLightShadows = pointLightShadowsSettings.enable;
+    constantsData.useSpotLightShadows = spotLightShadowsSettings.enable;
+    constantsData.useDirectionalLightShadows = directionalLightShadowsSettings.enable;
+    constantsData.pointLightShadowsTechnique = pointLightShadowsSettings.technique;
+    constantsData.spotLightShadowsTechnique = spotLightShadowsSettings.technique;
+    constantsData.directionalLightShadowsTechnique = directionalLightShadowsSettings.technique;
+
     constantsData.drawCascadesInSolidColor = drawCascadesInSolidColor;
 
     constantsData.terrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
@@ -903,25 +892,35 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, shadowmapGen);
 
-      // @TODO: tweakable, different on light type/params
-      const float depthBiasConstantFactor = 1.25f;
-      const float depthBiasClamp = 0.f;
-      const float depthBiasSlopeFactor = 1.75f;
-
-      cmd_buf.setDepthBiasEnable(VK_TRUE);
-      cmd_buf.setDepthBias(depthBiasConstantFactor, depthBiasClamp, depthBiasSlopeFactor);
-
       DEFER([&cmd_buf] { cmd_buf.setDepthBiasEnable(VK_FALSE); });
 
       const auto& lights = sceneMgr->getLights();
 
       // @TODO: cull lights outside of frustum. Maybe also draw sm-s on demand?
 
-      if (enablePointLightShadows)
+      if (pointLightShadowsSettings.enable)
       {
+        cmd_buf.setDepthBiasEnable(pointLightShadowsSettings.depthBias ? VK_TRUE : VK_FALSE);
+        cmd_buf.setDepthBias(
+          pointLightShadowsSettings.depthBiasConstantFactor,
+          pointLightShadowsSettings.depthBiasClamp,
+          pointLightShadowsSettings.depthBiasSlopeFactor);
+
         for (size_t i = 0;
              const auto& point : std::span{lights.pointLights, lights.pointLightsCount})
         {
+          DEFER([&i] { ++i; });
+
+          if (
+            !pointLightsSettingsDirty &&
+            shader_veq(point.position, prevLights.pointLights[i].position) &&
+            shader_feq(point.range, prevLights.pointLights[i].range))
+          {
+            continue;
+          }
+
+          prevLights.pointLights[i] = point;
+
           const auto [tid, _] = unpack_tex_smp_id_pair(point.shadowmap);
           const auto& map = sceneMgr->getTex(tid);
 
@@ -958,17 +957,40 @@ void WorldRenderer::renderWorld(
                {},
                {.image = map.get(),
                 .view = map.getView({.baseLayer = uint32_t(j), .layerCount = 1u})}},
-              SceneRenderingPass::SHADOW);
+              pointLightShadowsSettings.frontFaceCull ? SceneRenderingPass::SHADOW_FRONT_CULLED
+                                                      : SceneRenderingPass::SHADOW);
           }
-
-          ++i;
         }
+
+        pointLightsSettingsDirty = false;
       }
 
-      if (enableSpotLightShadows)
+      if (spotLightShadowsSettings.enable)
       {
+        // @TODO : why the fuck is this not functioning?
+
+        cmd_buf.setDepthBiasEnable(spotLightShadowsSettings.depthBias ? VK_TRUE : VK_FALSE);
+        cmd_buf.setDepthBias(
+          spotLightShadowsSettings.depthBiasConstantFactor,
+          spotLightShadowsSettings.depthBiasClamp,
+          spotLightShadowsSettings.depthBiasSlopeFactor);
+
         for (size_t i = 0; const auto& spot : std::span{lights.spotLights, lights.spotLightsCount})
         {
+          DEFER([&i] { ++i; });
+
+          if (
+            !spotLightsSettingsDirty &&
+            shader_veq(spot.position, prevLights.spotLights[i].position) &&
+            shader_veq(spot.direction, prevLights.spotLights[i].direction) &&
+            shader_feq(spot.range, prevLights.spotLights[i].range) &&
+            shader_feq(spot.outerConeAngle, prevLights.spotLights[i].outerConeAngle))
+          {
+            continue;
+          }
+
+          prevLights.spotLights[i] = spot;
+
           const auto [tid, _] = unpack_tex_smp_id_pair(spot.shadowmap);
           const auto& map = sceneMgr->getTex(tid);
 
@@ -990,7 +1012,8 @@ void WorldRenderer::renderWorld(
             {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
              {},
              {.image = map.get(), .view = map.getView({})}},
-            SceneRenderingPass::SHADOW);
+            spotLightShadowsSettings.frontFaceCull ? SceneRenderingPass::SHADOW_FRONT_CULLED
+                                                   : SceneRenderingPass::SHADOW);
 
           etna::set_state(
             cmd_buf,
@@ -999,16 +1022,25 @@ void WorldRenderer::renderWorld(
             vk::AccessFlagBits2::eShaderRead,
             vk::ImageLayout::eShaderReadOnlyOptimal,
             vk::ImageAspectFlagBits::eDepth);
-
-          ++i;
         }
+
+        spotLightsSettingsDirty = false;
       }
 
-      if (enableDirectionalLightShadows)
+      if (directionalLightShadowsSettings.enable)
       {
+        cmd_buf.setDepthBiasEnable(directionalLightShadowsSettings.depthBias ? VK_TRUE : VK_FALSE);
+        cmd_buf.setDepthBias(
+          directionalLightShadowsSettings.depthBiasConstantFactor,
+          directionalLightShadowsSettings.depthBiasClamp,
+          directionalLightShadowsSettings.depthBiasSlopeFactor);
+
         for (size_t i = 0;
              const auto& dirl : std::span{lights.directionalLights, lights.directionalLightsCount})
         {
+          // @NOTE: not bothering skipping cascades cuz camera turns
+          DEFER([&i] { ++i; });
+
           for (size_t j = 0; j < CSM_CASCADE_COUNT; ++j)
           {
             const auto [tid, _] = unpack_tex_smp_id_pair(dirl.shadowmapCascades[j].map);
@@ -1050,7 +1082,9 @@ void WorldRenderer::renderWorld(
               {{{0, 0}, {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION}},
                {},
                {.image = map.get(), .view = map.getView({})}},
-              SceneRenderingPass::SHADOW);
+              directionalLightShadowsSettings.frontFaceCull
+                ? SceneRenderingPass::SHADOW_FRONT_CULLED
+                : SceneRenderingPass::SHADOW);
 
             etna::set_state(
               cmd_buf,
@@ -1060,9 +1094,9 @@ void WorldRenderer::renderWorld(
               vk::ImageLayout::eShaderReadOnlyOptimal,
               vk::ImageAspectFlagBits::eDepth);
           }
-
-          ++i;
         }
+
+        directionalLightsSettingsDirty = false;
       }
     }
 
@@ -1391,37 +1425,65 @@ void WorldRenderer::drawGui()
         }
       }
 
-      auto shadowsTechDropdown = [&](const char* label, ShadowTechnique& tech) {
-        if (ImGui::BeginCombo(label, SHADOW_TECHNIQUE_NAMES[size_t(tech)].data()))
+      auto shadowsSettingsDropdown = [&](const char* name, ShadowsSettings& settings, bool& dirty) {
+        std::string nameCap{name};
+        nameCap[0] += 'A' - 'a';
+
+        auto prevSettings = settings;
+
+        ImGui::Checkbox(fmt::format("Enable {} light shadows", name).c_str(), &settings.enable);
+        if (settings.enable)
         {
-          for (size_t i = 0; i < SHADOW_TECHNIQUE_COUNT; i++)
+          if (ImGui::BeginCombo(
+                fmt::format("({}) Shadowmap technique", name).c_str(),
+                SHADOW_TECHNIQUE_NAMES[size_t(settings.technique)].data()))
           {
-            bool selected = tech == ShadowTechnique(i);
-            if (ImGui::Selectable(SHADOW_TECHNIQUE_NAMES[i].data(), selected))
-              tech = ShadowTechnique(i);
-            if (selected)
-              ImGui::SetItemDefaultFocus();
+            for (size_t i = 0; i < SHADOW_TECHNIQUE_COUNT; i++)
+            {
+              bool selected = settings.technique == ShadowTechnique(i);
+              if (ImGui::Selectable(SHADOW_TECHNIQUE_NAMES[i].data(), selected))
+                settings.technique = ShadowTechnique(i);
+              if (selected)
+                ImGui::SetItemDefaultFocus();
+            }
+
+            ImGui::EndCombo();
           }
 
-          ImGui::EndCombo();
+          ImGui::Checkbox(fmt::format("({}) Use depth bias", name).c_str(), &settings.depthBias);
+          if (settings.depthBias)
+          {
+            ImGui::SliderFloat(
+              fmt::format("({}) Depth bias const factor", name).c_str(),
+              &settings.depthBiasConstantFactor,
+              0.f,
+              3.f);
+            ImGui::SliderFloat(
+              fmt::format("({}) Depth bias clamp", name).c_str(),
+              &settings.depthBiasClamp,
+              0.f,
+              3.f);
+            ImGui::SliderFloat(
+              fmt::format("({}) Depth bias slope factor", name).c_str(),
+              &settings.depthBiasSlopeFactor,
+              0.f,
+              3.f);
+          }
+
+          ImGui::Checkbox(
+            fmt::format("({}) Use front face culling", name).c_str(), &settings.frontFaceCull);
         }
+
+        dirty |= settings != prevSettings;
       };
 
-      ImGui::Checkbox("Enable point light shadows", &enablePointLightShadows);
-      if (enablePointLightShadows)
-        shadowsTechDropdown("Point light shadows technique", pointLightShadowsTechnique);
+      shadowsSettingsDropdown("point", pointLightShadowsSettings, pointLightsSettingsDirty);
+      shadowsSettingsDropdown("spot", spotLightShadowsSettings, spotLightsSettingsDirty);
+      shadowsSettingsDropdown(
+        "directional", directionalLightShadowsSettings, directionalLightsSettingsDirty);
 
-      ImGui::Checkbox("Enable spot light shadows", &enableSpotLightShadows);
-      if (enableSpotLightShadows)
-        shadowsTechDropdown("Spot light shadows technique", spotLightShadowsTechnique);
-
-      ImGui::Checkbox("Enable directional light shadows", &enableDirectionalLightShadows);
-      if (enableDirectionalLightShadows)
-      {
-        shadowsTechDropdown(
-          "Directional light shadows technique", directionalLightShadowsTechnique);
+      if (directionalLightShadowsSettings.enable)
         ImGui::SliderFloat("CSM split lambda", &csmSplitLambda, 0.f, 1.f);
-      }
 
       ImGui::Checkbox("Draw debug cascades", &drawCascadesInSolidColor);
 
@@ -1597,12 +1659,9 @@ void WorldRenderer::loadDebugConfig()
   enableSkybox = unwrap(reader.read<bool>());
   doTonemapping = unwrap(reader.read<bool>());
   useSharedMemForTonemapping = unwrap(reader.read<bool>());
-  enablePointLightShadows = unwrap(reader.read<bool>());
-  enableSpotLightShadows = unwrap(reader.read<bool>());
-  enableDirectionalLightShadows = unwrap(reader.read<bool>());
-  pointLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
-  spotLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
-  directionalLightShadowsTechnique = unwrap(reader.read<ShadowTechnique>());
+  pointLightShadowsSettings = unwrap(reader.read<ShadowsSettings>());
+  spotLightShadowsSettings = unwrap(reader.read<ShadowsSettings>());
+  directionalLightShadowsSettings = unwrap(reader.read<ShadowsSettings>());
   drawCascadesInSolidColor = unwrap(reader.read<bool>());
   terrainNoiseRelHeightAmp = unwrap(reader.read<float>());
   terrainNoisePeriod = unwrap(reader.read<float>());
@@ -1619,6 +1678,10 @@ void WorldRenderer::loadDebugConfig()
     histEqTonemappingRefinedW,
     histEqTonemappingMinAdmissibleLum,
     histEqTonemappingMaxAdmissibleLum);
+
+  pointLightsSettingsDirty = true;
+  spotLightsSettingsDirty = true;
+  directionalLightsSettingsDirty = true;
 
   spdlog::info("Loaded debug config from {}", cfg.debugConfigFile.c_str());
 }
@@ -1660,12 +1723,9 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(enableSkybox));
   ETNA_VERIFY(writer.write(doTonemapping));
   ETNA_VERIFY(writer.write(useSharedMemForTonemapping));
-  ETNA_VERIFY(writer.write(enablePointLightShadows));
-  ETNA_VERIFY(writer.write(enableSpotLightShadows));
-  ETNA_VERIFY(writer.write(enableDirectionalLightShadows));
-  ETNA_VERIFY(writer.write(pointLightShadowsTechnique));
-  ETNA_VERIFY(writer.write(spotLightShadowsTechnique));
-  ETNA_VERIFY(writer.write(directionalLightShadowsTechnique));
+  ETNA_VERIFY(writer.write(pointLightShadowsSettings));
+  ETNA_VERIFY(writer.write(spotLightShadowsSettings));
+  ETNA_VERIFY(writer.write(directionalLightShadowsSettings));
   ETNA_VERIFY(writer.write(drawCascadesInSolidColor));
   ETNA_VERIFY(writer.write(terrainNoiseRelHeightAmp));
   ETNA_VERIFY(writer.write(terrainNoisePeriod));
