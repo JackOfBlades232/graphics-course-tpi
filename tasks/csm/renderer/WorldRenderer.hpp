@@ -147,8 +147,8 @@ private:
     float depthBiasClamp = 0.f;
     float depthBiasSlopeFactor = 1.75f;
 
-    friend bool operator==(const ShadowsSettings &s1, const ShadowsSettings &s2) = default;
-    friend bool operator!=(const ShadowsSettings &s1, const ShadowsSettings &s2) = default;
+    friend bool operator==(const ShadowsSettings& s1, const ShadowsSettings& s2) = default;
+    friend bool operator!=(const ShadowsSettings& s1, const ShadowsSettings& s2) = default;
   };
 
 private:
@@ -256,7 +256,7 @@ private:
     vk::CommandBuffer cmd_buf,
     ViewContext& ctx,
     const ViewParams& params,
-    etna::RenderTargetState::CreateInfo rpass_info,
+    etna::RenderTargetState::RenderPassInfo rpass_info,
     SceneRenderingPass pass);
 
   void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
