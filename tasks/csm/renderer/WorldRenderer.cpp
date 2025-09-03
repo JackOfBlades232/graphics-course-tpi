@@ -665,7 +665,7 @@ void WorldRenderer::renderScene(
   vk::CommandBuffer cmd_buf,
   ViewContext& ctx,
   const ViewParams& params,
-  etna::RenderTargetState::CreateInfo rpass_info,
+  etna::RenderTargetState::RenderPassInfo rpass_info,
   SceneRenderingPass pass)
 {
   const auto passHasFragmentStage = [](SceneRenderingPass p) {
