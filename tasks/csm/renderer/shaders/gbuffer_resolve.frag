@@ -312,7 +312,7 @@ void main(void)
 
       if (constants.pointLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
       {
-        const int gridDim = 3; // @TODO: make a param
+        const int gridDim = 4; // @TODO: make a param
 
         const float faceExt = 
           (faceIdx == 0 || faceIdx == 1) ? abs(sampleDir.x) :
@@ -388,7 +388,7 @@ void main(void)
       // @TODO: pull out
       if (constants.spotLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
       {
-        const int gridDim = 3; // @TODO: make a param
+        const int gridDim = 4; // @TODO: make a param
 
         const vec2 uvStep = vec2(1.f / SPOT_SM_RESOLUTION);
         const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
