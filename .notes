@@ -1,11 +1,31 @@
-1. Prepare the frustum split +
-2. Calculate view space viewports +
-3. Cpu matrix calculation +
-4. Gpu matrix calculation +
-5. Render cascades cpu side +
-6. Sample with matrix in resolve +
-7. PCF +
-8. PCF blending for cascades via manhattan thingy
-9. Optimize sm rendering with dirty lights
-10. Stabilize visuals
+CSM
++ Prepare the frustum split
++ Calculate view space viewports
++ Cpu matrix calculation
++ Gpu matrix calculation
++ Render cascades cpu side
++ Sample with matrix in resolve
++ PCF
++ Optimize sm rendering with dirty lights
+
+* Stabilize visuals
+  * Investigate tightening depth bounds
+    * Try collecting minz maxz in frustum culling and passing it as payload
+    * In this case, I'd need to patch the matrix up in the vertex shader (I think I can actually do away with the matrix calc shader and just write it out from vs)
+    * Since now terrain chunks move in lockstep with the clipmap, we can calculate tight bounding boxes for chunks in a compute shader by taking min over clipmap
+  * Point & spot lights
+    * Write out depth bias formulas to eval value ranges
+    * Try linear depth (may need to disable perp interpolation for raster)
+    * Try additional depth bias calculation in shaders
+  * Cascades
+    * Fix frustum split
+    * Investigate depth interpolation in raster
+    * Try fixed pixel size (largest possible frustum bb) + pixel sized increments
+    * Read papers front to back
+
+* Sort out depth bias clamp seemingly not working
+
+* PCF blending for cascades
+* VSM option
+* ESM option
 
