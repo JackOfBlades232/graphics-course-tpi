@@ -65,6 +65,18 @@ private:
 
   static constexpr size_t SCENE_RPASS_COUNT = size_t(SceneRenderingPass::COUNT);
 
+  struct SceneRenderPassInfo
+  {
+    SceneRenderingPass pass;
+    ViewContext* vctx;
+    ViewParams vparams;
+    etna::RenderTargetState::RenderPassInfo rtargetInfo;
+    bool depthBias = false;
+    float depthBiasConstantFactor = 0.f;
+    float depthBiasClamp = 0.f;
+    float depthBiasSlopeFactor = 0.f;
+  };
+
   struct MeshPipeline
   {
     etna::GraphicsPipeline pipelines[SCENE_RPASS_COUNT];
@@ -252,12 +264,7 @@ private:
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
 
 private:
-  void renderScene(
-    vk::CommandBuffer cmd_buf,
-    ViewContext& ctx,
-    const ViewParams& params,
-    etna::RenderTargetState::RenderPassInfo rpass_info,
-    SceneRenderingPass pass);
+  void renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&& srpi);
 
   void createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci);
   void registerManagedImage(

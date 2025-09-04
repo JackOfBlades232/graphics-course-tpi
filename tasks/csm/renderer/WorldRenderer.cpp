@@ -53,6 +53,7 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
     sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eBack;
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBias);
+    sci.dynamicStates.push_back(vk::DynamicState::eDepthBiasEnable);
     pipelines[size_t(SceneRenderingPass::SHADOW)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
     programs[size_t(SceneRenderingPass::SHADOW)].emplace(
@@ -66,6 +67,7 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.fragmentShaderOutput.depthAttachmentFormat = vk::Format::eD16Unorm;
     sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eFront;
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBias);
+    sci.dynamicStates.push_back(vk::DynamicState::eDepthBiasEnable);
     pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
     programs[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)].emplace(
@@ -133,43 +135,49 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
-  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
-    .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
+  defaultSampler = etna::Sampler(
+    etna::Sampler::CreateInfo{
+      .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
 
   constants.emplace(wc, [](size_t) {
-    return create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(constantsData),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "constants"});
+    return create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(constantsData),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "constants"});
   });
   lights.emplace(wc, [](size_t) {
-    return create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getLights()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "lights"});
+    return create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getLights()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "lights"});
   });
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
   prevLights = {};
 
-  lightMatricesBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = sizeof(LightMatrices),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "light_matrices"});
+  lightMatricesBuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = sizeof(LightMatrices),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "light_matrices"});
 
-  stubUniBuffer = create_buffer(etna::Buffer::CreateInfo{
-    .size = 16,
-    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-    .name = "stub_uniform"});
-  stubStorageBuffer = create_buffer(etna::Buffer::CreateInfo{
-    .size = 16,
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "stub_storage"});
+  stubUniBuffer = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = 16,
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "stub_uniform"});
+  stubStorageBuffer = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = 16,
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "stub_storage"});
 
   for (auto& component : rcomponents)
     component->allocateResources(resolution);
@@ -189,8 +197,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
   for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
   {
-    pointLightViews.emplace_back(array_make<ViewContext, 6>(
-      [this, i] { return viewCtxMgr->alloc(fmt::format("point{}", i).c_str()); }));
+    pointLightViews.emplace_back(array_make<ViewContext, 6>([this, i] {
+      return viewCtxMgr->alloc(fmt::format("point{}", i).c_str());
+    }));
   }
   for (size_t i = 0; i < sceneMgr->getLights().spotLightsCount; ++i)
   {
@@ -198,8 +207,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   }
   for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
   {
-    directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>(
-      [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
+    directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>([this, i] {
+      return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str());
+    }));
   }
 
   if (sceneMgr->hasTerrain())
@@ -209,11 +219,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     terrain.emplace(TerrainRenderingData{});
 
     memcpy(&terrain->sourceData, &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
-    terrain->source = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getTerrainData()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "terrain_data"});
+    terrain->source = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getTerrainData()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "terrain_data"});
 
     memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
 
@@ -250,10 +261,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
         .layers = CLIPMAP_LEVEL_COUNT});
 
-    terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
-      .filter = vk::Filter::eLinear,
-      .addressMode = vk::SamplerAddressMode::eRepeat,
-      .name = "terrain_clipmap_sampler"});
+    terrain->clipmapSampler = etna::Sampler(
+      etna::Sampler::CreateInfo{
+        .filter = vk::Filter::eLinear,
+        .addressMode = vk::SamplerAddressMode::eRepeat,
+        .name = "terrain_clipmap_sampler"});
 
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
@@ -321,11 +333,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     skybox.emplace(SkyboxRenderingData{});
 
     memcpy(&skybox->sourceData, &sceneMgr->getSkyboxData(), sizeof(sceneMgr->getSkyboxData()));
-    skybox->source = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getSkyboxData()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "skybox_data"});
+    skybox->source = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getSkyboxData()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "skybox_data"});
 
     memcpy(skybox->source.map(), &skybox->sourceData, sizeof(skybox->sourceData));
   }
@@ -355,8 +368,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     etna::Image::ViewParams vps{};
     if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
       vps.type = vk::ImageViewType::eCube;
-    texBindings.emplace_back(etna::Binding{
-      0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
+    texBindings.emplace_back(
+      etna::Binding{
+        0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
     registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", i, tex.getName()));
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
@@ -661,41 +675,43 @@ void WorldRenderer::update(const FramePacket& packet)
   }
 }
 
-void WorldRenderer::renderScene(
-  vk::CommandBuffer cmd_buf,
-  ViewContext& ctx,
-  const ViewParams& params,
-  etna::RenderTargetState::RenderPassInfo rpass_info,
-  SceneRenderingPass pass)
+void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&& srpi)
 {
   const auto passHasFragmentStage = [](SceneRenderingPass p) {
     return p == SceneRenderingPass::COLOR || p == SceneRenderingPass::WIRE_COLOR;
   };
 
-  ctx.update(params);
-  viewCtxMgr->cullForView(cmd_buf, ctx, constants->get());
+  srpi.vctx->update(srpi.vparams);
+  viewCtxMgr->cullForView(cmd_buf, *srpi.vctx, constants->get());
 
   {
     ETNA_PROFILE_GPU(cmd_buf, renderScene);
 
-    etna::RenderTargetState renderTargets{cmd_buf, rpass_info};
+    etna::RenderTargetState renderTargets{cmd_buf, srpi.rtargetInfo};
+
+    cmd_buf.setDepthBiasEnable(vk::Bool32(srpi.depthBias));
+    if (srpi.depthBias)
+    {
+      cmd_buf.setDepthBias(
+        srpi.depthBiasConstantFactor, srpi.depthBiasClamp, srpi.depthBiasSlopeFactor);
+    }
 
     if (drawScene)
     {
       ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
 
-      auto programInfo = staticMeshPipeline->getProg(pass);
-      const auto& pipe = staticMeshPipeline->get(pass);
+      auto programInfo = staticMeshPipeline->getProg(srpi.pass);
+      const auto& pipe = staticMeshPipeline->get(srpi.pass);
 
       auto set = etna::create_descriptor_set(
         programInfo.getDescriptorLayoutId(0),
         cmd_buf,
         {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
-         etna::Binding{1, ctx.culledInstancesBuf.genBinding()},
-         etna::Binding{9, ctx.viewParamsBuf.get().genBinding()}});
+         etna::Binding{1, srpi.vctx->culledInstancesBuf.genBinding()},
+         etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()}});
       std::vector vkSets{set.getVkSet()};
 
-      if (passHasFragmentStage(pass))
+      if (passHasFragmentStage(srpi.pass))
       {
         vkSets.push_back(materialParamsDsetFrag.getVkSet());
         vkSets.push_back(bindlessTexturesDsetFrag.getVkSet());
@@ -713,15 +729,15 @@ void WorldRenderer::renderScene(
       auto [offset, count] = sceneMgr->getSceneObjectsIndirectCommandsSubrange();
 
       cmd_buf.drawIndexedIndirect(
-        ctx.indirectDrawBuf.get(), offset, count, sizeof(IndirectCommand));
+        srpi.vctx->indirectDrawBuf.get(), offset, count, sizeof(IndirectCommand));
     }
 
     if (terrain && drawTerrain)
     {
       ETNA_PROFILE_GPU(cmd_buf, terrain);
 
-      auto programInfo = terrainMeshPipeline->getProg(pass);
-      const auto& pipe = terrainMeshPipeline->get(pass);
+      auto programInfo = terrainMeshPipeline->getProg(srpi.pass);
+      const auto& pipe = terrainMeshPipeline->get(srpi.pass);
 
       std::vector<etna::Binding> bindings{};
       bindings.reserve(
@@ -729,7 +745,7 @@ void WorldRenderer::renderScene(
         terrain->normalLevelsSamplerBindings.size() + terrain->albedoLevelsSamplerBindings.size() +
         terrain->matdataLevelsSamplerBindings.size() + 4);
       bindings.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
-      bindings.emplace_back(1, ctx.culledInstancesBuf.genBinding());
+      bindings.emplace_back(1, srpi.vctx->culledInstancesBuf.genBinding());
       for (const auto& b : terrain->geometryLevelsSamplerBindings)
         bindings.push_back(b);
       for (const auto& b : terrain->normalLevelsSamplerBindings)
@@ -740,7 +756,7 @@ void WorldRenderer::renderScene(
         bindings.push_back(b);
       bindings.emplace_back(7, terrain->source.genBinding());
       bindings.emplace_back(8, constants->get().genBinding());
-      bindings.emplace_back(9, ctx.viewParamsBuf.get().genBinding());
+      bindings.emplace_back(9, srpi.vctx->viewParamsBuf.get().genBinding());
 
       auto set =
         etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
@@ -759,7 +775,7 @@ void WorldRenderer::renderScene(
         shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance));
 
       cmd_buf.drawIndexedIndirect(
-        ctx.indirectDrawBuf.get(),
+        srpi.vctx->indirectDrawBuf.get(),
         offset * sizeof(IndirectCommand),
         count,
         sizeof(IndirectCommand));
@@ -900,12 +916,6 @@ void WorldRenderer::renderWorld(
 
       if (pointLightShadowsSettings.enable)
       {
-        cmd_buf.setDepthBiasEnable(pointLightShadowsSettings.depthBias ? VK_TRUE : VK_FALSE);
-        cmd_buf.setDepthBias(
-          pointLightShadowsSettings.depthBiasConstantFactor,
-          pointLightShadowsSettings.depthBiasClamp,
-          pointLightShadowsSettings.depthBiasSlopeFactor);
-
         for (size_t i = 0;
              const auto& point : std::span{lights.pointLights, lights.pointLightsCount})
         {
@@ -951,14 +961,20 @@ void WorldRenderer::renderWorld(
 
             renderScene(
               cmd_buf,
-              pointLightViews[i][j],
-              view_params_for_cam(cam, 1.f),
-              {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
-               {},
-               {.image = map.get(),
-                .view = map.getView({.baseLayer = uint32_t(j), .layerCount = 1u})}},
-              pointLightShadowsSettings.frontFaceCull ? SceneRenderingPass::SHADOW_FRONT_CULLED
-                                                      : SceneRenderingPass::SHADOW);
+              {.pass = pointLightShadowsSettings.frontFaceCull
+                 ? SceneRenderingPass::SHADOW_FRONT_CULLED
+                 : SceneRenderingPass::SHADOW,
+               .vctx = &pointLightViews[i][j],
+               .vparams = view_params_for_cam(cam, 1.f),
+               .rtargetInfo =
+                 {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
+                  {},
+                  {.image = map.get(),
+                   .view = map.getView({.baseLayer = uint32_t(j), .layerCount = 1u})}},
+               .depthBias = pointLightShadowsSettings.depthBias,
+               .depthBiasConstantFactor = pointLightShadowsSettings.depthBiasConstantFactor,
+               .depthBiasClamp = pointLightShadowsSettings.depthBiasClamp,
+               .depthBiasSlopeFactor = pointLightShadowsSettings.depthBiasSlopeFactor});
           }
         }
 
@@ -1007,13 +1023,19 @@ void WorldRenderer::renderWorld(
 
           renderScene(
             cmd_buf,
-            spotLightViews[i],
-            view_params_for_cam(cam, 1.f),
-            {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
-             {},
-             {.image = map.get(), .view = map.getView({})}},
-            spotLightShadowsSettings.frontFaceCull ? SceneRenderingPass::SHADOW_FRONT_CULLED
-                                                   : SceneRenderingPass::SHADOW);
+            {.pass = spotLightShadowsSettings.frontFaceCull
+               ? SceneRenderingPass::SHADOW_FRONT_CULLED
+               : SceneRenderingPass::SHADOW,
+             .vctx = &spotLightViews[i],
+             .vparams = view_params_for_cam(cam, 1.f),
+             .rtargetInfo =
+               {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
+                {},
+                {.image = map.get(), .view = map.getView({})}},
+             .depthBias = spotLightShadowsSettings.depthBias,
+             .depthBiasConstantFactor = spotLightShadowsSettings.depthBiasConstantFactor,
+             .depthBiasClamp = spotLightShadowsSettings.depthBiasClamp,
+             .depthBiasSlopeFactor = spotLightShadowsSettings.depthBiasSlopeFactor});
 
           etna::set_state(
             cmd_buf,
@@ -1077,14 +1099,19 @@ void WorldRenderer::renderWorld(
 
             renderScene(
               cmd_buf,
-              directionalLightCascadeViews[i][j],
-              view_params_for_cam(cam, xExt, yExt),
-              {{{0, 0}, {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION}},
-               {},
-               {.image = map.get(), .view = map.getView({})}},
-              directionalLightShadowsSettings.frontFaceCull
-                ? SceneRenderingPass::SHADOW_FRONT_CULLED
-                : SceneRenderingPass::SHADOW);
+              {.pass = directionalLightShadowsSettings.frontFaceCull
+                 ? SceneRenderingPass::SHADOW_FRONT_CULLED
+                 : SceneRenderingPass::SHADOW,
+               .vctx = &directionalLightCascadeViews[i][j],
+               .vparams = view_params_for_cam(cam, xExt, yExt),
+               .rtargetInfo =
+                 {{{0, 0}, {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION}},
+                  {},
+                  {.image = map.get(), .view = map.getView({})}},
+               .depthBias = directionalLightShadowsSettings.depthBias,
+               .depthBiasConstantFactor = directionalLightShadowsSettings.depthBiasConstantFactor,
+               .depthBiasClamp = directionalLightShadowsSettings.depthBiasClamp,
+               .depthBiasSlopeFactor = directionalLightShadowsSettings.depthBiasSlopeFactor});
 
             etna::set_state(
               cmd_buf,
@@ -1105,14 +1132,15 @@ void WorldRenderer::renderWorld(
 
       renderScene(
         cmd_buf,
-        *mainViewContext,
-        view_params_for_cam(mainCam, aspect(), csmSplitLambda),
-        {{{0, 0}, {resolution.x, resolution.y}},
-         {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
-          {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
-          {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
-         {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}},
-        wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR);
+        {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
+         .vctx = &mainViewContext.value(),
+         .vparams = view_params_for_cam(mainCam, aspect(), csmSplitLambda),
+         .rtargetInfo = {
+           {{0, 0}, {resolution.x, resolution.y}},
+           {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
+            {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
+            {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
+           {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}}});
     }
 
     {
