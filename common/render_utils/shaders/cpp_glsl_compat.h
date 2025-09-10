@@ -99,6 +99,9 @@ shader_mat4 translation(shader_vec3 offs)
 #define SHADER_UINT_MAX 4294967295
 #define SHADER_FLT_MAX 3.402823466e+38
 
+#define SHADER_MIN(a_, b_) ((a_) < (b_) ? (a_) : (b_))
+#define SHADER_MAX(a_, b_) ((a_) > (b_) ? (a_) : (b_))
+
 // NOLINTEND
 
 #endif // SHADER_COMMON_H_INCLUDED

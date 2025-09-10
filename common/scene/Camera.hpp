@@ -104,9 +104,6 @@ inline ViewParams view_params_for_cam(
     const auto proj = cam.projTm(aspect);
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
-    
-    // @TEST
-    params.mProj = proj;
   }
 
   // pass frustum dimensions
@@ -148,9 +145,6 @@ inline ViewParams view_params_for_cam(const OrthoCamera& cam, float xext, float 
     const auto proj = cam.orthoTm(xext, yext);
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
-    
-    // @TEST
-    params.mProj = proj;
   }
 
   // pass frustum dimensions

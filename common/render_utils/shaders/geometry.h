@@ -64,27 +64,25 @@ struct ViewParams
   shader_mat4 mProjView;
   shader_mat4 mView;
   ViewFrustum viewFrustum;
-  shader_vec4 csmFrustumSplits[(CSM_CASCADE_COUNT - 1) / 4 + 1];
+  // Workaround for a bug where [1] array is probably flattened
+  shader_vec4 csmFrustumSplits[SHADER_MAX((CSM_CASCADE_COUNT - 1) / 4 + 1, 2)];
   ViewType type;
   shader_uint pad1_, pad2_, pad3_;
-
-  // @TEST
-  shader_mat4 mProj;
 };
 
 #ifndef __cplusplus
 
 float get_frustum_split(in ViewParams p, uint i)
 {
-  uint comp = i % 4;
+  uint comp = i & 3;
   if (comp == 0)
-    return p.csmFrustumSplits[i / 4].x;
+    return p.csmFrustumSplits[i & ~3].x;
   else if (comp == 1)
-    return p.csmFrustumSplits[i / 4].y;
+    return p.csmFrustumSplits[i & ~3].y;
   else if (comp == 2)
-    return p.csmFrustumSplits[i / 4].z;
+    return p.csmFrustumSplits[i & ~3].z;
   else
-    return p.csmFrustumSplits[i / 4].w;
+    return p.csmFrustumSplits[i & ~3].w;
 }
 
 #endif
