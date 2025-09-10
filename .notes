@@ -18,9 +18,10 @@ CSM
     * Try linear depth (may need to disable perp interpolation for raster)
     * Try additional depth bias calculation in shaders
   * Cascades
-    * Fix frustum split
-    * Investigate depth interpolation in raster
+    + Fix frustum split
+    * Fix weird black artifacts on screen edge
     * Try fixed pixel size (largest possible frustum bb) + pixel sized increments
+    * Investigate depth interpolation in raster
     * Read papers front to back
 
 * Sort out depth bias clamp seemingly not working

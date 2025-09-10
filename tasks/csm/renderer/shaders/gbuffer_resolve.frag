@@ -195,31 +195,16 @@ void main(void)
   vec3 color = ambient * albedo;
 
   // For directional shadows
-  int cascade = -1;
-  if (constants.useDirectionalLightShadows != 0 && lights.directionalLightsCount > 0)
-  {
-    for (cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade)
-    {
-      float prevZ = cascade == 0 ? viewParams.viewFrustum.nearZ : get_frustum_split(viewParams, cascade - 1);
-      float nextZ = get_frustum_split(viewParams, cascade);
-
-      if (viewPos.z >= prevZ && viewPos.z <= nextZ)
-        break;
-    }
-
-    // @FEAT: should rather be shader asserted
-    if (cascade == CSM_CASCADE_COUNT)
-      --cascade;
-  }
+  int cascade = 0;
+  while (cascade < CSM_CASCADE_COUNT - 1 && viewPos.z > get_frustum_split(viewParams, cascade))
+    ++cascade;
 
   if (constants.drawCascadesInSolidColor != 0)
   {
-    const vec3 DEBUG_CASCADE_COLORS[3] = {
-      vec3(1.0, 0.94, 0.2),
-      vec3(1.0, 0.0, 1.0),
-      vec3(0.27, 0.51, 0.71)};
+    const vec3 DEBUG_CASCADE_COLORS[4] = {
+      vec3(0.1), vec3(0.3), vec3(0.6), vec3(1.)};
 
-    out_fragColor = vec4(DEBUG_CASCADE_COLORS[cascade % 3], 1.f);
+    out_fragColor = vec4(DEBUG_CASCADE_COLORS[cascade & 3], 1.f);
     return;
   }
 
@@ -249,7 +234,7 @@ void main(void)
 
       if (constants.directionalLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
       {
-        const int gridDim = 3; // @TODO: make a param
+        const int gridDim = 4; // @TODO: make a param
 
         const vec2 uvStep = vec2(1.f / CSM_CASCADE_RESOLUTION);
         const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
