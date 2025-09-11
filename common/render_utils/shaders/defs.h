@@ -5,6 +5,9 @@
 #define BASE_WORK_GROUP_SIZE 64
 #define MAX_WORK_GROUP_SIZE 1024
 
+// @TODO move
+#define BUFFER_ACI_ELEMS_PER_THREAD 32
+
 #endif // DEFS_H_INCLUDED
 
 

@@ -7,7 +7,7 @@
 #ifdef __cplusplus
 
 #include <glm/glm.hpp>
-
+#include <bit>
 
 // NOLINTBEGIN
 
@@ -47,6 +47,17 @@ using shader_bool = glm::uint;
 
 #define XZ(v_) (shader_vec2((v_).x, (v_).z))
 
+shader_inline shader_uint float_to_ordered_uint(float v)
+{
+  const shader_uint i = std::bit_cast<shader_uint>(v);
+  return (i & 0x80000000) ? (i ^ 0x7FFFFFFF) : i;
+}
+
+shader_inline float ordered_uint_to_float(shader_uint i)
+{
+  return std::bit_cast<float>((i & 0x80000000) ? (i ^ 0x7FFFFFFF) : i); 
+}
+
 #else
 
 #define shader_int int
@@ -85,6 +96,17 @@ shader_mat4 translation(shader_vec3 offs)
   shader_mat4 m = shader_mat4(1.f);
   m[3] = shader_vec4(offs, 1.f);
   return m;
+}
+
+shader_uint float_to_ordered_uint(float v)
+{
+  const shader_uint i = floatBitsToUint(v);
+  return (i & 0x80000000) != 0 ? (i ^ 0x7FFFFFFF) : i;
+}
+
+float ordered_uint_to_float(shader_uint i)
+{
+  return uintBitsToFloat((i & 0x80000000) != 0 ? (i ^ 0x7FFFFFFF) : i); 
 }
 
 #endif

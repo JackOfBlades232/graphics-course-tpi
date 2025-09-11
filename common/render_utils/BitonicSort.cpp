@@ -1,4 +1,5 @@
 #include "BitonicSort.hpp"
+#include "Common.hpp"
 
 #include "shaders/defs.h"
 #include "shaders/cpp_glsl_compat.h"
@@ -24,14 +25,6 @@ BitonicSorter<T>::BitonicSorter()
   pipeline = pipelineManager.createComputePipeline(progName.c_str(), {});
 }
 
-static void emit_barrier(vk::CommandBuffer cmd_buf, const vk::BufferMemoryBarrier2& bar)
-{
-  cmd_buf.pipelineBarrier2(vk::DependencyInfo{
-    .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-    .bufferMemoryBarrierCount = 1,
-    .pBufferMemoryBarriers = &bar});
-}
-
 template <class T>
 BITONIC_SORTER_CONSTRAINT(T)
 void BitonicSorter<T>::sortPotImpl(
@@ -40,16 +33,16 @@ void BitonicSorter<T>::sortPotImpl(
   uint32_t size,
   const vk::BufferMemoryBarrier2& transition_barrier)
 {
-  emit_barrier(
+  emit_barriers(
     cmd_buf,
-    vk::BufferMemoryBarrier2{
+    {vk::BufferMemoryBarrier2{
       .srcStageMask = transition_barrier.srcStageMask,
       .srcAccessMask = transition_barrier.srcAccessMask,
       .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
       .dstAccessMask =
         vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
       .buffer = buffer.get(),
-      .size = sizeof(T) * size});
+      .size = sizeof(T) * size}});
 
   auto programInfo = etna::get_shader_program(programId);
   auto set = etna::create_descriptor_set(
@@ -75,9 +68,9 @@ void BitonicSorter<T>::sortPotImpl(
 
       cmd_buf.dispatch(get_linear_wg_count(1u << (stageCnt - 1), BASE_WORK_GROUP_SIZE), 1, 1);
 
-      emit_barrier(
+      emit_barriers(
         cmd_buf,
-        vk::BufferMemoryBarrier2{
+        {vk::BufferMemoryBarrier2{
           .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
           .srcAccessMask =
             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
@@ -85,7 +78,7 @@ void BitonicSorter<T>::sortPotImpl(
           .dstAccessMask =
             vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
           .buffer = buffer.get(),
-          .size = sizeof(T) * size});
+          .size = sizeof(T) * size}});
     }
 
   if (
@@ -93,16 +86,16 @@ void BitonicSorter<T>::sortPotImpl(
     (transition_barrier.dstAccessMask &
      ~(vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite)))
   {
-    emit_barrier(
+    emit_barriers(
       cmd_buf,
-      vk::BufferMemoryBarrier2{
+      {vk::BufferMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
         .srcAccessMask =
           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
         .dstStageMask = transition_barrier.dstStageMask,
         .dstAccessMask = transition_barrier.dstAccessMask,
         .buffer = buffer.get(),
-        .size = sizeof(T) * size});
+        .size = sizeof(T) * size}});
   }
 }
 

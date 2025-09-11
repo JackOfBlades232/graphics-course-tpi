@@ -2,8 +2,8 @@
 
 #include "SceneManager.hpp"
 
-// @TODO: move to render components?
 #include <render_components/IComponent.hpp>
+#include <render_utils/BufferAciStat.hpp>
 
 #include <etna/Image.hpp>
 #include <etna/Vulkan.hpp>
@@ -50,6 +50,8 @@ public:
 private:
   etna::ComputePipeline cullingPipeline{};
   etna::ComputePipeline resetIndirectCommandsPipeline{};
+  std::optional<BufferAciStatCollector<DrawableInstance, BufferAciStatOp::MINMAXZ>>
+    depthMinMaxCollector{};
   const etna::GpuWorkCount& workCount;
   const SceneManager& sceneMgr;
 

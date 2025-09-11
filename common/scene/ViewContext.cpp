@@ -19,6 +19,7 @@ void ViewContextManager::setupPipelines(vk::Format, DebugDrawersRegistry&)
   cullingPipeline = pipelineManager.createComputePipeline("culling", {});
   resetIndirectCommandsPipeline =
     pipelineManager.createComputePipeline("reset_indirect_commands", {});
+  depthMinMaxCollector.emplace();
 }
 
 ViewContext ViewContextManager::alloc(const char* tag)
