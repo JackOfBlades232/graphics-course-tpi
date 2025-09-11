@@ -55,5 +55,8 @@ private:
 
 private:
   uint32_t indirectDrawBufByteSize() const { return sceneMgr.getIndirectCommands().size_bytes(); }
-  uint32_t markedInstBufSizeBytes() const { return sceneMgr.getInstances().size_bytes(); }
+  uint32_t markedInstBufSizeBytes() const
+  {
+    return sceneMgr.getInstances().size() * sizeof(DrawableInstance);
+  }
 };

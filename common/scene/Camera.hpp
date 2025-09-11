@@ -94,7 +94,7 @@ struct OrthoCamera
 };
 
 inline ViewParams view_params_for_cam(
-  const Camera& cam, float aspect, float csm_split_lambda = -1.f)
+  const Camera& cam, float aspect, bool need_depth_bounds, float csm_split_lambda = -1.f)
 {
   ViewParams params{};
   params.type = ViewType::PERSPECTIVE;
@@ -132,10 +132,13 @@ inline ViewParams view_params_for_cam(
     }
   }
 
+  params.needDepthBounds = shader_uint(need_depth_bounds);
+
   return params;
 }
 
-inline ViewParams view_params_for_cam(const OrthoCamera& cam, float xext, float yext)
+inline ViewParams view_params_for_cam(
+  const OrthoCamera& cam, float xext, float yext, bool need_depth_bounds)
 {
   ViewParams params{};
   params.type = ViewType::ORTHO;
@@ -154,6 +157,8 @@ inline ViewParams view_params_for_cam(const OrthoCamera& cam, float xext, float 
     params.viewFrustum.nearZ = cam.zNear;
     params.viewFrustum.farZ = cam.zFar;
   }
+
+  params.needDepthBounds = shader_uint(need_depth_bounds);
 
   return params;
 }
