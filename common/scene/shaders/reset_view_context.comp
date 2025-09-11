@@ -2,8 +2,8 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
-
 #include "draw.h"
+#include "geometry.h"
 
 layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 
@@ -11,10 +11,19 @@ layout(binding = 0, set = 0) writeonly buffer commands_t
 {
   IndirectCommand commands[];
 };
+layout(binding = 1, set = 0) writeonly buffer data_t
+{
+  ViewData vdata;
+};
 
 void main(void)
 {
   uint idx = gl_GlobalInvocationID.x;
+  if (idx == 0)
+  {
+    vdata.minViewZOrderedUint = float_to_ordered_uint(SHADER_FLT_MAX);
+    vdata.maxViewZOrderedUint = float_to_ordered_uint(-SHADER_FLT_MAX);
+  }
   if (idx < commands.length())
     commands[idx].instanceCount = 0;
 }

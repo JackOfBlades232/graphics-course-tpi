@@ -330,7 +330,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       for (size_t matrixId : matrixIds)
       {
         data.instances.push_back(DrawableInstance{
-          shader_uint(matrixId), shader_uint(relem.materialId), 0, FLT_MAX, -FLT_MAX, 0, 0, 0});
+          shader_uint(matrixId), shader_uint(relem.materialId), 0, 0, FLT_MAX, -FLT_MAX, 0, 0});
       }
 
       totalInstCount += uint32_t(matrixIds.size());

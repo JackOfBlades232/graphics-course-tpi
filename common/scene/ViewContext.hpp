@@ -3,7 +3,6 @@
 #include "SceneManager.hpp"
 
 #include <render_components/IComponent.hpp>
-#include <render_utils/BufferAciStat.hpp>
 
 #include <etna/Image.hpp>
 #include <etna/Vulkan.hpp>
@@ -19,6 +18,7 @@ struct ViewContext
 {
   etna::Buffer indirectDrawBuf;
   etna::Buffer culledInstancesBuf;
+  etna::Buffer viewDataBuf;
   etna::GpuSharedResource<etna::Buffer> viewParamsBuf;
   bool prepared;
 
@@ -45,13 +45,16 @@ public:
   void setupPipelines(vk::Format, DebugDrawersRegistry&) final;
 
   ViewContext alloc(const char* tag = "");
-  void cullForView(vk::CommandBuffer cmd_buf, ViewContext& ctx, const etna::Buffer& constants);
+  void cullForView(
+    vk::CommandBuffer cmd_buf,
+    ViewContext& ctx,
+    const ViewParams& params,
+    const etna::Buffer& constants);
 
 private:
   etna::ComputePipeline cullingPipeline{};
-  etna::ComputePipeline resetIndirectCommandsPipeline{};
-  std::optional<BufferAciStatCollector<DrawableInstance, BufferAciStatOp::MINMAXZ>>
-    depthMinMaxCollector{};
+  etna::ComputePipeline calculateDepthBoundsPipeline{};
+  etna::ComputePipeline resetViewContextPipeline{};
   const etna::GpuWorkCount& workCount;
   const SceneManager& sceneMgr;
 

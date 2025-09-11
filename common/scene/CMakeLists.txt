@@ -11,5 +11,6 @@ target_link_libraries(scene PUBLIC glm::glm tinygltf etna render_utils render_co
 
 target_add_shaders(scene
   shaders/culling.comp
-  shaders/reset_indirect_commands.comp
+  shaders/reset_view_context.comp
+  shaders/calculate_depth_bounds.comp
 )

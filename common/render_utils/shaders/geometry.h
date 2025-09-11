@@ -71,6 +71,15 @@ struct ViewParams
   shader_uint pad1_, pad2_;
 };
 
+// Calculated on the GPU
+struct ViewData
+{
+  shader_uint minViewZOrderedUint;
+  shader_uint maxViewZOrderedUint;
+};
+
+#define CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD 32
+
 #ifndef __cplusplus
 
 float get_frustum_split(in ViewParams p, uint i)
