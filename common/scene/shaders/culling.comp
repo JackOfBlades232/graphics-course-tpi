@@ -20,6 +20,12 @@ layout(binding = 4, set = 0) buffer commands_t
   IndirectCommand commands[];
 };
 
+struct InstanceViewRelatedData
+{
+  float minZ;
+  float maxZ;
+};
+
 bool point_is_in_frustum(vec3 p)
 {
   return p.x >= -1.f && p.x <= 1.f && p.y >= -1.f && p.y <= 1.f && p.z >= 0.f && p.z <= 1.f;
@@ -82,8 +88,27 @@ vec2 project_frustum_onto_ax(
   }
 }
 
-bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode)
+bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode, out InstanceViewRelatedData payload)
 {
+  if (viewParams.needDepthBounds != 0)
+  {
+    const vec3 vps[8] = {
+     world_to_view(inst_mat * bbox.min),
+     world_to_view(inst_mat * vec4(bbox.min.x, bbox.min.y, bbox.max.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.min.x, bbox.max.y, bbox.min.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.max.x, bbox.min.y, bbox.min.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.max.x, bbox.min.y, bbox.max.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.min.x, bbox.max.y, bbox.max.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.max.x, bbox.max.y, bbox.min.z, 1.f)),
+     world_to_view(inst_mat * bbox.max)};
+    payload.minZ = payload.maxZ = vps[0].z;
+    for (int i = 1; i < 8; ++i)
+    {
+      payload.minZ = min(payload.minZ, vps[i].z);
+      payload.maxZ = max(payload.maxZ, vps[i].z);
+    }
+  }
+
   if (mode == CULLING_MODE_PER_VERTEX)
   {
     const vec3 p1 = world_to_clip(inst_mat * bbox.min);
@@ -292,8 +317,9 @@ void main(void)
     // @TODO: make all the 'player' stuff view stuff instead
     const mat4 instMat = get_inst_matrix(inst);
     const BBox bbox = get_inst_bbox(inst);
+    InstanceViewRelatedData payload;
 
-    if (instance_is_in_view(bbox, instMat, constants.cullingMode))
+    if (instance_is_in_view(bbox, instMat, constants.cullingMode, payload))
     {
       const uint destId =
         commands[inst.commandId].firstInstance +
@@ -302,6 +328,8 @@ void main(void)
       markedInstances[destId].instId = inst.instId;
       markedInstances[destId].materialId = inst.materialId;
       markedInstances[destId].flags = inst.flags;
+      markedInstances[destId].minViewZ = payload.minZ;
+      markedInstances[destId].maxViewZ = payload.maxZ;
     }
   }
 }

@@ -29,6 +29,9 @@ struct DrawableInstance
   shader_uint instId;                                                                                          
   shader_uint materialId;
   shader_uint flags;
+  float minViewZ;
+  float maxViewZ;
+  shader_uint pad1_, pad2_, pad3_;
 };
 
 #ifdef __cplusplus

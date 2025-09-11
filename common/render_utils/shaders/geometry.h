@@ -67,7 +67,8 @@ struct ViewParams
   // Workaround for a bug where [1] array is probably flattened
   shader_vec4 csmFrustumSplits[SHADER_MAX((CSM_CASCADE_COUNT - 1) / 4 + 1, 2)];
   ViewType type;
-  shader_uint pad1_, pad2_, pad3_;
+  shader_uint needDepthBounds;
+  shader_uint pad1_, pad2_;
 };
 
 #ifndef __cplusplus

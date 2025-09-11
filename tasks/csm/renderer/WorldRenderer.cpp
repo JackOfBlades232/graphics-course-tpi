@@ -135,49 +135,43 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
-  defaultSampler = etna::Sampler(
-    etna::Sampler::CreateInfo{
-      .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
+  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
+    .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
 
   constants.emplace(wc, [](size_t) {
-    return create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(constantsData),
-        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-        .name = "constants"});
+    return create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(constantsData),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "constants"});
   });
   lights.emplace(wc, [](size_t) {
-    return create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(sceneMgr->getLights()),
-        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-        .name = "lights"});
+    return create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getLights()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "lights"});
   });
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
   prevLights = {};
 
-  lightMatricesBuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = sizeof(LightMatrices),
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "light_matrices"});
+  lightMatricesBuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = sizeof(LightMatrices),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "light_matrices"});
 
-  stubUniBuffer = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = 16,
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "stub_uniform"});
-  stubStorageBuffer = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = 16,
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "stub_storage"});
+  stubUniBuffer = create_buffer(etna::Buffer::CreateInfo{
+    .size = 16,
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .name = "stub_uniform"});
+  stubStorageBuffer = create_buffer(etna::Buffer::CreateInfo{
+    .size = 16,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "stub_storage"});
 
   for (auto& component : rcomponents)
     component->allocateResources(resolution);
@@ -197,9 +191,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
   for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
   {
-    pointLightViews.emplace_back(array_make<ViewContext, 6>([this, i] {
-      return viewCtxMgr->alloc(fmt::format("point{}", i).c_str());
-    }));
+    pointLightViews.emplace_back(array_make<ViewContext, 6>(
+      [this, i] { return viewCtxMgr->alloc(fmt::format("point{}", i).c_str()); }));
   }
   for (size_t i = 0; i < sceneMgr->getLights().spotLightsCount; ++i)
   {
@@ -207,9 +200,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   }
   for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
   {
-    directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>([this, i] {
-      return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str());
-    }));
+    directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>(
+      [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
   }
 
   if (sceneMgr->hasTerrain())
@@ -219,12 +211,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     terrain.emplace(TerrainRenderingData{});
 
     memcpy(&terrain->sourceData, &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
-    terrain->source = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(sceneMgr->getTerrainData()),
-        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-        .name = "terrain_data"});
+    terrain->source = create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getTerrainData()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "terrain_data"});
 
     memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
 
@@ -261,11 +252,10 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
         .layers = CLIPMAP_LEVEL_COUNT});
 
-    terrain->clipmapSampler = etna::Sampler(
-      etna::Sampler::CreateInfo{
-        .filter = vk::Filter::eLinear,
-        .addressMode = vk::SamplerAddressMode::eRepeat,
-        .name = "terrain_clipmap_sampler"});
+    terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
+      .filter = vk::Filter::eLinear,
+      .addressMode = vk::SamplerAddressMode::eRepeat,
+      .name = "terrain_clipmap_sampler"});
 
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
@@ -333,12 +323,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     skybox.emplace(SkyboxRenderingData{});
 
     memcpy(&skybox->sourceData, &sceneMgr->getSkyboxData(), sizeof(sceneMgr->getSkyboxData()));
-    skybox->source = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(sceneMgr->getSkyboxData()),
-        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-        .name = "skybox_data"});
+    skybox->source = create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getSkyboxData()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "skybox_data"});
 
     memcpy(skybox->source.map(), &skybox->sourceData, sizeof(skybox->sourceData));
   }
@@ -368,9 +357,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     etna::Image::ViewParams vps{};
     if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
       vps.type = vk::ImageViewType::eCube;
-    texBindings.emplace_back(
-      etna::Binding{
-        0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
+    texBindings.emplace_back(etna::Binding{
+      0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
     registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", i, tex.getName()));
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
@@ -606,7 +594,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
   {
     auto& lights = sceneMgr->lightsRW();
-    const auto mainViewParams = view_params_for_cam(mainCam, aspect(), csmSplitLambda);
+    const auto mainViewParams = view_params_for_cam(mainCam, aspect(), false, csmSplitLambda);
     const auto [xNear, yNear, zNear, zFar] = mainViewParams.viewFrustum;
 
     const auto invView = glm::inverse(mainViewParams.mView);
@@ -965,7 +953,7 @@ void WorldRenderer::renderWorld(
                  ? SceneRenderingPass::SHADOW_FRONT_CULLED
                  : SceneRenderingPass::SHADOW,
                .vctx = &pointLightViews[i][j],
-               .vparams = view_params_for_cam(cam, 1.f),
+               .vparams = view_params_for_cam(cam, 1.f, true),
                .rtargetInfo =
                  {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
                   {},
@@ -1027,7 +1015,7 @@ void WorldRenderer::renderWorld(
                ? SceneRenderingPass::SHADOW_FRONT_CULLED
                : SceneRenderingPass::SHADOW,
              .vctx = &spotLightViews[i],
-             .vparams = view_params_for_cam(cam, 1.f),
+             .vparams = view_params_for_cam(cam, 1.f, true),
              .rtargetInfo =
                {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
                 {},
@@ -1103,7 +1091,7 @@ void WorldRenderer::renderWorld(
                  ? SceneRenderingPass::SHADOW_FRONT_CULLED
                  : SceneRenderingPass::SHADOW,
                .vctx = &directionalLightCascadeViews[i][j],
-               .vparams = view_params_for_cam(cam, xExt, yExt),
+               .vparams = view_params_for_cam(cam, xExt, yExt, true),
                .rtargetInfo =
                  {{{0, 0}, {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION}},
                   {},
@@ -1134,7 +1122,7 @@ void WorldRenderer::renderWorld(
         cmd_buf,
         {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
          .vctx = &mainViewContext.value(),
-         .vparams = view_params_for_cam(mainCam, aspect(), csmSplitLambda),
+         .vparams = view_params_for_cam(mainCam, aspect(), false, csmSplitLambda),
          .rtargetInfo = {
            {{0, 0}, {resolution.x, resolution.y}},
            {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
