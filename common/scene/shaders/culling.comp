@@ -327,6 +327,7 @@ void main(void)
 
       markedInstances[destId].instId = inst.instId;
       markedInstances[destId].materialId = inst.materialId;
+      markedInstances[destId].commandId = inst.commandId;
       markedInstances[destId].flags = inst.flags;
       markedInstances[destId].minViewZ = payload.minZ;
       markedInstances[destId].maxViewZ = payload.maxZ;

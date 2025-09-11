@@ -1,0 +1,80 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "cpp_glsl_compat.h"
+#include "defs.h"
+#include "draw.h"
+#include "geometry.h"
+
+layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
+
+layout(binding = 0, set = 0) readonly buffer instances_t
+{
+  DrawableInstance markedInstances[];
+};
+layout(binding = 1, set = 0) buffer commands_t
+{
+  IndirectCommand commands[];
+};
+layout(binding = 2, set = 0) buffer data_t
+{
+  ViewData vdata;
+};
+
+struct MinMax
+{
+  float minv;
+  float maxv;
+};
+
+shared MinMax sharedCache[BASE_WORK_GROUP_SIZE];
+
+void main(void)
+{
+  const int dsize = int(markedInstances.length());
+
+  const int globId = int(gl_GlobalInvocationID.x);
+  const int locId = int(gl_LocalInvocationID.x);
+  const int localFirstElem = globId * CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD;
+  const int localElemCount = min(CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD, dsize - localFirstElem);
+
+  MinMax mm = MinMax(SHADER_FLT_MAX, -SHADER_FLT_MAX);
+  for (int e = localFirstElem; e < localFirstElem + localElemCount; ++e)
+  {
+    IndirectCommand cmd = commands[markedInstances[e].commandId];
+    if (e < cmd.firstInstance + cmd.instanceCount)
+    {
+      mm.minv = min(mm.minv, markedInstances[e].minViewZ);
+      mm.maxv = max(mm.maxv, markedInstances[e].maxViewZ);
+    }
+  }
+
+  sharedCache[locId] = mm;
+
+  barrier();
+
+  for (int skip = 1; skip < BASE_WORK_GROUP_SIZE; skip <<= 1)
+  {
+    // @TODO: should't skip be *2 here or smth
+    if (locId % skip == 0)
+    {
+      const int nextId = locId + skip;
+      if (nextId < BASE_WORK_GROUP_SIZE)
+      {
+        sharedCache[locId].minv = min(sharedCache[locId].minv, sharedCache[nextId].minv);
+        sharedCache[locId].maxv = max(sharedCache[locId].maxv, sharedCache[nextId].maxv);
+      }
+    }
+
+    barrier();
+  }
+
+  if (locId == 0 && sharedCache[0].minv <= sharedCache[0].maxv)
+  {
+    uint minvOrd = float_to_ordered_uint(sharedCache[0].minv);
+    uint maxvOrd = float_to_ordered_uint(sharedCache[0].maxv);
+    atomicMin(vdata.minViewZOrderedUint, minvOrd);
+    atomicMax(vdata.maxViewZOrderedUint, maxvOrd);
+  }
+}

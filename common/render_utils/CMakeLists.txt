@@ -4,7 +4,6 @@ add_library(render_utils
   BboxRenderer.cpp
   PostfxRenderer.cpp
   BitonicSort.cpp
-  BufferAciStat.cpp
   Common.cpp
 )
 
@@ -23,5 +22,4 @@ target_add_shaders(render_utils
   shaders/bbox.vert
   shaders/bbox.frag
   shaders/bitonic_sort_float.comp
-  shaders/buffer_minmaxz_drawinst.comp
 )

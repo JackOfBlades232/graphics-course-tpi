@@ -670,7 +670,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
   };
 
   srpi.vctx->update(srpi.vparams);
-  viewCtxMgr->cullForView(cmd_buf, *srpi.vctx, constants->get());
+  viewCtxMgr->cullForView(cmd_buf, *srpi.vctx, srpi.vparams, constants->get());
 
   {
     ETNA_PROFILE_GPU(cmd_buf, renderScene);
