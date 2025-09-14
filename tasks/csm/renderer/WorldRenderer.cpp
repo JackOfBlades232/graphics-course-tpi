@@ -383,7 +383,7 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "static_mesh",
     {RENDERER_SHADERS_ROOT "static_mesh.frag.spv", RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
-  etna::create_program("static_shadow", {RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
+  etna::create_program("static_mesh_shadow", {RENDERER_SHADERS_ROOT "static_mesh_shadow.vert.spv"});
   etna::create_program(
     "terrain_mesh",
     {RENDERER_SHADERS_ROOT "terrain_mesh.frag.spv",
@@ -391,13 +391,13 @@ void WorldRenderer::loadShaders()
      RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
   etna::create_program(
-    "terrain_shadow",
+    "terrain_mesh_shadow",
     {RENDERER_SHADERS_ROOT "terrain_mesh.vert.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
-     RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
+     RENDERER_SHADERS_ROOT "terrain_mesh_shadow.tese.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
   etna::create_program(
-    "calculate_light_mats", {RENDERER_SHADERS_ROOT "calculate_light_mats.comp.spv"});
+    "transfer_light_mats", {RENDERER_SHADERS_ROOT "transfer_light_mats.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -496,12 +496,12 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     };
 
   staticMeshPipeline.emplace(
-    pipelineManager, "static_mesh", "static_shadow", meshPipelineCreateInfo);
+    pipelineManager, "static_mesh", "static_mesh_shadow", meshPipelineCreateInfo);
   terrainMeshPipeline.emplace(
-    pipelineManager, "terrain_mesh", "terrain_shadow", terrainPipelineCreateInfo);
+    pipelineManager, "terrain_mesh", "terrain_mesh_shadow", terrainPipelineCreateInfo);
 
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
-  calcLightMatsPipeline = pipelineManager.createComputePipeline("calculate_light_mats", {});
+  transferLightMatsPipeline = pipelineManager.createComputePipeline("transfer_light_mats", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -795,48 +795,6 @@ void WorldRenderer::renderWorld(
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
 
-    {
-      emit_barriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-          .srcStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
-          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-          .buffer = lightMatricesBuf.get(),
-          .size = sizeof(LightMatrices)}});
-
-      auto programInfo = etna::get_shader_program("calculate_light_mats");
-      auto set = etna::create_descriptor_set(
-        programInfo.getDescriptorLayoutId(0),
-        cmd_buf,
-        {etna::Binding{0, lightMatricesBuf.genBinding()},
-         etna::Binding{1, lights->get().genBinding()},
-         etna::Binding{8, constants->get().genBinding()},
-         etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()}});
-
-      cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eCompute,
-        calcLightMatsPipeline.getVkPipelineLayout(),
-        0,
-        {set.getVkSet()},
-        {});
-
-      cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, calcLightMatsPipeline.getVkPipeline());
-      cmd_buf.dispatch(
-        get_linear_wg_count(sizeof(LightMatrices) / sizeof(glm::mat4), BASE_WORK_GROUP_SIZE), 1, 1);
-
-      emit_barriers(
-        cmd_buf,
-        {vk::BufferMemoryBarrier2{
-          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-          .dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
-          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-          .buffer = lightMatricesBuf.get(),
-          .size = sizeof(LightMatrices)}});
-    }
-
     if (terrain && terrain->needToroidalUpdate)
     {
       ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
@@ -893,12 +851,48 @@ void WorldRenderer::renderWorld(
       }
     }
 
+    emit_barriers(
+      cmd_buf,
+      {vk::BufferMemoryBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
+        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+        .buffer = lightMatricesBuf.get(),
+        .size = sizeof(LightMatrices)}});
+
     {
       ETNA_PROFILE_GPU(cmd_buf, shadowmapGen);
 
       DEFER([&cmd_buf] { cmd_buf.setDepthBiasEnable(VK_FALSE); });
 
       const auto& lights = sceneMgr->getLights();
+
+      auto transferMat = [this, &cmd_buf](auto lid, const ViewContext& ctx) {
+        auto programInfo = etna::get_shader_program("transfer_light_mats");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, lightMatricesBuf.genBinding()},
+           etna::Binding{9, ctx.viewParamsBuf.get().genBinding()}});
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          transferLightMatsPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, transferLightMatsPipeline.getVkPipeline());
+        cmd_buf.pushConstants<shader_uint>(
+          transferLightMatsPipeline.getVkPipelineLayout(),
+          vk::ShaderStageFlagBits::eCompute,
+          0,
+          shader_uint(lid));
+
+        cmd_buf.dispatch(1, 1, 1);
+      };
 
       // @TODO: cull lights outside of frustum. Maybe also draw sm-s on demand?
 
@@ -963,6 +957,8 @@ void WorldRenderer::renderWorld(
                .depthBiasConstantFactor = pointLightShadowsSettings.depthBiasConstantFactor,
                .depthBiasClamp = pointLightShadowsSettings.depthBiasClamp,
                .depthBiasSlopeFactor = pointLightShadowsSettings.depthBiasSlopeFactor});
+
+            transferMat(j + i * 6, pointLightViews[i][j]);
           }
         }
 
@@ -1032,6 +1028,8 @@ void WorldRenderer::renderWorld(
             vk::AccessFlagBits2::eShaderRead,
             vk::ImageLayout::eShaderReadOnlyOptimal,
             vk::ImageAspectFlagBits::eDepth);
+
+          transferMat(i + POINT_LIGHT_BUF_SIZE * 6, spotLightViews[i]);
         }
 
         spotLightsSettingsDirty = false;
@@ -1108,12 +1106,26 @@ void WorldRenderer::renderWorld(
               vk::AccessFlagBits2::eShaderRead,
               vk::ImageLayout::eShaderReadOnlyOptimal,
               vk::ImageAspectFlagBits::eDepth);
+
+            transferMat(
+              j + i * CSM_CASCADE_COUNT + POINT_LIGHT_BUF_SIZE * 6 + SPOT_LIGHT_BUF_SIZE,
+              directionalLightCascadeViews[i][j]);
           }
         }
 
         directionalLightsSettingsDirty = false;
       }
     }
+
+    emit_barriers(
+      cmd_buf,
+      {vk::BufferMemoryBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+        .buffer = lightMatricesBuf.get(),
+        .size = sizeof(LightMatrices)}});
 
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);

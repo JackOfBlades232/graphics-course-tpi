@@ -175,7 +175,7 @@ private:
   std::optional<MeshPipeline> staticMeshPipeline{};
   std::optional<MeshPipeline> terrainMeshPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
-  etna::ComputePipeline calcLightMatsPipeline{};
+  etna::ComputePipeline transferLightMatsPipeline{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
 

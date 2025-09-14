@@ -12,11 +12,13 @@ target_link_libraries(renderer
 target_add_shaders(renderer
   shaders/gbuffer_resolve.frag
   shaders/clipmap_gen.comp
-  shaders/calculate_light_mats.comp
+  shaders/transfer_light_mats.comp
   shaders/static_mesh.vert
   shaders/static_mesh.frag
+  shaders/static_mesh_shadow.vert
   shaders/terrain_mesh.vert
   shaders/terrain_mesh.tesc
   shaders/terrain_mesh.tese
   shaders/terrain_mesh.frag
+  shaders/terrain_mesh_shadow.tese
 )
