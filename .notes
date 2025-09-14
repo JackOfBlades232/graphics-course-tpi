@@ -11,7 +11,7 @@ CSM
 * Stabilize visuals
   * Investigate tightening depth bounds
     + Try collecting minz maxz in frustum culling and passing it as payload
-    * Calculate min/max over the buffer
+    + Calculate min/max over the buffer
     * In this case, I'd need to patch the matrix up in the vertex shader (I think I can actually do away with the matrix calc shader and just write it out from vs)
     * Since now terrain chunks move in lockstep with the clipmap, we can calculate tight bounding boxes for chunks in a compute shader by taking min over clipmap
   * Point & spot lights
