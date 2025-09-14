@@ -26,11 +26,10 @@ layout(binding = 9, set = 0) uniform view_params_t
 {
   ViewParams viewParams;
 };
-
-layout(push_constant) uniform params_t
+layout(binding = 10, set = 0) readonly buffer view_data_t
 {
-  uint lightShadowmapId;
-} params;
+  ViewData viewData;
+};
 
 layout(location = 0) out VS_OUT
 {
@@ -45,7 +44,6 @@ out gl_PerVertex { vec4 gl_Position; };
 
 void main(void)
 {
-  // @TODO: apply z perturbations based on view data
   // @TODO: should not be duplicated with static_mesh.vert
   const DrawableInstance inst = markedInstances[gl_InstanceIndex];
   const mat4 modelMatrix = instanceMatrices[inst.instId];
@@ -60,6 +58,7 @@ void main(void)
   vOut.texCoord = vTexCoordAndTang.xy;
   vOut.matId    = matId;
 
-  gl_Position   = viewParams.mProjView * vec4(vOut.wPos, 1.0);
+
+  gl_Position   = adjust_depth_bounds(viewParams.mProjView, viewParams, viewData) * vec4(vOut.wPos, 1.0);
 }
 

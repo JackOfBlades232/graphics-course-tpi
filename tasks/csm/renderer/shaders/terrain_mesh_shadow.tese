@@ -17,6 +17,10 @@ layout(binding = 9, set = 0) uniform view_params_t
 {
   ViewParams viewParams;
 };
+layout(binding = 10, set = 0) readonly buffer view_data_t
+{
+  ViewData viewData;
+};
 
 #include "terrain_mesh.glsl.inc"
 

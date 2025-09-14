@@ -101,12 +101,12 @@ shader_mat4 translation(shader_vec3 offs)
 shader_uint float_to_ordered_uint(float v)
 {
   const shader_uint i = floatBitsToUint(v);
-  return (i & 0x80000000) != 0 ? (i ^ 0x7FFFFFFF) : i;
+  return i ^ ((i & 0x80000000) != 0 ? 0xFFFFFFFF : 0x80000000);
 }
 
 float ordered_uint_to_float(shader_uint i)
 {
-  return uintBitsToFloat((i & 0x80000000) != 0 ? (i ^ 0x7FFFFFFF) : i); 
+  return uintBitsToFloat(i ^ ((i & 0x80000000) != 0 ? 0x80000000 : 0xFFFFFFFF)); 
 }
 
 #endif
