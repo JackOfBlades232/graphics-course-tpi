@@ -696,7 +696,8 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         cmd_buf,
         {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
          etna::Binding{1, srpi.vctx->culledInstancesBuf.genBinding()},
-         etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()}});
+         etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()},
+         etna::Binding{10, srpi.vctx->viewDataBuf.genBinding()}});
       std::vector vkSets{set.getVkSet()};
 
       if (passHasFragmentStage(srpi.pass))
@@ -745,6 +746,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
       bindings.emplace_back(7, terrain->source.genBinding());
       bindings.emplace_back(8, constants->get().genBinding());
       bindings.emplace_back(9, srpi.vctx->viewParamsBuf.get().genBinding());
+      bindings.emplace_back(10, srpi.vctx->viewDataBuf.genBinding());
 
       auto set =
         etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
@@ -874,7 +876,8 @@ void WorldRenderer::renderWorld(
           programInfo.getDescriptorLayoutId(0),
           cmd_buf,
           {etna::Binding{0, lightMatricesBuf.genBinding()},
-           etna::Binding{9, ctx.viewParamsBuf.get().genBinding()}});
+           etna::Binding{9, ctx.viewParamsBuf.get().genBinding()},
+           etna::Binding{10, ctx.viewDataBuf.genBinding()}});
 
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
@@ -947,7 +950,7 @@ void WorldRenderer::renderWorld(
                  ? SceneRenderingPass::SHADOW_FRONT_CULLED
                  : SceneRenderingPass::SHADOW,
                .vctx = &pointLightViews[i][j],
-               .vparams = view_params_for_cam(cam, 1.f, true),
+               .vparams = view_params_for_cam(cam, 1.f, false),
                .rtargetInfo =
                  {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
                   {},
@@ -1011,7 +1014,7 @@ void WorldRenderer::renderWorld(
                ? SceneRenderingPass::SHADOW_FRONT_CULLED
                : SceneRenderingPass::SHADOW,
              .vctx = &spotLightViews[i],
-             .vparams = view_params_for_cam(cam, 1.f, true),
+             .vparams = view_params_for_cam(cam, 1.f, false),
              .rtargetInfo =
                {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
                 {},

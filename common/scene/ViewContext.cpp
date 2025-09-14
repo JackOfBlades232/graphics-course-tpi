@@ -111,7 +111,9 @@ void ViewContextManager::cullForView(
   emit_barriers(
     cmd_buf,
     {vk::BufferMemoryBarrier2{
-      .srcStageMask = vk::PipelineStageFlagBits2::eVertexShader,
+      .srcStageMask = vk::PipelineStageFlagBits2::eVertexShader |
+        vk::PipelineStageFlagBits2::eTessellationEvaluationShader |
+        vk::PipelineStageFlagBits2::eComputeShader,
       .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
       .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
       .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
@@ -183,35 +185,34 @@ void ViewContextManager::cullForView(
       get_linear_wg_count(uint32_t(sceneMgr.getInstances().size()), BASE_WORK_GROUP_SIZE), 1, 1);
   }
 
-  emit_barriers(
-    cmd_buf,
-    {vk::BufferMemoryBarrier2{
-       .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .srcAccessMask =
-         vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-       .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-       .buffer = ctx.indirectDrawBuf.get(),
-       .size = indirectDrawBufByteSize()},
-     vk::BufferMemoryBarrier2{
-       .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-       .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-       .buffer = ctx.culledInstancesBuf.get(),
-       .size = markedInstBufSizeBytes()},
-     vk::BufferMemoryBarrier2{
-       .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
-       .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .dstAccessMask =
-         vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-       .buffer = ctx.viewDataBuf.get(),
-       .size = sizeof(ViewData)}});
-
-  // @TODO: no redundant barriers when depth bounds is not used?
   if (params.needDepthBounds)
   {
+    emit_barriers(
+      cmd_buf,
+      {vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask =
+           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .buffer = ctx.indirectDrawBuf.get(),
+         .size = indirectDrawBufByteSize()},
+       vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .buffer = ctx.culledInstancesBuf.get(),
+         .size = markedInstBufSizeBytes()},
+       vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .dstAccessMask =
+           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+         .buffer = ctx.viewDataBuf.get(),
+         .size = sizeof(ViewData)}});
+
     ETNA_PROFILE_GPU(cmd_buf, depthBounds);
 
     auto programInfo = etna::get_shader_program("calculate_depth_bounds");
@@ -237,30 +238,61 @@ void ViewContextManager::cullForView(
         BASE_WORK_GROUP_SIZE * CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD),
       1,
       1);
-  }
 
-  emit_barriers(
-    cmd_buf,
-    {vk::BufferMemoryBarrier2{
-       .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-       .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
-       .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
-       .buffer = ctx.indirectDrawBuf.get(),
-       .size = indirectDrawBufByteSize()},
-     vk::BufferMemoryBarrier2{
-       .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-       .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
-       .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-       .buffer = ctx.culledInstancesBuf.get(),
-       .size = markedInstBufSizeBytes()},
-     vk::BufferMemoryBarrier2{
-       .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-       .srcAccessMask =
-         vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-       .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
-       .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-       .buffer = ctx.viewDataBuf.get(),
-       .size = sizeof(ViewData)}});
+    emit_barriers(
+      cmd_buf,
+      {vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+         .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+         .buffer = ctx.indirectDrawBuf.get(),
+         .size = indirectDrawBufByteSize()},
+       vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
+         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .buffer = ctx.culledInstancesBuf.get(),
+         .size = markedInstBufSizeBytes()},
+       vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask =
+           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader |
+           vk::PipelineStageFlagBits2::eTessellationEvaluationShader |
+           vk::PipelineStageFlagBits2::eComputeShader,
+         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .buffer = ctx.viewDataBuf.get(),
+         .size = sizeof(ViewData)}});
+  }
+  else
+  {
+    emit_barriers(
+      cmd_buf,
+      {vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask =
+           vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+         .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+         .buffer = ctx.indirectDrawBuf.get(),
+         .size = indirectDrawBufByteSize()},
+       vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
+         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .buffer = ctx.culledInstancesBuf.get(),
+         .size = markedInstBufSizeBytes()},
+       vk::BufferMemoryBarrier2{
+         .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+         .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+         .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader |
+           vk::PipelineStageFlagBits2::eTessellationEvaluationShader |
+           vk::PipelineStageFlagBits2::eComputeShader,
+         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+         .buffer = ctx.viewDataBuf.get(),
+         .size = sizeof(ViewData)}});
+  }
 }

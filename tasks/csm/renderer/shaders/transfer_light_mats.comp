@@ -14,6 +14,10 @@ layout(binding = 9, set = 0) uniform view_params_t
 {
   ViewParams viewParams;
 };
+layout(binding = 10, set = 0) readonly buffer view_data_t
+{
+  ViewData viewData;
+};
 
 layout(push_constant) uniform params_t
 {
@@ -22,17 +26,18 @@ layout(push_constant) uniform params_t
 
 void main(void)
 {
+  const mat4 correctedMat = adjust_depth_bounds(viewParams.mProjView, viewParams, viewData);
   if (params.lightId < POINT_LIGHT_BUF_SIZE * 6)
   {
     const uint idx = params.lightId;
     const uint lidx = idx / 6;
     const uint fidx = idx - lidx * 6;
-    lightMats.pointLightMats[lidx][fidx] = viewParams.mProjView;
+    lightMats.pointLightMats[lidx][fidx] = correctedMat;
   }
   else if (params.lightId < POINT_LIGHT_BUF_SIZE * 6 + SPOT_LIGHT_BUF_SIZE)
   {
     const uint idx = params.lightId - POINT_LIGHT_BUF_SIZE * 6;
-    lightMats.spotLightMats[idx] = viewParams.mProjView;
+    lightMats.spotLightMats[idx] = correctedMat;
   }
   else if (
     params.lightId <
@@ -41,6 +46,6 @@ void main(void)
     const uint idx = params.lightId - POINT_LIGHT_BUF_SIZE * 6 - SPOT_LIGHT_BUF_SIZE;
     const uint lidx = idx / CSM_CASCADE_COUNT;
     const uint cidx = idx - lidx * CSM_CASCADE_COUNT;
-    lightMats.directionalLightMats[lidx][cidx] = viewParams.mProjView;
+    lightMats.directionalLightMats[lidx][cidx] = correctedMat;
   }
 }

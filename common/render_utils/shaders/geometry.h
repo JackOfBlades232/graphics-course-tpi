@@ -80,6 +80,22 @@ struct ViewData
 
 #define CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD 32
 
+shader_inline shader_mat4 patch_depth_bounds_proj(shader_mat4 pv, float znear, float zfar)
+{
+  const float invZRng = 1.f / (zfar - znear);
+  pv[2][2] = zfar * invZRng;
+  pv[3][2] = -znear * zfar * invZRng;
+  return pv;
+}
+
+shader_inline shader_mat4 patch_depth_bounds_ortho(shader_mat4 pv, float znear, float zfar)
+{
+  const float invZRng = 1.f / (zfar - znear);
+  pv[2][2] = invZRng;
+  pv[3][2] = -znear * invZRng;
+  return pv;
+}
+
 #ifndef __cplusplus
 
 float get_frustum_split(in ViewParams p, uint i)
@@ -93,6 +109,27 @@ float get_frustum_split(in ViewParams p, uint i)
     return p.csmFrustumSplits[i & ~3].z;
   else
     return p.csmFrustumSplits[i & ~3].w;
+}
+
+vec2 get_corrected_depth_bounds(in ViewParams params, in ViewData data)
+{
+  float sceneMinZ = ordered_uint_to_float(data.minViewZOrderedUint) - 0.001f;
+  float sceneMaxZ = ordered_uint_to_float(data.maxViewZOrderedUint) + 0.001f;
+  float correctedNearZ = max(sceneMinZ, params.viewFrustum.nearZ);
+  float correctedFarZ = min(sceneMaxZ, params.viewFrustum.farZ);
+  return vec2(correctedNearZ, correctedFarZ);
+}
+
+mat4 adjust_depth_bounds(mat4 pv, in ViewParams params, in ViewData data)
+{
+  if (params.needDepthBounds == 0)
+    return pv;
+  const vec2 zNearFar = get_corrected_depth_bounds(params, data);
+  if (params.type == VIEW_TYPE_PERSPECTIVE)
+    return patch_depth_bounds_proj(pv, zNearFar.x, zNearFar.y);
+  else // VIEW_TYPE_ORTHO
+    return patch_depth_bounds_ortho(pv, zNearFar.x, zNearFar.y);
+  return pv;
 }
 
 #endif
