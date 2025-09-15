@@ -1,0 +1,107 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "cpp_glsl_compat.h"
+#include "defs.h"
+#include "terrain.h"
+#include "constants.h"
+
+#include "common.frag.inc"
+
+#define WORK_GROUP_SIZE (TERRAIN_CELL_LUT_WORK_GROUP_DIM * TERRAIN_CELL_LUT_WORK_GROUP_DIM)
+
+layout(local_size_x = TERRAIN_CELL_LUT_WORK_GROUP_DIM, local_size_y = TERRAIN_CELL_LUT_WORK_GROUP_DIM) in;
+
+layout(binding = 0, set = 0, r32ui) uniform uimage2D cellMinHeightLut;
+layout(binding = 1, set = 0, r32ui) uniform uimage2D cellMaxHeightLut;
+
+// @TODO: we may need displacement (and thus normals) here
+layout(binding = 2, set = 0) uniform sampler2D heightmap;
+
+layout(binding = 7, set = 0) uniform terrain_source_t
+{
+  TerrainSourceData source;
+};
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
+// @TODO: dedup with clipmap gen
+float sample_rel_height_uv(vec2 uv, vec2 worldUv)
+{
+  float relHeight = textureLod(heightmap, uv, 0.f).x;
+
+  relHeight *= 1.f - 2.f * constants.terrainNoiseRelHeightAmp;
+  relHeight += constants.terrainNoiseRelHeightAmp;
+
+  relHeight +=
+    simplex_noise(worldUv * constants.terrainNoisePeriod) *
+    constants.terrainNoiseRelHeightAmp;
+
+  return relHeight;
+}
+
+struct MinMax
+{
+  float minv;
+  float maxv;
+};
+
+shared MinMax sharedCache[WORK_GROUP_SIZE];
+
+void main(void)
+{
+  const ivec2 globId = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 locId = ivec2(gl_LocalInvocationID.xy);
+  const int locLinId = int(gl_LocalInvocationIndex);
+
+  const ivec2 lutSz = imageSize(cellMinHeightLut);
+  const float samplingIncrement = source.cellDim / float(source.samplesPerCellSide);
+
+  const ivec2 cellId = globId / int(source.samplesPerCellSide);
+
+  const vec2 hmapBase = source.rangeMin.xz;
+  const vec2 hmapSize = source.rangeMax.xz - source.rangeMin.xz;
+  
+  const float cellWorldSize = source.cellDim;
+  const ivec2 cellLutGridBase = ivec2(floor(hmapBase / cellWorldSize));
+  const vec2 cellLutBase = vec2(cellLutGridBase) * cellWorldSize;
+
+  const vec2 cellBase = cellLutBase + cellWorldSize * vec2(cellId);
+  const vec2 samplePos = cellBase + samplingIncrement * vec2(locId);
+
+  const vec2 sampleInHmapPos = samplePos - hmapBase;
+  const vec2 sampleHmapUv = sampleInHmapPos / hmapSize;
+
+  const float relH = sample_rel_height_uv(sampleHmapUv, sampleInHmapPos);
+
+  sharedCache[locLinId] = MinMax(relH, relH);
+
+  barrier();
+
+  for (int skip = 1; skip < WORK_GROUP_SIZE; skip <<= 1)
+  {
+    if ((locLinId & (skip | (skip - 1))) == 0)
+    {
+      const int nextLinId = locLinId + skip;
+      if (nextLinId < BASE_WORK_GROUP_SIZE)
+      {
+        sharedCache[locLinId].minv = min(sharedCache[locLinId].minv, sharedCache[nextLinId].minv);
+        sharedCache[locLinId].maxv = max(sharedCache[locLinId].maxv, sharedCache[nextLinId].maxv);
+      }
+    }
+
+    barrier();
+  }
+
+  if (locLinId == 0 && cellId.x < lutSz.x && cellId.y < lutSz.y)
+  {
+    uint minvOrd = float_to_ordered_uint(sharedCache[0].minv);
+    uint maxvOrd = float_to_ordered_uint(sharedCache[0].maxv);
+    imageAtomicMin(cellMinHeightLut, cellId, minvOrd);
+    imageAtomicMax(cellMaxHeightLut, cellId, maxvOrd);
+  }
+}
+

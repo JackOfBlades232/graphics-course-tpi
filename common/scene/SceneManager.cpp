@@ -22,6 +22,7 @@
 
 #include <filesystem>
 #include <stack>
+#include <numeric>
 #include <unordered_map>
 
 SceneManager::SceneManager()
@@ -141,11 +142,12 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
             static_cast<float>(node.scale[2])));
 
       if (!node.rotation.empty())
-        transform *= mat4_cast(glm::quat(
-          static_cast<float>(node.rotation[3]),
-          static_cast<float>(node.rotation[0]),
-          static_cast<float>(node.rotation[1]),
-          static_cast<float>(node.rotation[2])));
+        transform *= mat4_cast(
+          glm::quat(
+            static_cast<float>(node.rotation[3]),
+            static_cast<float>(node.rotation[0]),
+            static_cast<float>(node.rotation[1]),
+            static_cast<float>(node.rotation[2])));
 
       if (!node.translation.empty())
         transform = translate(
@@ -288,10 +290,11 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
   for (size_t i = 0; i < model.meshes.size(); ++i)
   {
     const auto& mesh = model.meshes[i];
-    result.meshes.push_back(Mesh{
-      .firstRelem = static_cast<uint32_t>(result.relems.size()),
-      .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
-    });
+    result.meshes.push_back(
+      Mesh{
+        .firstRelem = static_cast<uint32_t>(result.relems.size()),
+        .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
+      });
 
     std::vector<uint32_t> matrixIds{};
 
@@ -314,12 +317,13 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       const tinygltf::Accessor& indAccessor = model.accessors[prim.indices];
       const tinygltf::Accessor& posAccessor = model.accessors[prim.attributes.at("POSITION")];
 
-      result.relems.push_back(RenderElement{
-        .vertexOffset = static_cast<uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
-        .indexOffset = static_cast<uint32_t>(indAccessor.byteOffset / sizeof(uint32_t)),
-        .indexCount = static_cast<uint32_t>(indAccessor.count),
-        .materialId =
-          prim.material == -1 ? MaterialId::INVALID : material_remapping[prim.material]});
+      result.relems.push_back(
+        RenderElement{
+          .vertexOffset = static_cast<uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
+          .indexOffset = static_cast<uint32_t>(indAccessor.byteOffset / sizeof(uint32_t)),
+          .indexCount = static_cast<uint32_t>(indAccessor.count),
+          .materialId =
+            prim.material == -1 ? MaterialId::INVALID : material_remapping[prim.material]});
 
       const auto& relem = result.relems.back();
 
@@ -329,8 +333,9 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 
       for (size_t matrixId : matrixIds)
       {
-        data.instances.push_back(DrawableInstance{
-          shader_uint(matrixId), shader_uint(relem.materialId), 0, 0, FLT_MAX, -FLT_MAX, 0, 0});
+        data.instances.push_back(
+          DrawableInstance{
+            shader_uint(matrixId), shader_uint(relem.materialId), 0, 0, FLT_MAX, -FLT_MAX, 0, 0});
       }
 
       totalInstCount += uint32_t(matrixIds.size());
@@ -370,8 +375,9 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
     auto instances = std::move(data.instances);
     for (DrawableInstance inst : instances)
     {
-      result.allInstances.push_back(CullableInstance{
-        inst.instId, inst.materialId, shader_uint(result.sceneDrawCommands.size() - 1), 0});
+      result.allInstances.push_back(
+        CullableInstance{
+          inst.instId, inst.materialId, shader_uint(result.sceneDrawCommands.size() - 1), 0});
     }
   }
 
@@ -397,11 +403,12 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 
     for (size_t i = 0; i < totalChunkCount; ++i)
     {
-      result.allInstances.push_back(CullableInstance{
-        shader_uint(i + commandId),
-        shader_uint(MaterialId::INVALID), // @TODO set in scene
-        shader_uint(commandId),
-        TERRAIN_CHUNK_INSTANCE_FLAG});
+      result.allInstances.push_back(
+        CullableInstance{
+          shader_uint(i + commandId),
+          shader_uint(MaterialId::INVALID), // @TODO set in scene
+          shader_uint(commandId),
+          TERRAIN_CHUNK_INSTANCE_FLAG});
 
       glm::vec3 chunkCoord = {};
       glm::vec3 chunkExtent = {};
@@ -602,10 +609,11 @@ SceneManager::ProcessedLights SceneManager::processLights(
     directionalLights.size() * sizeof(directionalLights[0]));
 
   const SmpId shadowSamplerId = SmpId(samplers.size());
-  samplers.emplace_back(etna::Sampler::CreateInfo{
-    .filter = vk::Filter::eNearest,
-    .addressMode = vk::SamplerAddressMode::eClampToEdge,
-    .name = "<shadowmap_sampler>"});
+  samplers.emplace_back(
+    etna::Sampler::CreateInfo{
+      .filter = vk::Filter::eNearest,
+      .addressMode = vk::SamplerAddressMode::eClampToEdge,
+      .name = "<shadowmap_sampler>"});
 
   auto nextShadowTexSmpId = [&, this] {
     ETNA_ASSERT(textures.size() <= 65535);
@@ -615,14 +623,15 @@ SceneManager::ProcessedLights SceneManager::processLights(
   for (uint32_t i = 0; i < lights->pointLightsCount; ++i)
   {
     lights->pointLights[i].shadowmap = nextShadowTexSmpId();
-    textures.emplace_back(create_image(etna::Image::CreateInfo{
-      .extent = {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION, 1},
-      .name = fmt::format("pointlight_shadowmap{}", i),
-      .format = vk::Format::eD16Unorm,
-      .imageUsage =
-        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment,
-      .layers = 6,
-      .flags = vk::ImageCreateFlagBits::eCubeCompatible}));
+    textures.emplace_back(create_image(
+      etna::Image::CreateInfo{
+        .extent = {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION, 1},
+        .name = fmt::format("pointlight_shadowmap{}", i),
+        .format = vk::Format::eD16Unorm,
+        .imageUsage =
+          vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment,
+        .layers = 6,
+        .flags = vk::ImageCreateFlagBits::eCubeCompatible}));
   }
   std::span<const etna::Image> pointLightShadowmaps{
     textures.end() - lights->pointLightsCount, textures.end()};
@@ -630,12 +639,13 @@ SceneManager::ProcessedLights SceneManager::processLights(
   for (uint32_t i = 0; i < lights->spotLightsCount; ++i)
   {
     lights->spotLights[i].shadowmap = nextShadowTexSmpId();
-    textures.emplace_back(create_image(etna::Image::CreateInfo{
-      .extent = {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION, 1},
-      .name = fmt::format("spotlight_shadowmap{}", i),
-      .format = vk::Format::eD16Unorm,
-      .imageUsage =
-        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
+    textures.emplace_back(create_image(
+      etna::Image::CreateInfo{
+        .extent = {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION, 1},
+        .name = fmt::format("spotlight_shadowmap{}", i),
+        .format = vk::Format::eD16Unorm,
+        .imageUsage =
+          vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
   }
   std::span<const etna::Image> spotLightShadowmaps{
     textures.end() - lights->spotLightsCount, textures.end()};
@@ -646,12 +656,13 @@ SceneManager::ProcessedLights SceneManager::processLights(
     for (uint32_t j = 0; j < CSM_CASCADE_COUNT; ++j)
     {
       lights->directionalLights[i].shadowmapCascades[j].map = nextShadowTexSmpId();
-      textures.emplace_back(create_image(etna::Image::CreateInfo{
-        .extent = {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION, 1},
-        .name = fmt::format("directional{}_csm_shadowmap[{}]", i, j),
-        .format = vk::Format::eD16Unorm,
-        .imageUsage =
-          vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
+      textures.emplace_back(create_image(
+        etna::Image::CreateInfo{
+          .extent = {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION, 1},
+          .name = fmt::format("directional{}_csm_shadowmap[{}]", i, j),
+          .format = vk::Format::eD16Unorm,
+          .imageUsage =
+            vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
     }
   }
   // @NOTE ub
@@ -671,56 +682,67 @@ void SceneManager::uploadData(
   std::span<const CullableInstance> instances,
   std::span<const Material> material_params)
 {
-  unifiedVbuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = vertices.size_bytes(),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "unifiedVbuf",
-  });
+  unifiedVbuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = vertices.size_bytes(),
+      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "unifiedVbuf",
+    });
 
-  unifiedIbuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = indices.size_bytes(),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "unifiedIbuf",
-  });
+  unifiedIbuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = indices.size_bytes(),
+      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "unifiedIbuf",
+    });
 
-  matricesBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = instance_matrices.size_bytes(),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "matricesBuf",
-  });
+  matricesBuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = instance_matrices.size_bytes(),
+      .bufferUsage =
+        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "matricesBuf",
+    });
 
-  indirectDrawBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = draw_commands.size_bytes(),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc |
-      vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "indirectDrawBuf",
-  }),
+  indirectDrawBuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = draw_commands.size_bytes(),
+      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc |
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "indirectDrawBuf",
+    }),
 
-  bboxesBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = boxes.size_bytes(),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "bboxesBuf",
-  });
+  bboxesBuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = boxes.size_bytes(),
+      .bufferUsage =
+        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "bboxesBuf",
+    });
 
-  instancesBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = instances.size_bytes(),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "instancesBuf",
-  });
+  instancesBuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = instances.size_bytes(),
+      .bufferUsage =
+        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "instancesBuf",
+    });
 
   // @TODO: it isn't big, maybe make uniform?
-  materialParamsBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = material_params.size_bytes(),
-    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "materialParamsBuf",
-  });
+  materialParamsBuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = material_params.size_bytes(),
+      .bufferUsage =
+        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "materialParamsBuf",
+    });
 
   transferHelper.uploadBuffer<Vertex>(*oneShotCommands, unifiedVbuf, 0, vertices);
   transferHelper.uploadBuffer<uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
@@ -749,12 +771,13 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
   // @TODO: Maybe bake all this shit into bindata? Instances, everything. How fast it would be?
   std::vector<size_t> samplerRemapping{};
   {
-    samplers.emplace_back(etna::Sampler::CreateInfo{
-      .filter = vk::Filter::eNearest,
-      .addressMode = vk::SamplerAddressMode::eRepeat,
-      .name = "<default_sampler>",
-      .minLod = 0.f,
-      .maxLod = VK_LOD_CLAMP_NONE});
+    samplers.emplace_back(
+      etna::Sampler::CreateInfo{
+        .filter = vk::Filter::eNearest,
+        .addressMode = vk::SamplerAddressMode::eRepeat,
+        .name = "<default_sampler>",
+        .minLod = 0.f,
+        .maxLod = VK_LOD_CLAMP_NONE});
 
     auto hashGltfSampler = [](const tinygltf::Sampler& smp) {
       auto hasher = std::hash<int>{};
@@ -790,12 +813,13 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
                ? vk::SamplerAddressMode::eMirroredRepeat
                : vk::SamplerAddressMode::eRepeat);
 
-        samplers.emplace_back(etna::Sampler::CreateInfo{
-          .filter = filterMode,
-          .addressMode = addressMode,
-          .name = loadedSampler.name,
-          .minLod = 0.f,
-          .maxLod = VK_LOD_CLAMP_NONE});
+        samplers.emplace_back(
+          etna::Sampler::CreateInfo{
+            .filter = filterMode,
+            .addressMode = addressMode,
+            .name = loadedSampler.name,
+            .minLod = 0.f,
+            .maxLod = VK_LOD_CLAMP_NONE});
       }
     }
   }
@@ -991,28 +1015,31 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
         loadedImg.image.clear();
         loadedImg.image.shrink_to_fit();
 
-        img = create_image(etna::Image::CreateInfo{
-          .extent = {side, side, 1},
-          .name = loadedImg.uri,
-          .format = format,
-          .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-            vk::ImageUsageFlagBits::eTransferDst,
-          .layers = 6,
-          .mipLevels = mip_count_for_dims(side, side),
-          .flags = vk::ImageCreateFlagBits::eCubeCompatible});
+        img = create_image(
+          etna::Image::CreateInfo{
+            .extent = {side, side, 1},
+            .name = loadedImg.uri,
+            .format = format,
+            .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+              vk::ImageUsageFlagBits::eTransferDst,
+            .layers = 6,
+            .mipLevels = mip_count_for_dims(side, side),
+            .flags = vk::ImageCreateFlagBits::eCubeCompatible});
 
         for (size_t j = 0; j < 6; ++j)
           transferHelper.uploadImage(*oneShotCommands, img, 0, uint32_t(j), imageDatas[j]);
       }
       else
       {
-        img = create_image(etna::Image::CreateInfo{
-          .extent = {uint32_t(loadedImg.width), uint32_t(loadedImg.height), 1},
-          .name = loadedImg.uri,
-          .format = format,
-          .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-            vk::ImageUsageFlagBits::eTransferDst,
-          .mipLevels = mip_count_for_dims(uint32_t(loadedImg.width), uint32_t(loadedImg.height))});
+        img = create_image(
+          etna::Image::CreateInfo{
+            .extent = {uint32_t(loadedImg.width), uint32_t(loadedImg.height), 1},
+            .name = loadedImg.uri,
+            .format = format,
+            .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+              vk::ImageUsageFlagBits::eTransferDst,
+            .mipLevels =
+              mip_count_for_dims(uint32_t(loadedImg.width), uint32_t(loadedImg.height))});
 
         // @TODO: batch uploads, or make a streaming thread, this hangs hard on start
         transferHelper.uploadImage(
@@ -1049,6 +1076,18 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     data.noiseSeed = terrainExt->noiseSeed;
     data.rangeMin = terrainExt->rangeMin;
     data.rangeMax = terrainExt->rangeMax;
+
+    const float smallestDrawnChunkDim = CLIPMAP_LEVEL_WSIZE(0) / float(TERRAIN_CHUNKS_LEVEL_DIM);
+    const float updateIncrementDim = CLIPMAP_UPDATE_GRID_SIZE;
+
+    // @HACK: I don't want to do maths, so I'll just assert these are kinda integers
+    // and do an integer gcd. @TODO: this might need to go once we introduce more chunks to up
+    // the tessellation level.
+    ETNA_ASSERT(glm::abs(smallestDrawnChunkDim - smallestDrawnChunkDim) < SHADER_EPSILON);
+    ETNA_ASSERT(glm::abs(updateIncrementDim - updateIncrementDim) < SHADER_EPSILON);
+    data.cellDim = float(std::gcd(int(smallestDrawnChunkDim), int(updateIncrementDim)));
+    const float hmapMinSamplingIncrement = smallestDrawnChunkDim / float(TERRAIN_CHUNK_TESSELLATION_FACTOR);
+    data.samplesPerCellSide = shader_uint(data.cellDim / hmapMinSamplingIncrement);
 
     ETNA_ASSERT(terrainExt->details.size() <= TERRAIN_MAX_DETAILS);
     data.detailCount = uint32_t(terrainExt->details.size());

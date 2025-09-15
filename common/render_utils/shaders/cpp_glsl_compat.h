@@ -50,12 +50,12 @@ using shader_bool = glm::uint;
 shader_inline shader_uint float_to_ordered_uint(float v)
 {
   const shader_uint i = std::bit_cast<shader_uint>(v);
-  return (i & 0x80000000) ? (i ^ 0x7FFFFFFF) : i;
+  return i ^ ((i & 0x80000000) != 0 ? 0xFFFFFFFF : 0x80000000);
 }
 
 shader_inline float ordered_uint_to_float(shader_uint i)
 {
-  return std::bit_cast<float>((i & 0x80000000) ? (i ^ 0x7FFFFFFF) : i); 
+  return std::bit_cast<float>(i ^ ((i & 0x80000000) != 0 ? 0x80000000 : 0xFFFFFFFF)); 
 }
 
 #else
@@ -118,8 +118,8 @@ float ordered_uint_to_float(shader_uint i)
 #define shader_veq(x_, y_) (shader_length((x_) - (y_)) < SHADER_EPSILON)
 
 #define SHADER_EPSILON 0.00001f
-#define SHADER_UINT_MAX 4294967295
-#define SHADER_FLT_MAX 3.402823466e+38
+#define SHADER_UINT_MAX 4294967295u
+#define SHADER_FLT_MAX 3.402823466e+38f
 
 #define SHADER_MIN(a_, b_) ((a_) < (b_) ? (a_) : (b_))
 #define SHADER_MAX(a_, b_) ((a_) > (b_) ? (a_) : (b_))

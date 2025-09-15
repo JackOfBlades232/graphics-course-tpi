@@ -135,43 +135,49 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
-  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
-    .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
+  defaultSampler = etna::Sampler(
+    etna::Sampler::CreateInfo{
+      .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
 
   constants.emplace(wc, [](size_t) {
-    return create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(constantsData),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "constants"});
+    return create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(constantsData),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "constants"});
   });
   lights.emplace(wc, [](size_t) {
-    return create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getLights()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "lights"});
+    return create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getLights()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "lights"});
   });
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
   prevLights = {};
 
-  lightMatricesBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = sizeof(LightMatrices),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "light_matrices"});
+  lightMatricesBuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = sizeof(LightMatrices),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "light_matrices"});
 
-  stubUniBuffer = create_buffer(etna::Buffer::CreateInfo{
-    .size = 16,
-    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-    .name = "stub_uniform"});
-  stubStorageBuffer = create_buffer(etna::Buffer::CreateInfo{
-    .size = 16,
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "stub_storage"});
+  stubUniBuffer = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = 16,
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "stub_uniform"});
+  stubStorageBuffer = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = 16,
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "stub_storage"});
 
   for (auto& component : rcomponents)
     component->allocateResources(resolution);
@@ -191,8 +197,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
   for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
   {
-    pointLightViews.emplace_back(array_make<ViewContext, 6>(
-      [this, i] { return viewCtxMgr->alloc(fmt::format("point{}", i).c_str()); }));
+    pointLightViews.emplace_back(array_make<ViewContext, 6>([this, i] {
+      return viewCtxMgr->alloc(fmt::format("point{}", i).c_str());
+    }));
   }
   for (size_t i = 0; i < sceneMgr->getLights().spotLightsCount; ++i)
   {
@@ -200,8 +207,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   }
   for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
   {
-    directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>(
-      [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
+    directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>([this, i] {
+      return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str());
+    }));
   }
 
   if (sceneMgr->hasTerrain())
@@ -211,11 +219,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     terrain.emplace(TerrainRenderingData{});
 
     memcpy(&terrain->sourceData, &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
-    terrain->source = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getTerrainData()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "terrain_data"});
+    terrain->source = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getTerrainData()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "terrain_data"});
 
     memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
 
@@ -252,10 +261,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
         .layers = CLIPMAP_LEVEL_COUNT});
 
-    terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
-      .filter = vk::Filter::eLinear,
-      .addressMode = vk::SamplerAddressMode::eRepeat,
-      .name = "terrain_clipmap_sampler"});
+    terrain->clipmapSampler = etna::Sampler(
+      etna::Sampler::CreateInfo{
+        .filter = vk::Filter::eLinear,
+        .addressMode = vk::SamplerAddressMode::eRepeat,
+        .name = "terrain_clipmap_sampler"});
 
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
@@ -309,7 +319,38 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         uint32_t(i));
     }
 
+    const auto& sd = terrain->sourceData;
+    const auto lowCellLutCorner = glm::ivec2(glm::floor(XZ(sd.rangeMin) / sd.cellDim));
+    const auto highCellLutCorner = glm::ivec2(glm::ceil(XZ(sd.rangeMax) / sd.cellDim));
+    const auto horizCellLutExtent = uint32_t(highCellLutCorner.x - lowCellLutCorner.x);
+    const auto vertCellLutExtent = uint32_t(highCellLutCorner.y - lowCellLutCorner.y);
+
+    createManagedImage(
+      terrain->perCellMinHeightLut,
+      etna::Image::CreateInfo{
+        .extent = {horizCellLutExtent, vertCellLutExtent, 1},
+        .name = "terrain_cell_min_height_lut",
+        .format = vk::Format::eR32Uint,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage |
+          vk::ImageUsageFlagBits::eTransferDst});
+    createManagedImage(
+      terrain->perCellMaxHeightLut,
+      etna::Image::CreateInfo{
+        .extent = {horizCellLutExtent, vertCellLutExtent, 1},
+        .name = "terrain_cell_max_height_lut",
+        .format = vk::Format::eR32Uint,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage |
+          vk::ImageUsageFlagBits::eTransferDst});
+    terrain->perCellRangeLutSampler = etna::Sampler{etna::Sampler::CreateInfo{
+      .filter = vk::Filter::eNearest,
+      // @TODO: 1) cache params in sampler hnd
+      //        2) get the address mode from hmap sampler
+      .addressMode = vk::SamplerAddressMode::eMirroredRepeat,
+      .name = "<terrain_cell_range_lut_sampler>",
+      .maxLod = 1.f}};
+
     queueClipmapInvalidation();
+    queueHmapRangesInvalidation();
   }
   else
   {
@@ -323,11 +364,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     skybox.emplace(SkyboxRenderingData{});
 
     memcpy(&skybox->sourceData, &sceneMgr->getSkyboxData(), sizeof(sceneMgr->getSkyboxData()));
-    skybox->source = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getSkyboxData()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "skybox_data"});
+    skybox->source = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getSkyboxData()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "skybox_data"});
 
     memcpy(skybox->source.map(), &skybox->sourceData, sizeof(skybox->sourceData));
   }
@@ -357,8 +399,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     etna::Image::ViewParams vps{};
     if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
       vps.type = vk::ImageViewType::eCube;
-    texBindings.emplace_back(etna::Binding{
-      0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
+    texBindings.emplace_back(
+      etna::Binding{
+        0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
     registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", i, tex.getName()));
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
@@ -396,6 +439,8 @@ void WorldRenderer::loadShaders()
      RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh_shadow.tese.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
+  etna::create_program(
+    "prepare_terrain_cell_lut", {RENDERER_SHADERS_ROOT "prepare_terrain_cell_lut.comp.spv"});
   etna::create_program(
     "transfer_light_mats", {RENDERER_SHADERS_ROOT "transfer_light_mats.comp.spv"});
 
@@ -501,6 +546,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     pipelineManager, "terrain_mesh", "terrain_mesh_shadow", terrainPipelineCreateInfo);
 
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
+  prepareTerrainCellLutPipeline =
+    pipelineManager.createComputePipeline("prepare_terrain_cell_lut", {});
   transferLightMatsPipeline = pipelineManager.createComputePipeline("transfer_light_mats", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
@@ -539,6 +586,12 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.playerWorldPos = packet.mainCam.position;
     if (terrain)
     {
+      if (terrain->invalidateHmapRangeRequested)
+      {
+        terrain->needHmapRangeUpdate = true;
+        terrain->invalidateHmapRangeRequested = false;
+      }
+
       if (terrain->invalidateClipmapRequested)
       {
         constantsData.toroidalUpdatePlayerWorldPos = snap_to_toroidal_update_grid(
@@ -549,7 +602,7 @@ void WorldRenderer::update(const FramePacket& packet)
       const auto toroidalOffsetRaw =
         XZ(constantsData.playerWorldPos) - constantsData.toroidalUpdatePlayerWorldPos;
       const float disp = std::max(glm::abs(toroidalOffsetRaw.x), glm::abs(toroidalOffsetRaw.y));
-      if (disp >= CLIMPAP_UPDATE_GRID_SIZE)
+      if (disp >= CLIPMAP_UPDATE_GRID_SIZE)
       {
         const auto oldToroidalUpdatePos = std::exchange(
           constantsData.toroidalUpdatePlayerWorldPos,
@@ -797,59 +850,149 @@ void WorldRenderer::renderWorld(
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
 
-    if (terrain && terrain->needToroidalUpdate)
+    if (terrain)
     {
-      ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
-
-      terrain->needToroidalUpdate = false;
-
-      auto programInfo = etna::get_shader_program("clipmap_gen");
-      std::vector<etna::Binding> bindings{};
-      bindings.reserve(
-        terrain->geometryLevelsBindings.size() + terrain->normalLevelsBindings.size() +
-        terrain->albedoLevelsBindings.size() + terrain->matdataLevelsBindings.size() + 2);
-      for (const auto& b : terrain->geometryLevelsBindings)
-        bindings.push_back(b);
-      for (const auto& b : terrain->normalLevelsBindings)
-        bindings.push_back(b);
-      for (const auto& b : terrain->albedoLevelsBindings)
-        bindings.push_back(b);
-      for (const auto& b : terrain->matdataLevelsBindings)
-        bindings.push_back(b);
-      bindings.emplace_back(7, terrain->source.genBinding());
-      bindings.emplace_back(8, constants->get().genBinding());
-
-      auto set =
-        etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
-      cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eCompute,
-        generateClipmapPipeline.getVkPipelineLayout(),
-        0,
-        {set.getVkSet(),
-         materialParamsDsetComp.getVkSet(),
-         bindlessTexturesDsetComp.getVkSet(),
-         bindlessSamplersDsetComp.getVkSet()},
-        {});
-
-      cmd_buf.bindPipeline(
-        vk::PipelineBindPoint::eCompute, generateClipmapPipeline.getVkPipeline());
-
-      for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
+      if (terrain->needHmapRangeUpdate)
       {
-        const auto dims = calculate_toroidal_dims(constantsData.toroidalOffset, shader_uint(i));
-        ETNA_ASSERT(
-          glm::abs(dims) % glm::ivec2(1 << (CLIPMAP_LEVEL_COUNT - 1 - i)) == glm::ivec2(0, 0));
+        terrain->needHmapRangeUpdate = false;
 
-        cmd_buf.pushConstants<shader_uint>(
-          generateClipmapPipeline.getVkPipelineLayout(),
-          vk::ShaderStageFlagBits::eCompute,
+        // @TODO (re)generate min-max cell map
+        ETNA_PROFILE_GPU(cmd_buf, prepareTerrainCellLut);
+
+        etna::set_state(
+          cmd_buf,
+          terrain->perCellMinHeightLut.get(),
+          vk::PipelineStageFlagBits2::eClear,
+          vk::AccessFlagBits2::eTransferWrite,
+          vk::ImageLayout::eTransferDstOptimal,
+          vk::ImageAspectFlagBits::eColor);
+        etna::set_state(
+          cmd_buf,
+          terrain->perCellMaxHeightLut.get(),
+          vk::PipelineStageFlagBits2::eClear,
+          vk::AccessFlagBits2::eTransferWrite,
+          vk::ImageLayout::eTransferDstOptimal,
+          vk::ImageAspectFlagBits::eColor);
+        etna::flush_barriers(cmd_buf);
+
+        cmd_buf.clearColorImage(
+          terrain->perCellMinHeightLut.get(),
+          vk::ImageLayout::eTransferDstOptimal,
+          {SHADER_UINT_MAX, SHADER_UINT_MAX, SHADER_UINT_MAX, SHADER_UINT_MAX},
+          {{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}});
+        cmd_buf.clearColorImage(
+          terrain->perCellMaxHeightLut.get(),
+          vk::ImageLayout::eTransferDstOptimal,
+          {0u, 0u, 0u, 0u},
+          {{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}});
+
+        const auto [hmapTexId, hmapSmpId] =
+          unpack_tex_smp_id_pair(terrain->sourceData.heightmapTexSmp);
+
+        etna::set_state(
+          cmd_buf,
+          terrain->perCellMinHeightLut.get(),
+          vk::PipelineStageFlagBits2::eComputeShader,
+          vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite,
+          vk::ImageLayout::eGeneral,
+          vk::ImageAspectFlagBits::eColor);
+        etna::set_state(
+          cmd_buf,
+          terrain->perCellMaxHeightLut.get(),
+          vk::PipelineStageFlagBits2::eComputeShader,
+          vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite,
+          vk::ImageLayout::eGeneral,
+          vk::ImageAspectFlagBits::eColor);
+        etna::flush_barriers(cmd_buf);
+
+        // @TODO: fix validation error on read-after-write on the hmap texture
+
+        auto programInfo = etna::get_shader_program("prepare_terrain_cell_lut");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, terrain->perCellMinHeightLut.genBinding({}, vk::ImageLayout::eGeneral)},
+           etna::Binding{1, terrain->perCellMaxHeightLut.genBinding({}, vk::ImageLayout::eGeneral)},
+           etna::Binding{
+             2,
+             sceneMgr->getTex(hmapTexId).genBinding(
+               sceneMgr->getSmp(hmapSmpId).get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{7, terrain->source.genBinding()},
+           etna::Binding{8, constants->get().genBinding()}});
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          prepareTerrainCellLutPipeline.getVkPipelineLayout(),
           0,
-          shader_uint(i));
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, prepareTerrainCellLutPipeline.getVkPipeline());
+
+        const uint32_t cellD = terrain->sourceData.samplesPerCellSide;
+        const auto [lutW, lutH, _] = terrain->perCellMinHeightLut.getExtent();
         cmd_buf.dispatch(
-          get_linear_wg_count(
-            calculate_thread_count_for_clipmap_update(dims), CLIPMAP_WORK_GROUP_SIZE),
-          1,
+          get_linear_wg_count(cellD * lutW, TERRAIN_CELL_LUT_WORK_GROUP_DIM),
+          get_linear_wg_count(cellD * lutH, TERRAIN_CELL_LUT_WORK_GROUP_DIM),
           1);
+      }
+
+      if (terrain->needToroidalUpdate)
+      {
+        ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
+
+        terrain->needToroidalUpdate = false;
+
+        auto programInfo = etna::get_shader_program("clipmap_gen");
+        std::vector<etna::Binding> bindings{};
+        bindings.reserve(
+          terrain->geometryLevelsBindings.size() + terrain->normalLevelsBindings.size() +
+          terrain->albedoLevelsBindings.size() + terrain->matdataLevelsBindings.size() + 2);
+        for (const auto& b : terrain->geometryLevelsBindings)
+          bindings.push_back(b);
+        for (const auto& b : terrain->normalLevelsBindings)
+          bindings.push_back(b);
+        for (const auto& b : terrain->albedoLevelsBindings)
+          bindings.push_back(b);
+        for (const auto& b : terrain->matdataLevelsBindings)
+          bindings.push_back(b);
+        bindings.emplace_back(7, terrain->source.genBinding());
+        bindings.emplace_back(8, constants->get().genBinding());
+
+        auto set =
+          etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          generateClipmapPipeline.getVkPipelineLayout(),
+          0,
+          {set.getVkSet(),
+           materialParamsDsetComp.getVkSet(),
+           bindlessTexturesDsetComp.getVkSet(),
+           bindlessSamplersDsetComp.getVkSet()},
+          {});
+
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, generateClipmapPipeline.getVkPipeline());
+
+        for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
+        {
+          const auto dims = calculate_toroidal_dims(constantsData.toroidalOffset, shader_uint(i));
+          ETNA_ASSERT(
+            glm::abs(dims) % glm::ivec2(1 << (CLIPMAP_LEVEL_COUNT - 1 - i)) == glm::ivec2(0, 0));
+
+          cmd_buf.pushConstants<shader_uint>(
+            generateClipmapPipeline.getVkPipelineLayout(),
+            vk::ShaderStageFlagBits::eCompute,
+            0,
+            shader_uint(i));
+          cmd_buf.dispatch(
+            get_linear_wg_count(
+              calculate_thread_count_for_clipmap_update(dims), CLIPMAP_WORK_GROUP_SIZE),
+            1,
+            1);
+        }
+
+        // @TODO: regenerate bboxes from the cell lut
       }
     }
 
@@ -1067,8 +1210,9 @@ void WorldRenderer::renderWorld(
             // @TODO: pull stuff out
             OrthoCamera cam{};
 
-            cam.zNear = minZ - CSM_CORRIDOR_SIZE - 0.001f;
+            const float defaultZRng = cam.zFar - cam.zNear;
             cam.zFar = maxZ + 0.001f;
+            cam.zNear = std::min(cam.zFar - defaultZRng, minZ - 0.001f);
 
             const auto xExt = (maxX - minX) * 0.5f;
             const auto yExt = (maxY - minY) * 0.5f;
@@ -1393,18 +1537,31 @@ void WorldRenderer::drawGui()
       ImGui::Begin("Scene");
 
       ImGui::Checkbox("Draw scene", &drawScene);
-      ImGui::Checkbox("Draw terrain", &drawTerrain);
-      if (drawTerrain)
+      if (terrain)
       {
-        const bool prevDetailOn = drawTerrainSplattedDetail;
-        ImGui::Checkbox("Draw terrain splatted details", &drawTerrainSplattedDetail);
-        if (prevDetailOn != drawTerrainSplattedDetail)
-          queueClipmapInvalidation();
-        ImGui::SliderFloat("Terrain noise rel amplitude", &terrainNoiseRelHeightAmp, 0.f, 0.2f);
-        ImGui::SliderFloat("Terrain noise period", &terrainNoisePeriod, 0.0001f, 2.f);
+        ImGui::Checkbox("Draw terrain", &drawTerrain);
+        if (drawTerrain)
+        {
+          const bool prevDetailOn = drawTerrainSplattedDetail;
+          ImGui::Checkbox("Draw terrain splatted details", &drawTerrainSplattedDetail);
+          if (prevDetailOn != drawTerrainSplattedDetail)
+            queueClipmapInvalidation();
+
+          const float prevTerrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
+          const float prevTerrainNoisePeriod = terrainNoisePeriod;
+          ImGui::SliderFloat("Terrain noise rel amplitude", &terrainNoiseRelHeightAmp, 0.f, 0.2f);
+          ImGui::SliderFloat("Terrain noise period", &terrainNoisePeriod, 0.0001f, 2.f);
+          if (
+            terrainNoiseRelHeightAmp != prevTerrainNoiseRelHeightAmp ||
+            terrainNoisePeriod != prevTerrainNoisePeriod)
+          {
+            queueHmapRangesInvalidation();
+          }
+        }
       }
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
-      ImGui::Checkbox("Enable skybox", &enableSkybox);
+      if (skybox)
+        ImGui::Checkbox("Enable skybox", &enableSkybox);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
       {

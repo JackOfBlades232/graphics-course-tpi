@@ -72,7 +72,7 @@ void main(void)
 
     for (int skip = 1; skip < HISTOGRAM_WORK_GROUP_SIZE; skip <<= 1)
     {
-      if (locId % skip == 0)
+      if ((locId & (skip | (skip - 1))) == 0)
       {
         const int nextId = locId + skip;
         if (nextId < HISTOGRAM_WORK_GROUP_SIZE)

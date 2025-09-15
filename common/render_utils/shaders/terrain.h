@@ -24,14 +24,16 @@ struct TerrainSourceData
   TexSmpIdPair heightmapTexSmp;
   TexSmpIdPair splattingMaskTexSmp;
 
-  shader_uint noiseSeed;
-  shader_uint detailCount;
+  float cellDim;
+  shader_uint samplesPerCellSide;
 
   shader_vec3 rangeMin;
-  shader_uint pad1_;
+
+  shader_uint noiseSeed;
 
   shader_vec3 rangeMax;
-  shader_uint pad2_;
+
+  shader_uint detailCount;
 
   TerrainDetailRule details[TERRAIN_MAX_DETAILS];
 };
@@ -55,13 +57,15 @@ struct TerrainSourceData
 
 #define TERRAIN_DETAIL_LEVEL_FALLOFF 0.001f
 
-#define CLIMPAP_UPDATE_GRID_SIZE                                                                   \
+#define TERRAIN_CELL_LUT_WORK_GROUP_DIM 8
+
+#define CLIPMAP_UPDATE_GRID_SIZE                                                                   \
   (CLIPMAP_LEVEL_WSIZE(CLIPMAP_LEVEL_COUNT - 1) /                                                  \
    float(TERRAIN_CHUNK_TESSELLATION_FACTOR * TERRAIN_CHUNKS_LEVEL_DIM))
 
 shader_inline shader_vec2 snap_to_toroidal_update_grid(shader_vec2 pos)
 {
-  return shader_floor(pos / CLIMPAP_UPDATE_GRID_SIZE + 0.5f) * CLIMPAP_UPDATE_GRID_SIZE;
+  return shader_floor(pos / CLIPMAP_UPDATE_GRID_SIZE + 0.5f) * CLIPMAP_UPDATE_GRID_SIZE;
 }
 
 // @TODO: now offset should be snapped, remove redundant calculations

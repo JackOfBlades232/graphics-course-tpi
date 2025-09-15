@@ -115,13 +115,19 @@ private:
     std::vector<etna::Binding> albedoLevelsSamplerBindings{};
     std::vector<etna::Binding> matdataLevelsSamplerBindings{};
 
+    etna::Image perCellMinHeightLut{};
+    etna::Image perCellMaxHeightLut{};
+    etna::Sampler perCellRangeLutSampler{};
+
     etna::Buffer source{};
     TerrainSourceData sourceData{};
 
     etna::Sampler clipmapSampler{};
 
     bool needToroidalUpdate = false;
+    bool needHmapRangeUpdate = false;
     bool invalidateClipmapRequested = false;
+    bool invalidateHmapRangeRequested = false;
   };
 
   struct SkyboxRenderingData
@@ -175,6 +181,7 @@ private:
   std::optional<MeshPipeline> staticMeshPipeline{};
   std::optional<MeshPipeline> terrainMeshPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
+  etna::ComputePipeline prepareTerrainCellLutPipeline{};
   etna::ComputePipeline transferLightMatsPipeline{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
@@ -303,5 +310,10 @@ private:
   {
     if (terrain)
       terrain->invalidateClipmapRequested = true;
+  }
+  void queueHmapRangesInvalidation()
+  {
+    if (terrain)
+      terrain->invalidateHmapRangeRequested = true;
   }
 };
