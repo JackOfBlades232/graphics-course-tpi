@@ -182,6 +182,9 @@ private:
   std::optional<MeshPipeline> terrainMeshPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
   etna::ComputePipeline prepareTerrainCellLutPipeline{};
+  etna::ComputePipeline resetTerrainBboxesPipeline{};
+  etna::ComputePipeline patchTerrainBboxesPipeline{};
+  etna::ComputePipeline convertTerrainBboxesPipeline{};
   etna::ComputePipeline transferLightMatsPipeline{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};

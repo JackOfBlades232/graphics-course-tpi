@@ -413,12 +413,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       glm::vec3 chunkCoord = {};
       glm::vec3 chunkExtent = {};
 
-      // @TODO: more accurate? This is very conservative just ot not calculate heights.
-      const float totalTolerance = 1.f;
-      const float baseRange = terrainData->rangeMax.y - terrainData->rangeMin.y;
-      const float rangeAdjustment = totalTolerance * baseRange;
-      chunkCoord.y = terrainData->rangeMin.y - rangeAdjustment;
-      chunkExtent.y = baseRange + 2.f * rangeAdjustment;
+      // @NOTE: height bounds are calculated separately
 
       if (i < TERRAIN_FIRST_LEVEL_CHUNKS)
       {
@@ -1077,7 +1072,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     data.rangeMin = terrainExt->rangeMin;
     data.rangeMax = terrainExt->rangeMax;
 
-    const float smallestDrawnChunkDim = CLIPMAP_LEVEL_WSIZE(0) / float(TERRAIN_CHUNKS_LEVEL_DIM);
+    const float smallestDrawnChunkDim = TERRAIN_SMALLEST_CHUNK_DIM;
     const float updateIncrementDim = CLIPMAP_UPDATE_GRID_SIZE;
 
     // @HACK: I don't want to do maths, so I'll just assert these are kinda integers

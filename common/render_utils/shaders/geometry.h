@@ -42,6 +42,12 @@ struct BBox
   shader_vec4 max;
 };
 
+struct BBoxAsOrdUints
+{
+  shader_uvec4 min;
+  shader_uvec4 max;
+};
+
 struct OBBox
 {
   shader_vec3 center;

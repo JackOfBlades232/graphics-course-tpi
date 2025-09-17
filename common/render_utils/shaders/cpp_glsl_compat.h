@@ -17,9 +17,11 @@
 using shader_int = int;
 using shader_ivec2 = glm::ivec2;
 using shader_ivec3 = glm::ivec3;
+using shader_ivec4 = glm::ivec4;
 using shader_uint = glm::uint;
 using shader_uvec2 = glm::uvec2;
 using shader_uvec3 = glm::uvec3;
+using shader_uvec4 = glm::uvec4;
 
 using shader_float = float;
 using shader_vec2 = glm::vec2;
@@ -63,9 +65,11 @@ shader_inline float ordered_uint_to_float(shader_uint i)
 #define shader_int int
 #define shader_ivec2 ivec2
 #define shader_ivec3 ivec3
+#define shader_ivec4 ivec4
 #define shader_uint uint
 #define shader_uvec2 uvec2
 #define shader_uvec3 uvec3
+#define shader_uvec4 uvec4
 
 #define shader_float float
 #define shader_vec2 vec2

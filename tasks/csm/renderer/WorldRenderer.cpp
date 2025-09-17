@@ -343,8 +343,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
           vk::ImageUsageFlagBits::eTransferDst});
     terrain->perCellRangeLutSampler = etna::Sampler{etna::Sampler::CreateInfo{
       .filter = vk::Filter::eNearest,
-      // @TODO: 1) cache params in sampler hnd
-      //        2) get the address mode from hmap sampler
+      .mipMapMode = vk::SamplerMipmapMode::eNearest,
+      // @TODO: this is not actually aligned with the hmap, so need to do smth else
       .addressMode = vk::SamplerAddressMode::eMirroredRepeat,
       .name = "<terrain_cell_range_lut_sampler>",
       .maxLod = 1.f}};
@@ -441,6 +441,12 @@ void WorldRenderer::loadShaders()
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
   etna::create_program(
     "prepare_terrain_cell_lut", {RENDERER_SHADERS_ROOT "prepare_terrain_cell_lut.comp.spv"});
+  etna::create_program(
+    "reset_terrain_bboxes", {RENDERER_SHADERS_ROOT "reset_terrain_bboxes.comp.spv"});
+  etna::create_program(
+    "patch_terrain_bboxes", {RENDERER_SHADERS_ROOT "patch_terrain_bboxes.comp.spv"});
+  etna::create_program(
+    "convert_terrain_bboxes", {RENDERER_SHADERS_ROOT "convert_terrain_bboxes.comp.spv"});
   etna::create_program(
     "transfer_light_mats", {RENDERER_SHADERS_ROOT "transfer_light_mats.comp.spv"});
 
@@ -548,6 +554,10 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
   prepareTerrainCellLutPipeline =
     pipelineManager.createComputePipeline("prepare_terrain_cell_lut", {});
+  resetTerrainBboxesPipeline = pipelineManager.createComputePipeline("reset_terrain_bboxes", {});
+  patchTerrainBboxesPipeline = pipelineManager.createComputePipeline("patch_terrain_bboxes", {});
+  convertTerrainBboxesPipeline =
+    pipelineManager.createComputePipeline("convert_terrain_bboxes", {});
   transferLightMatsPipeline = pipelineManager.createComputePipeline("transfer_light_mats", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
@@ -939,60 +949,227 @@ void WorldRenderer::renderWorld(
 
       if (terrain->needToroidalUpdate)
       {
-        ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
-
         terrain->needToroidalUpdate = false;
 
-        auto programInfo = etna::get_shader_program("clipmap_gen");
-        std::vector<etna::Binding> bindings{};
-        bindings.reserve(
-          terrain->geometryLevelsBindings.size() + terrain->normalLevelsBindings.size() +
-          terrain->albedoLevelsBindings.size() + terrain->matdataLevelsBindings.size() + 2);
-        for (const auto& b : terrain->geometryLevelsBindings)
-          bindings.push_back(b);
-        for (const auto& b : terrain->normalLevelsBindings)
-          bindings.push_back(b);
-        for (const auto& b : terrain->albedoLevelsBindings)
-          bindings.push_back(b);
-        for (const auto& b : terrain->matdataLevelsBindings)
-          bindings.push_back(b);
-        bindings.emplace_back(7, terrain->source.genBinding());
-        bindings.emplace_back(8, constants->get().genBinding());
-
-        auto set =
-          etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
-        cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eCompute,
-          generateClipmapPipeline.getVkPipelineLayout(),
-          0,
-          {set.getVkSet(),
-           materialParamsDsetComp.getVkSet(),
-           bindlessTexturesDsetComp.getVkSet(),
-           bindlessSamplersDsetComp.getVkSet()},
-          {});
-
-        cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, generateClipmapPipeline.getVkPipeline());
-
-        for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
         {
-          const auto dims = calculate_toroidal_dims(constantsData.toroidalOffset, shader_uint(i));
-          ETNA_ASSERT(
-            glm::abs(dims) % glm::ivec2(1 << (CLIPMAP_LEVEL_COUNT - 1 - i)) == glm::ivec2(0, 0));
+          ETNA_PROFILE_GPU(cmd_buf, generateClipmap);
 
-          cmd_buf.pushConstants<shader_uint>(
+          auto programInfo = etna::get_shader_program("clipmap_gen");
+          std::vector<etna::Binding> bindings{};
+          bindings.reserve(
+            terrain->geometryLevelsBindings.size() + terrain->normalLevelsBindings.size() +
+            terrain->albedoLevelsBindings.size() + terrain->matdataLevelsBindings.size() + 2);
+          for (const auto& b : terrain->geometryLevelsBindings)
+            bindings.push_back(b);
+          for (const auto& b : terrain->normalLevelsBindings)
+            bindings.push_back(b);
+          for (const auto& b : terrain->albedoLevelsBindings)
+            bindings.push_back(b);
+          for (const auto& b : terrain->matdataLevelsBindings)
+            bindings.push_back(b);
+          bindings.emplace_back(7, terrain->source.genBinding());
+          bindings.emplace_back(8, constants->get().genBinding());
+
+          auto set =
+            etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
+          cmd_buf.bindDescriptorSets(
+            vk::PipelineBindPoint::eCompute,
             generateClipmapPipeline.getVkPipelineLayout(),
-            vk::ShaderStageFlagBits::eCompute,
             0,
-            shader_uint(i));
-          cmd_buf.dispatch(
-            get_linear_wg_count(
-              calculate_thread_count_for_clipmap_update(dims), CLIPMAP_WORK_GROUP_SIZE),
-            1,
-            1);
+            {set.getVkSet(),
+             materialParamsDsetComp.getVkSet(),
+             bindlessTexturesDsetComp.getVkSet(),
+             bindlessSamplersDsetComp.getVkSet()},
+            {});
+
+          cmd_buf.bindPipeline(
+            vk::PipelineBindPoint::eCompute, generateClipmapPipeline.getVkPipeline());
+
+          for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
+          {
+            const auto dims = calculate_toroidal_dims(constantsData.toroidalOffset, shader_uint(i));
+            ETNA_ASSERT(
+              glm::abs(dims) % glm::ivec2(1 << (CLIPMAP_LEVEL_COUNT - 1 - i)) == glm::ivec2(0, 0));
+
+            cmd_buf.pushConstants<shader_uint>(
+              generateClipmapPipeline.getVkPipelineLayout(),
+              vk::ShaderStageFlagBits::eCompute,
+              0,
+              shader_uint(i));
+            cmd_buf.dispatch(
+              get_linear_wg_count(
+                calculate_thread_count_for_clipmap_update(dims), CLIPMAP_WORK_GROUP_SIZE),
+              1,
+              1);
+          }
         }
 
-        // @TODO: regenerate bboxes from the cell lut
+        {
+          ETNA_PROFILE_GPU(cmd_buf, updateTerrainChunksHeight);
+
+          emit_barriers(
+            cmd_buf,
+            {vk::BufferMemoryBarrier2{
+              .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader |
+                vk::PipelineStageFlagBits2::eVertexShader,
+              .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+              .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+              .buffer = sceneMgr->getBboxesBuf().get(),
+              .size = sceneMgr->getBboxes().size_bytes()}});
+
+          using TerrainBboxGenPayload = std::pair<uint32_t, uint32_t>;
+          const uint32_t base = sceneMgr->getTerrainIndirectCommandsSubrange().first;
+          const TerrainBboxGenPayload rangeInfo{
+            sceneMgr->getIndirectCommands()[base].firstInstance,
+            TERRAIN_FIRST_LEVEL_CHUNKS + (CLIPMAP_LEVEL_COUNT - 1) * TERRAIN_OTHER_LEVELS_CHUNKS};
+
+          {
+            auto programInfo = etna::get_shader_program("reset_terrain_bboxes");
+            auto set = etna::create_descriptor_set(
+              programInfo.getDescriptorLayoutId(0),
+              cmd_buf,
+              {etna::Binding{0, sceneMgr->getBboxesBuf().genBinding()}});
+
+            cmd_buf.bindDescriptorSets(
+              vk::PipelineBindPoint::eCompute,
+              resetTerrainBboxesPipeline.getVkPipelineLayout(),
+              0,
+              {set.getVkSet()},
+              {});
+
+            cmd_buf.bindPipeline(
+              vk::PipelineBindPoint::eCompute, resetTerrainBboxesPipeline.getVkPipeline());
+
+            cmd_buf.pushConstants<TerrainBboxGenPayload>(
+              resetTerrainBboxesPipeline.getVkPipelineLayout(),
+              vk::ShaderStageFlagBits::eCompute,
+              0,
+              rangeInfo);
+            cmd_buf.dispatch(get_linear_wg_count(rangeInfo.second, BASE_WORK_GROUP_SIZE), 1, 1);
+          }
+
+          emit_barriers(
+            cmd_buf,
+            {vk::BufferMemoryBarrier2{
+              .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+              .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .dstAccessMask =
+                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+              .buffer = sceneMgr->getBboxesBuf().get(),
+              .size = sceneMgr->getBboxes().size_bytes()}});
+
+          etna::set_state(
+            cmd_buf,
+            terrain->perCellMinHeightLut.get(),
+            vk::PipelineStageFlagBits2::eComputeShader,
+            vk::AccessFlagBits2::eShaderSampledRead,
+            vk::ImageLayout::eShaderReadOnlyOptimal,
+            vk::ImageAspectFlagBits::eColor);
+          etna::set_state(
+            cmd_buf,
+            terrain->perCellMaxHeightLut.get(),
+            vk::PipelineStageFlagBits2::eComputeShader,
+            vk::AccessFlagBits2::eShaderSampledRead,
+            vk::ImageLayout::eShaderReadOnlyOptimal,
+            vk::ImageAspectFlagBits::eColor);
+          etna::flush_barriers(cmd_buf);
+
+          {
+            auto programInfo = etna::get_shader_program("patch_terrain_bboxes");
+            auto set = etna::create_descriptor_set(
+              programInfo.getDescriptorLayoutId(0),
+              cmd_buf,
+              {etna::Binding{
+                 0,
+                 terrain->perCellMinHeightLut.genBinding(
+                   terrain->perCellRangeLutSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+               etna::Binding{
+                 1,
+                 terrain->perCellMaxHeightLut.genBinding(
+                   terrain->perCellRangeLutSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+               etna::Binding{2, sceneMgr->getBboxesBuf().genBinding()},
+               etna::Binding{7, terrain->source.genBinding()},
+               etna::Binding{8, constants->get().genBinding()}});
+
+            cmd_buf.bindDescriptorSets(
+              vk::PipelineBindPoint::eCompute,
+              patchTerrainBboxesPipeline.getVkPipelineLayout(),
+              0,
+              {set.getVkSet()},
+              {});
+
+            cmd_buf.bindPipeline(
+              vk::PipelineBindPoint::eCompute, patchTerrainBboxesPipeline.getVkPipeline());
+
+            cmd_buf.pushConstants<TerrainBboxGenPayload>(
+              patchTerrainBboxesPipeline.getVkPipelineLayout(),
+              vk::ShaderStageFlagBits::eCompute,
+              0,
+              rangeInfo);
+
+            const uint32_t cellsPerSmallestChunkSide =
+              uint32_t(TERRAIN_SMALLEST_CHUNK_DIM / terrain->sourceData.cellDim);
+            const uint32_t cellsPerSmallestChunk =
+              cellsPerSmallestChunkSide * cellsPerSmallestChunkSide;
+            const uint32_t cellsInLevel0 = TERRAIN_FIRST_LEVEL_CHUNKS * cellsPerSmallestChunk;
+            const uint32_t cellsInOtherLevels = (12 * 4 * cellsPerSmallestChunk) *
+              (0x55555555 & ((1 << ((CLIPMAP_LEVEL_COUNT - 1) * 2)) - 1));
+
+            cmd_buf.dispatch(
+              get_linear_wg_count(cellsInLevel0 + cellsInOtherLevels, BASE_WORK_GROUP_SIZE), 1, 1);
+          }
+
+          emit_barriers(
+            cmd_buf,
+            {vk::BufferMemoryBarrier2{
+              .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .srcAccessMask =
+                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+              .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .dstAccessMask =
+                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+              .buffer = sceneMgr->getBboxesBuf().get(),
+              .size = sceneMgr->getBboxes().size_bytes()}});
+
+          {
+            auto programInfo = etna::get_shader_program("convert_terrain_bboxes");
+            auto set = etna::create_descriptor_set(
+              programInfo.getDescriptorLayoutId(0),
+              cmd_buf,
+              {etna::Binding{0, sceneMgr->getBboxesBuf().genBinding()}});
+
+            cmd_buf.bindDescriptorSets(
+              vk::PipelineBindPoint::eCompute,
+              convertTerrainBboxesPipeline.getVkPipelineLayout(),
+              0,
+              {set.getVkSet()},
+              {});
+
+            cmd_buf.bindPipeline(
+              vk::PipelineBindPoint::eCompute, convertTerrainBboxesPipeline.getVkPipeline());
+
+            cmd_buf.pushConstants<TerrainBboxGenPayload>(
+              convertTerrainBboxesPipeline.getVkPipelineLayout(),
+              vk::ShaderStageFlagBits::eCompute,
+              0,
+              rangeInfo);
+            cmd_buf.dispatch(get_linear_wg_count(rangeInfo.second, BASE_WORK_GROUP_SIZE), 1, 1);
+          }
+
+          emit_barriers(
+            cmd_buf,
+            {vk::BufferMemoryBarrier2{
+              .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .srcAccessMask =
+                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+              .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader |
+                vk::PipelineStageFlagBits2::eVertexShader,
+              .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+              .buffer = sceneMgr->getBboxesBuf().get(),
+              .size = sceneMgr->getBboxes().size_bytes()}});
+        }
       }
     }
 
