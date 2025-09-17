@@ -18,6 +18,8 @@ struct Constants
   float terrainNoiseRelHeightAmp;
   float terrainNoisePeriod;
 
+  shader_uint terrainFirstInstance;
+
   shader_uint drawTerrainSplattedDetail;
 
   shader_uint useSkybox;
@@ -44,8 +46,6 @@ struct Constants
   float acesExposure;
 
   float csmSplitLambda;
-
-  shader_uint pad1_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

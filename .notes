@@ -12,8 +12,10 @@ CSM
   * Investigate tightening depth bounds
     + Try collecting minz maxz in frustum culling and passing it as payload
     + Calculate min/max over the buffer
-    * In this case, I'd need to patch the matrix up in the vertex shader (I think I can actually do away with the matrix calc shader and just write it out from vs)
-    * Since now terrain chunks move in lockstep with the clipmap, we can calculate tight bounding boxes for chunks in a compute shader by taking min over clipmap
+    * For beter bounds, calc terrain chunk bboxes
+      * To test in another branch: remove the complex code and just do texture subview minmax on clipmap
+    * Patch matrices for lights
+      * Done, but broken atm
   * Point & spot lights
     * Write out depth bias formulas to eval value ranges
     * Try linear depth (may need to disable perp interpolation for raster)

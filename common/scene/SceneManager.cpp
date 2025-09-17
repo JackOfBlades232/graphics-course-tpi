@@ -406,12 +406,9 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       glm::vec3 chunkCoord = {};
       glm::vec3 chunkExtent = {};
 
-      // @TODO: more accurate? This is very conservative just ot not calculate heights.
-      const float totalTolerance = 1.f;
-      const float baseRange = terrainData->rangeMax.y - terrainData->rangeMin.y;
-      const float rangeAdjustment = totalTolerance * baseRange;
-      chunkCoord.y = terrainData->rangeMin.y - rangeAdjustment;
-      chunkExtent.y = baseRange + 2.f * rangeAdjustment;
+      // @NOTE: filled dynamically from compute shaders
+      chunkCoord.y = 0.f;
+      chunkExtent.y = 0.f;
 
       if (i < TERRAIN_FIRST_LEVEL_CHUNKS)
       {

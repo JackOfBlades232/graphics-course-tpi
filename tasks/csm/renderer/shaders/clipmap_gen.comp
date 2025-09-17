@@ -16,11 +16,6 @@ layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D normal[CLIPMAP_L
 layout(binding = 2, set = 0, rgba32f) uniform writeonly image2D albedo[CLIPMAP_LEVEL_COUNT];
 layout(binding = 3, set = 0, rgba32f) uniform writeonly image2D matdata[CLIPMAP_LEVEL_COUNT];
 
-layout(push_constant) uniform params_t
-{
-  uint level;
-} params;
-
 layout(binding = 7, set = 0) uniform terrain_source_t
 {
   TerrainSourceData source;
@@ -29,6 +24,11 @@ layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
 };
+
+layout(push_constant) uniform params_t
+{
+  uint level;
+} params;
 
 #include "material_mesh.glsl.inc"
 

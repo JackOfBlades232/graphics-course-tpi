@@ -118,6 +118,8 @@ private:
     etna::Buffer source{};
     TerrainSourceData sourceData{};
 
+    etna::Buffer chunkHeightBoundsBuf{};
+
     etna::Sampler clipmapSampler{};
 
     bool needToroidalUpdate = false;
@@ -175,6 +177,9 @@ private:
   std::optional<MeshPipeline> staticMeshPipeline{};
   std::optional<MeshPipeline> terrainMeshPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
+  etna::ComputePipeline resetTerrainChunkHeightBoundsPipeline{};
+  etna::ComputePipeline generateTerrainChunkHeightBoundsPipeline{};
+  etna::ComputePipeline transferTerrainChunkHeightBoundsPipeline{};
   etna::ComputePipeline transferLightMatsPipeline{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};

@@ -54,6 +54,16 @@ public:
   // @TODO: restore data getters if needed
   std::span<const IndirectCommand> getIndirectCommands() const { return sceneDrawCommands; }
   std::span<const CullableInstance> getInstances() const { return allInstances; }
+  std::span<const BBox> getBboxes() const { return bboxes; }
+
+  std::span<const IndirectCommand> getSceneObjectsIndirectCommands() const
+  {
+    return sceneObjectsDrawCommands;
+  }
+  std::span<const IndirectCommand> getTerrainIndirectCommands() const
+  {
+    return terrainChunksDrawCommands;
+  }
 
   std::pair<uint32_t, uint32_t> getSceneObjectsIndirectCommandsSubrange() const
   {

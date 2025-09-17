@@ -12,6 +12,9 @@ target_link_libraries(renderer
 target_add_shaders(renderer
   shaders/gbuffer_resolve.frag
   shaders/clipmap_gen.comp
+  shaders/reset_terrain_chunk_height_bounds.comp
+  shaders/generate_terrain_chunk_height_bounds.comp
+  shaders/transfer_terrain_chunk_height_bounds.comp
   shaders/transfer_light_mats.comp
   shaders/static_mesh.vert
   shaders/static_mesh.frag

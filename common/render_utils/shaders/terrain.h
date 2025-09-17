@@ -50,14 +50,30 @@ struct TerrainSourceData
 #define TERRAIN_CHUNKS_LEVEL_DIM 4
 #define TERRAIN_FIRST_LEVEL_CHUNKS (TERRAIN_CHUNKS_LEVEL_DIM * TERRAIN_CHUNKS_LEVEL_DIM)
 #define TERRAIN_OTHER_LEVELS_CHUNKS (TERRAIN_FIRST_LEVEL_CHUNKS - (TERRAIN_FIRST_LEVEL_CHUNKS / 4))
+#define TERRAIN_TOTAL_CHUNK_COUNT (TERRAIN_FIRST_LEVEL_CHUNKS + (CLIPMAP_LEVEL_COUNT - 1) * TERRAIN_OTHER_LEVELS_CHUNKS)
 
 #define TERRAIN_CHUNK_TESSELLATION_FACTOR 64
+
+#define TERRAIN_CHUNK_HBOUNDS_WORK_GROUP_DIM 8
 
 #define TERRAIN_DETAIL_LEVEL_FALLOFF 0.001f
 
 #define CLIMPAP_UPDATE_GRID_SIZE                                                                   \
   (CLIPMAP_LEVEL_WSIZE(CLIPMAP_LEVEL_COUNT - 1) /                                                  \
    float(TERRAIN_CHUNK_TESSELLATION_FACTOR * TERRAIN_CHUNKS_LEVEL_DIM))
+
+struct HeightBounds
+{
+  shader_uint minZOrdUint;
+  shader_uint maxZOrdUint;
+  shader_uint pad1_, pad2_; 
+};
+
+struct ChunkHeightBoundsData
+{
+  HeightBounds firstLevel[TERRAIN_FIRST_LEVEL_CHUNKS];
+  HeightBounds otherLevels[CLIPMAP_LEVEL_COUNT - 1][TERRAIN_OTHER_LEVELS_CHUNKS];
+};
 
 shader_inline shader_vec2 snap_to_toroidal_update_grid(shader_vec2 pos)
 {
