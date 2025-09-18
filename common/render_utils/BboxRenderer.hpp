@@ -2,6 +2,7 @@
 
 #include <etna/Vulkan.hpp>
 #include <etna/GraphicsPipeline.hpp>
+#include <etna/RenderTargetStates.hpp>
 #include <etna/Buffer.hpp>
 
 
@@ -14,15 +15,13 @@ public:
   struct CreateInfo
   {
     vk::Format format = vk::Format::eUndefined;
-    vk::Extent2D extent = {};
   };
 
   explicit BboxRenderer(CreateInfo info);
 
   void render(
     vk::CommandBuffer cmd_buff,
-    vk::Image target_image,
-    vk::ImageView target_image_view,
+    etna::RenderTargetState::RenderPassInfo&& rpi,
     const etna::Buffer& matrices,
     const etna::Buffer& instances,
     const etna::Buffer& bboxes,
@@ -33,7 +32,6 @@ public:
 private:
   etna::GraphicsPipeline pipeline;
   etna::ShaderProgramId programId;
-  vk::Extent2D extent{};
 
   BboxRenderer(const BboxRenderer&) = delete;
   BboxRenderer& operator=(const BboxRenderer&) = delete;

@@ -1,4 +1,4 @@
-CSM
+  CSM
 + Prepare the frustum split
 + Calculate view space viewports
 + Cpu matrix calculation
@@ -12,10 +12,10 @@ CSM
   * Investigate tightening depth bounds
     + Try collecting minz maxz in frustum culling and passing it as payload
     + Calculate min/max over the buffer
-    * For beter bounds, calc terrain chunk bboxes
-      * To test in another branch: remove the complex code and just do texture subview minmax on clipmap
+    + For beter bounds, calc terrain chunk bboxes
+      + To test in another branch: remove the complex code and just do texture subview minmax on clipmap. Workd!
     * Patch matrices for lights
-      * Done, but broken atm
+      * Fix it being broken
   * Point & spot lights
     * Write out depth bias formulas to eval value ranges
     * Try linear depth (may need to disable perp interpolation for raster)

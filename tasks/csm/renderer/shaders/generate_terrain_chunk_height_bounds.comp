@@ -35,19 +35,20 @@ void main(void)
   {
     const vec2 worldPos = constants.toroidalUpdatePlayerWorldPos;
 
-    const vec2 flatUv = vec2(pixCoord) / float(CLIPMAP_RESOLUTION);
-
     const float clipmapWorldExtent = float(1 << params.level) * CLIPMAP_EXTENT_STEP;
     const float clipmapWorldSize = clipmapWorldExtent * 2.f;
 
-    const vec2 worldCoord = worldPos + (flatUv - 0.5f) * clipmapWorldSize;
+    const vec2 flatUv = vec2(pixCoord) / float(CLIPMAP_RESOLUTION);
+    const vec2 toroidalUvScrolloff = fract(worldPos / clipmapWorldSize) - 0.5f;
+
+    const vec2 adjustedUv = fract(flatUv - toroidalUvScrolloff);
 
     const float h = imageLoad(geom[params.level], ivec2(pixCoord)).x;
     const uint hOrdUint = float_to_ordered_uint(h);
 
     // @SPEED may be here shader memory trick should be done first. However,
     // for that we'd need to lign up work groups to chunks.
-    const ivec2 chunkCoord = ivec2(floor(flatUv * float(TERRAIN_CHUNKS_LEVEL_DIM)));
+    const ivec2 chunkCoord = ivec2(floor(adjustedUv * float(TERRAIN_CHUNKS_LEVEL_DIM)));
     if (params.level == 0)
     {
       const int chunkLinearCoord = chunkCoord.y * TERRAIN_CHUNKS_LEVEL_DIM + chunkCoord.x;
@@ -60,7 +61,7 @@ void main(void)
     {
       const int chunkLinearCoord =
         chunkCoord.y == 0 ? chunkCoord.x :
-        chunkCoord.y == TERRAIN_CHUNKS_LEVEL_DIM - 1 ? chunkCoord.x + 8 :
+        chunkCoord.y == TERRAIN_CHUNKS_LEVEL_DIM - 1 ? chunkCoord.x + TERRAIN_CHUNKS_LEVEL_DIM + 2 * (TERRAIN_CHUNKS_LEVEL_DIM - 2) :
         TERRAIN_CHUNKS_LEVEL_DIM + 2 * (chunkCoord.y - 1) + (chunkCoord.x == 0 ? 1 : 0);
       atomicMin(chunkHeightBoundsData.otherLevels[params.level - 1][chunkLinearCoord].minZOrdUint, hOrdUint);
       atomicMax(chunkHeightBoundsData.otherLevels[params.level - 1][chunkLinearCoord].maxZOrdUint, hOrdUint);

@@ -9,8 +9,6 @@
 
 BboxRenderer::BboxRenderer(CreateInfo info)
 {
-  extent = info.extent;
-
   programId = etna::get_program_id("bbox_renderer");
 
   if (programId == etna::ShaderProgramId::Invalid)
@@ -36,8 +34,7 @@ BboxRenderer::BboxRenderer(CreateInfo info)
 
 void BboxRenderer::render(
   vk::CommandBuffer cmd_buf,
-  vk::Image target_image,
-  vk::ImageView target_image_view,
+  etna::RenderTargetState::RenderPassInfo&& rpi,
   const etna::Buffer& matrices,
   const etna::Buffer& instances,
   const etna::Buffer& bboxes,
@@ -55,11 +52,7 @@ void BboxRenderer::render(
      etna::Binding{8, constants.genBinding()},
      etna::Binding{9, view_params.genBinding()}});
 
-  etna::RenderTargetState renderTargets(
-    cmd_buf,
-    {{0, 0}, {extent.width, extent.height}},
-    {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eLoad}},
-    {});
+  etna::RenderTargetState renderTargets{cmd_buf, std::move(rpi)};
 
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.getVkPipeline());
   cmd_buf.bindDescriptorSets(

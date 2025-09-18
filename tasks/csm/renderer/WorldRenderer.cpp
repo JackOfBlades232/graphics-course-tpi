@@ -543,8 +543,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     vk::Format::eR32G32B32A32Sfloat,
     {resolution.x, resolution.y}});
 
-  bboxRenderer = std::make_unique<BboxRenderer>(
-    BboxRenderer::CreateInfo{swapchain_format, {resolution.x, resolution.y}});
+  bboxRenderer = std::make_unique<BboxRenderer>(BboxRenderer::CreateInfo{swapchain_format});
   quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{swapchain_format});
 
   for (auto& component : rcomponents)
@@ -1365,8 +1364,13 @@ void WorldRenderer::renderWorld(
       {
         bboxRenderer->render(
           cmd_buf,
-          target_image,
-          target_image_view,
+          {{{0, 0}, {resolution.x, resolution.y}},
+           {{.image = target_image,
+             .view = target_image_view,
+             .loadOp = vk::AttachmentLoadOp::eLoad}},
+           {.image = mainViewDepth.get(),
+            .view = mainViewDepth.getView({}),
+            .loadOp = vk::AttachmentLoadOp::eLoad}},
           sceneMgr->getInstanceMatricesBuf(),
           sceneMgr->getInstancesBuf(),
           sceneMgr->getBboxesBuf(),

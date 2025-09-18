@@ -11,7 +11,7 @@ for root, dirs, files in os.walk('.'):
             if sys.platform == 'win32':
                 os.system(f'clang-format -i {os.path.join(root, file)}');
             else:
-                os.system(f'clang-format-18 -i {os.path.join(root, file)}');
+                os.system(f'clang-format-21 -i {os.path.join(root, file)}');
     safe_remove(dirs, 'build')
     safe_remove(dirs, '.git')
     safe_remove(dirs, '.vs')
