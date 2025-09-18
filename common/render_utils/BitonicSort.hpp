@@ -20,7 +20,7 @@ struct BitonicSortName<float>
 };
 
 // @TODO: fix msvc and restore
-#define BITONIC_SORTER_CONSTRAINT(T_) //requires(requires() { detail::BitonicSortName<T_>::name; })
+#define BITONIC_SORTER_CONSTRAINT(T_) // requires(requires() { detail::BitonicSortName<T_>::name; })
 
 } // namespace detail
 

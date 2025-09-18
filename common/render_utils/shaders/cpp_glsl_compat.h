@@ -55,7 +55,7 @@ shader_inline shader_uint float_to_ordered_uint(float v)
 
 shader_inline float ordered_uint_to_float(shader_uint i)
 {
-  return std::bit_cast<float>((i & 0x80000000) ? (i ^ 0x7FFFFFFF) : i); 
+  return std::bit_cast<float>((i & 0x80000000) ? (i ^ 0x7FFFFFFF) : i);
 }
 
 #else
@@ -106,7 +106,7 @@ shader_uint float_to_ordered_uint(float v)
 
 float ordered_uint_to_float(shader_uint i)
 {
-  return uintBitsToFloat(i ^ ((i & 0x80000000) != 0 ? 0x80000000 : 0xFFFFFFFF)); 
+  return uintBitsToFloat(i ^ ((i & 0x80000000) != 0 ? 0x80000000 : 0xFFFFFFFF));
 }
 
 #endif

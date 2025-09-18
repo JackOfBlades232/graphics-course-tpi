@@ -50,7 +50,8 @@ struct TerrainSourceData
 #define TERRAIN_CHUNKS_LEVEL_DIM 4
 #define TERRAIN_FIRST_LEVEL_CHUNKS (TERRAIN_CHUNKS_LEVEL_DIM * TERRAIN_CHUNKS_LEVEL_DIM)
 #define TERRAIN_OTHER_LEVELS_CHUNKS (TERRAIN_FIRST_LEVEL_CHUNKS - (TERRAIN_FIRST_LEVEL_CHUNKS / 4))
-#define TERRAIN_TOTAL_CHUNK_COUNT (TERRAIN_FIRST_LEVEL_CHUNKS + (CLIPMAP_LEVEL_COUNT - 1) * TERRAIN_OTHER_LEVELS_CHUNKS)
+#define TERRAIN_TOTAL_CHUNK_COUNT                                                                  \
+  (TERRAIN_FIRST_LEVEL_CHUNKS + (CLIPMAP_LEVEL_COUNT - 1) * TERRAIN_OTHER_LEVELS_CHUNKS)
 
 #define TERRAIN_CHUNK_TESSELLATION_FACTOR 64
 
@@ -66,7 +67,7 @@ struct HeightBounds
 {
   shader_uint minZOrdUint;
   shader_uint maxZOrdUint;
-  shader_uint pad1_, pad2_; 
+  shader_uint pad1_, pad2_;
 };
 
 struct ChunkHeightBoundsData

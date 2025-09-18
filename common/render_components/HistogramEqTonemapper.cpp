@@ -18,16 +18,18 @@ void HistogramEqTonemapper::allocateResources(glm::uvec2 resolution)
   targetPixelCount = targetResolution.x * targetResolution.y;
   jndBinsDataSize = align_up_pot(div_enough(targetPixelCount, 8u), 4u);
 
-  histData = create_buffer(etna::Buffer::CreateInfo{
-    .size = sizeof(HistogramData),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "hist_data"});
-  jndBinsData = create_buffer(etna::Buffer::CreateInfo{
-    .size = jndBinsDataSize,
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "jnd_bins_buffer"});
+  histData = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = sizeof(HistogramData),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "hist_data"});
+  jndBinsData = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = jndBinsDataSize,
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "jnd_bins_buffer"});
 }
 
 void HistogramEqTonemapper::loadShaders()

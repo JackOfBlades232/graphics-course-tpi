@@ -31,9 +31,7 @@ PostfxRenderer::PostfxRenderer(CreateInfo info)
 }
 
 void PostfxRenderer::render(
-  vk::CommandBuffer cmd_buf,
-  vk::Image target_image,
-  vk::ImageView target_image_view)
+  vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view)
 {
   etna::RenderTargetState renderTargets(
     cmd_buf,

@@ -18,7 +18,7 @@ struct IndirectCommand
 
 struct CullableInstance
 {
-  shader_uint instId;                                                                                          
+  shader_uint instId;
   shader_uint materialId;
   shader_uint commandId;
   shader_uint flags;
@@ -26,7 +26,7 @@ struct CullableInstance
 
 struct DrawableInstance
 {
-  shader_uint instId;                                                                                          
+  shader_uint instId;
   shader_uint materialId;
   shader_uint commandId;
   shader_uint flags;
@@ -45,7 +45,3 @@ inline uint32_t get_linear_wg_count(uint32_t work_count, uint32_t wg_size)
 #endif
 
 #endif // DRAW_H_INCLUDED
-
-
-
-

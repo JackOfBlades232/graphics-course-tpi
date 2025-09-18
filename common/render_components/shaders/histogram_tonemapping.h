@@ -25,7 +25,7 @@ struct HistogramData
 
 struct HistogramLuminanceRange
 {
-  shader_uint min, max; 
+  shader_uint min, max;
 };
 
 float luminance_bt601(shader_vec4 col)
@@ -60,4 +60,3 @@ float from_logscale(float loga)
 #define MAX_DISPLAY_LOG_LUMINANCE to_logscale(1.f)
 
 #endif // HISTOGRAM_TONEMAPPING_H_INCLUDED
-

@@ -24,11 +24,12 @@ App::App(const char* scene_name, std::span<const char* const> argv)
     ETNA_PANIC("Invalid args");
 
   glm::uvec2 initialRes = {1280, 720};
-  mainWindow = windowing.createWindow(OsWindow::CreateInfo{
-    .resolution = initialRes,
-    .resizeable = true,
-    // @TODO: provide some refresh capability while resizing, and check if we need spec on-resize
-    .name = std::string{NAME}});
+  mainWindow = windowing.createWindow(
+    OsWindow::CreateInfo{
+      .resolution = initialRes,
+      .resizeable = true,
+      // @TODO: provide some refresh capability while resizing, and check if we need spec on-resize
+      .name = std::string{NAME}});
 
   render.reset(new Renderer{initialRes, cfg});
 
@@ -105,10 +106,11 @@ void App::drawFrame()
 {
   ZoneScoped;
 
-  render->update(FramePacket{
-    .mainCam = mainCam,
-    .currentTime = static_cast<float>(windowing.getTime()),
-  });
+  render->update(
+    FramePacket{
+      .mainCam = mainCam,
+      .currentTime = static_cast<float>(windowing.getTime()),
+    });
   render->drawFrame();
 }
 
@@ -165,9 +167,10 @@ bool App::parseArgs(std::span<const char* const> argv)
     if (arg == "-multiplexScene")
     {
       auto err = [] {
-        spdlog::error("Wrong -multiplexScene usage, correct: -multiplexScene "
-                      "[X](uint > 0) [Y](uint > 0) [Z](uint > 0) "
-                      "[X offset](float > 0) [Y offset](float > 0) [Z offset](float > 0)");
+        spdlog::error(
+          "Wrong -multiplexScene usage, correct: -multiplexScene "
+          "[X](uint > 0) [Y](uint > 0) [Z](uint > 0) "
+          "[X offset](float > 0) [Y offset](float > 0) [Z offset](float > 0)");
       };
       cfg.testMultiplexScene = true;
       ++it;

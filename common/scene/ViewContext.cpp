@@ -26,34 +26,38 @@ void ViewContextManager::setupPipelines(vk::Format, DebugDrawersRegistry&)
 ViewContext ViewContextManager::alloc(const char* tag)
 {
   return ViewContext{
-    .indirectDrawBuf = create_buffer(etna::Buffer::CreateInfo{
-      .size = indirectDrawBufByteSize(),
-      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst |
-        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = std::string{"indirectDrawBuf-"} + tag,
-    }),
-    .culledInstancesBuf = create_buffer(etna::Buffer::CreateInfo{
-      .size = markedInstBufSizeBytes(),
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = std::string{"culledInstancesBuf-"} + tag,
-    }),
-    .viewDataBuf = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(ViewData),
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = std::string{"viewData-"} + tag,
-    }),
+    .indirectDrawBuf = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = indirectDrawBufByteSize(),
+        .bufferUsage = vk::BufferUsageFlagBits::eTransferDst |
+          vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = std::string{"indirectDrawBuf-"} + tag,
+      }),
+    .culledInstancesBuf = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = markedInstBufSizeBytes(),
+        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = std::string{"culledInstancesBuf-"} + tag,
+      }),
+    .viewDataBuf = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(ViewData),
+        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = std::string{"viewData-"} + tag,
+      }),
     .viewParamsBuf =
       etna::GpuSharedResource<etna::Buffer>{
         workCount,
         [&](size_t) {
-          return create_buffer(etna::Buffer::CreateInfo{
-            .size = sizeof(ViewParams),
-            .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-            .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-            .name = std::string{"viewParams-"} + tag});
+          return create_buffer(
+            etna::Buffer::CreateInfo{
+              .size = sizeof(ViewParams),
+              .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+              .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+              .name = std::string{"viewParams-"} + tag});
         }},
     .prepared = false};
 }

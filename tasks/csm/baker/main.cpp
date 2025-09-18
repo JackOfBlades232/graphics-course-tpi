@@ -37,7 +37,7 @@
 
 // @TODO: pull out
 template <class TS>
-  requires (std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
+  requires(std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
 std::string to_char_str(const TS& s)
 {
   if constexpr (std::same_as<TS, std::string>)

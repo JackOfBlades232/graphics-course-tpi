@@ -20,10 +20,7 @@ public:
 
   explicit PostfxRenderer(CreateInfo info);
 
-  void render(
-    vk::CommandBuffer cmd_buff,
-    vk::Image target_image,
-    vk::ImageView target_image_view);
+  void render(vk::CommandBuffer cmd_buff, vk::Image target_image, vk::ImageView target_image_view);
 
   etna::ShaderProgramInfo shaderProgramInfo() const { return etna::get_shader_program(programId); }
   vk::PipelineLayout pipelineLayout() const { return pipeline.getVkPipelineLayout(); }

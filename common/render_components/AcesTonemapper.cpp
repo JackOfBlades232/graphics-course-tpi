@@ -41,4 +41,3 @@ void AcesTonemapper::tonemap(
 
   tonemapper->render(cmd_buf, target_image, target_image_view);
 }
-

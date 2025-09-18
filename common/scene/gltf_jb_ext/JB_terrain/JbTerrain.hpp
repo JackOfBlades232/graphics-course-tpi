@@ -25,8 +25,8 @@ struct JbTerrainExtDetailData
 
 struct JbTerrainExtData
 {
-  int heightmap{-1}; 
-  int splattingMask{-1}; 
+  int heightmap{-1};
+  int splattingMask{-1};
   glm::vec3 rangeMin{-1.f, 0.f, -1.f}, rangeMax{1.f, 1.f, 1.f};
 
   int noiseSeed{0};

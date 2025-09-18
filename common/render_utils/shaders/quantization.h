@@ -133,10 +133,7 @@ vec4 dequantize4fcol(uint c)
   const uint aEncB = ((c & 0x00FF0000u) >> 16);
   const uint aEncA = ((c & 0xFF000000u) >> 24);
   return vec4(
-    float(aEncR) / 255.0f,
-    float(aEncG) / 255.0f,
-    float(aEncB) / 255.0f,
-    float(aEncA) / 255.0f);
+    float(aEncR) / 255.0f, float(aEncG) / 255.0f, float(aEncB) / 255.0f, float(aEncA) / 255.0f);
 }
 
 #endif

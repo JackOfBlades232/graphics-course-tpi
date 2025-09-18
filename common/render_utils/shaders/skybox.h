@@ -11,4 +11,3 @@ struct SkyboxSourceData
 };
 
 #endif // SKYBOX_H_INCLUDED
-

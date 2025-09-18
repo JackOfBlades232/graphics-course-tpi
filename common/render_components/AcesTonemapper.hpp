@@ -27,4 +27,3 @@ private:
   std::unique_ptr<PostfxRenderer> tonemapper{};
   glm::uvec2 targetResolution;
 };
-

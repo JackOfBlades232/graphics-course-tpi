@@ -6,5 +6,3 @@
 #define MAX_WORK_GROUP_SIZE 1024
 
 #endif // DEFS_H_INCLUDED
-
-

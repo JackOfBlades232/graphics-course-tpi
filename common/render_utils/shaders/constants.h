@@ -49,4 +49,3 @@ struct Constants
 };
 
 #endif // CONSTANTS_H_INCLUDED
-

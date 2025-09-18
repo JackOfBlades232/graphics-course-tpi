@@ -950,7 +950,8 @@ void WorldRenderer::renderWorld(
           {});
 
         cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, generateTerrainChunkHeightBoundsPipeline.getVkPipeline());
+          vk::PipelineBindPoint::eCompute,
+          generateTerrainChunkHeightBoundsPipeline.getVkPipeline());
 
         for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
         {
