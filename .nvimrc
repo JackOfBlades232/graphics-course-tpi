@@ -10,3 +10,5 @@ if g:os == "Windows"
 else
   nnoremap <Leader>f :!clang-format-18 -i %:p<CR>
 endif
+
+command! ClangFormat !python3 clang_format_all.py
