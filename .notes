@@ -9,25 +9,27 @@
 + Optimize sm rendering with dirty lights
 
 * Stabilize visuals
-  * Investigate tightening depth bounds
+  + Investigate tightening depth bounds
     + Try collecting minz maxz in frustum culling and passing it as payload
     + Calculate min/max over the buffer
     + For beter bounds, calc terrain chunk bboxes
-      + To test in another branch: remove the complex code and just do texture subview minmax on clipmap. Workd!
-    * Patch matrices for lights
-      * Fix it being broken
+    + Patch matrices for lights
+  * Cascades
+    + Fix frustum split
+    * Try fixed pixel size (largest possible frustum bb) + pixel sized increments
+    * Investigate depth interpolation in raster
+    * Read papers front to back
+  * Artifacts
+    + Fix weird black artifacts on screen edge
+    * Weird acne-like 'prints' on terrain with depth bounds enabled
+    * Shadows are all over the place near zFar and when flying away from scene
   * Point & spot lights
     * Write out depth bias formulas to eval value ranges
     * Try linear depth (may need to disable perp interpolation for raster)
     * Try additional depth bias calculation in shaders
-  * Cascades
-    + Fix frustum split
-    * Fix weird black artifacts on screen edge
-    * Try fixed pixel size (largest possible frustum bb) + pixel sized increments
-    * Investigate depth interpolation in raster
-    * Read papers front to back
 
 * Sort out depth bias clamp seemingly not working
+* Sort out lights spuriously rebuilding in lovely_town scene
 
 * PCF blending for cascades
 * VSM option

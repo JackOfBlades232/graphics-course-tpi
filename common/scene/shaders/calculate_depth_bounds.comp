@@ -56,8 +56,7 @@ void main(void)
 
   for (int skip = 1; skip < BASE_WORK_GROUP_SIZE; skip <<= 1)
   {
-    // @TODO: should't skip be *2 here or smth
-    if (locId % skip == 0)
+    if (locId % (skip << 1) == 0)
     {
       const int nextId = locId + skip;
       if (nextId < BASE_WORK_GROUP_SIZE)

@@ -80,20 +80,20 @@ struct ViewData
 
 #define CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD 32
 
-shader_inline shader_mat4 patch_depth_bounds_proj(shader_mat4 pv, float znear, float zfar)
+shader_inline shader_mat4 patch_depth_bounds_proj(shader_mat4 pm, float znear, float zfar)
 {
   const float invZRng = 1.f / (zfar - znear);
-  pv[2][2] = zfar * invZRng;
-  pv[3][2] = -znear * zfar * invZRng;
-  return pv;
+  pm[2][2] = zfar * invZRng;
+  pm[3][2] = -znear * zfar * invZRng;
+  return pm;
 }
 
-shader_inline shader_mat4 patch_depth_bounds_ortho(shader_mat4 pv, float znear, float zfar)
+shader_inline shader_mat4 patch_depth_bounds_ortho(shader_mat4 pm, float znear, float zfar)
 {
   const float invZRng = 1.f / (zfar - znear);
-  pv[2][2] = invZRng;
-  pv[3][2] = -znear * invZRng;
-  return pv;
+  pm[2][2] = invZRng;
+  pm[3][2] = -znear * invZRng;
+  return pm;
 }
 
 #ifndef __cplusplus
@@ -120,16 +120,18 @@ vec2 get_corrected_depth_bounds(in ViewParams params, in ViewData data)
   return vec2(correctedNearZ, correctedFarZ);
 }
 
-mat4 adjust_depth_bounds(mat4 pv, in ViewParams params, in ViewData data)
+mat4 calc_adjusted_viewproj_mat(in ViewParams params, in ViewData data)
 {
   if (params.needDepthBounds == 0)
-    return pv;
+    return params.mProjView;
   const vec2 zNearFar = get_corrected_depth_bounds(params, data);
+  const mat4 pm = params.mProjView * inverse(params.mView); // @SPEED piggy!
+  mat4 adjPm;
   if (params.type == VIEW_TYPE_PERSPECTIVE)
-    return patch_depth_bounds_proj(pv, zNearFar.x, zNearFar.y);
+    adjPm = patch_depth_bounds_proj(pm, zNearFar.x, zNearFar.y);
   else // VIEW_TYPE_ORTHO
-    return patch_depth_bounds_ortho(pv, zNearFar.x, zNearFar.y);
-  return pv;
+    adjPm = patch_depth_bounds_ortho(pm, zNearFar.x, zNearFar.y);
+  return adjPm * params.mView;
 }
 
 #endif

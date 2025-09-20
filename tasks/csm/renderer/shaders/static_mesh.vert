@@ -56,5 +56,5 @@ void main(void)
   vOut.texCoord = vTexCoordAndTang.xy;
   vOut.matId    = matId;
 
-  gl_Position   = viewParams.mProjView * vec4(vOut.wPos, 1.0);
+  gl_Position   = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(vOut.wPos, 1.0);
 }

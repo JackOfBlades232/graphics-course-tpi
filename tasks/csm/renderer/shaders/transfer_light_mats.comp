@@ -26,7 +26,7 @@ layout(push_constant) uniform params_t
 
 void main(void)
 {
-  const mat4 correctedMat = adjust_depth_bounds(viewParams.mProjView, viewParams, viewData);
+  const mat4 correctedMat = calc_adjusted_viewproj_mat(viewParams, viewData);
   if (params.lightId < POINT_LIGHT_BUF_SIZE * 6)
   {
     const uint idx = params.lightId;

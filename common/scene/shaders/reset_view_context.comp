@@ -21,8 +21,8 @@ void main(void)
   uint idx = gl_GlobalInvocationID.x;
   if (idx == 0)
   {
-    vdata.minViewZOrderedUint = float_to_ordered_uint(SHADER_FLT_MAX);
-    vdata.maxViewZOrderedUint = float_to_ordered_uint(-SHADER_FLT_MAX);
+    vdata.minViewZOrderedUint = SHADER_UINT_MAX;
+    vdata.maxViewZOrderedUint = 0;
   }
   if (idx < commands.length())
     commands[idx].instanceCount = 0;

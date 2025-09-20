@@ -204,15 +204,6 @@ void HistogramEqTonemapper::computeHistogram(
       .buffer = histData.get(),
       .size = sizeof(HistogramData)}});
 
-  etna::set_state(
-    cmd_buf,
-    hdr_image.get(),
-    vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader,
-    vk::AccessFlagBits2::eShaderSampledRead,
-    vk::ImageLayout::eShaderReadOnlyOptimal,
-    vk::ImageAspectFlagBits::eColor);
-  etna::flush_barriers(cmd_buf);
-
   {
     ETNA_PROFILE_GPU(cmd_buf, histogram_minmax);
 
@@ -224,6 +215,7 @@ void HistogramEqTonemapper::computeHistogram(
          0, hdr_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
        etna::Binding{1, histData.genBinding()},
        etna::Binding{8, constants.genBinding()}});
+    etna::flush_barriers(cmd_buf);
 
     cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eCompute,
@@ -302,6 +294,7 @@ void HistogramEqTonemapper::computeHistogram(
        etna::Binding{1, histData.genBinding()},
        etna::Binding{2, jndBinsData.genBinding()},
        etna::Binding{8, constants.genBinding()}});
+    etna::flush_barriers(cmd_buf);
 
     cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eCompute,

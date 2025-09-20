@@ -157,9 +157,9 @@ private:
     bool frontFaceCull = false;
     uint8_t pad1_{};
     ShadowTechnique technique = ShadowTechnique::PCF;
-    float depthBiasConstantFactor = 1.25f;
+    float depthBiasConstantFactor = 0.5f;
     float depthBiasClamp = 0.f;
-    float depthBiasSlopeFactor = 1.75f;
+    float depthBiasSlopeFactor = 3.00f;
 
     friend bool operator==(const ShadowsSettings& s1, const ShadowsSettings& s2) = default;
     friend bool operator!=(const ShadowsSettings& s1, const ShadowsSettings& s2) = default;

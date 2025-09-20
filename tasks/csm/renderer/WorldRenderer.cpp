@@ -658,8 +658,16 @@ void WorldRenderer::update(const FramePacket& packet)
       for (auto& dirl : std::span{lights.directionalLights, lights.directionalLightsCount})
       {
         auto& cascade = dirl.shadowmapCascades[i];
-        const auto mLightView =
-          glm::toMat4(glm::rotation(glm::normalize(dirl.direction), glm::vec3{0.f, 0.f, 1.f}));
+
+        // @TODO: pull stuff out
+        OrthoCamera cam{};
+        const auto dir = glm::normalize(dirl.direction);
+        const auto up = std::max(fabsf(dir.x), fabsf(dir.z)) < SHADER_EPSILON
+          ? glm::vec3(0.f, 0.f, 1.f)
+          : glm::vec3(0.f, 1.f, 0.f);
+        cam.lookAt({}, dir, up);
+        const auto mLightView = cam.viewTm();
+
         cascade.minX = FLT_MAX;
         cascade.maxX = -FLT_MAX;
         cascade.minY = FLT_MAX;
@@ -678,6 +686,7 @@ void WorldRenderer::update(const FramePacket& packet)
           cascade.maxZ = std::max(cascade.maxZ, viewV.z);
         }
 
+#if 0
         const float xExt = cascade.maxX - cascade.minX;
         const float yExt = cascade.maxY - cascade.minY;
 
@@ -691,6 +700,7 @@ void WorldRenderer::update(const FramePacket& packet)
           cascade.minX -= 0.5f * (yExt - xExt);
           cascade.maxX += 0.5f * (yExt - xExt);
         }
+#endif
 
         // @TODO: try snapping to some grid to avoid rasterization artifacts
       }
@@ -710,6 +720,55 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
   {
     ETNA_PROFILE_GPU(cmd_buf, renderScene);
 
+    auto sceneDset = [&, this]() -> std::optional<etna::DescriptorSet> {
+      if (drawScene)
+      {
+        return etna::create_descriptor_set(
+          staticMeshPipeline->getProg(srpi.pass).getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
+           etna::Binding{1, srpi.vctx->culledInstancesBuf.genBinding()},
+           etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()},
+           etna::Binding{10, srpi.vctx->viewDataBuf.genBinding()}});
+      }
+      else
+      {
+        return std::nullopt;
+      }
+    }();
+    auto terrainDset = [&, this]() -> std::optional<etna::DescriptorSet> {
+      if (terrain && drawTerrain)
+      {
+        std::vector<etna::Binding> terrainBinds{};
+        terrainBinds.reserve(
+          terrain->geometryLevelsSamplerBindings.size() +
+          terrain->normalLevelsSamplerBindings.size() +
+          terrain->albedoLevelsSamplerBindings.size() +
+          terrain->matdataLevelsSamplerBindings.size() + 4);
+        terrainBinds.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
+        terrainBinds.emplace_back(1, srpi.vctx->culledInstancesBuf.genBinding());
+        for (const auto& b : terrain->geometryLevelsSamplerBindings)
+          terrainBinds.push_back(b);
+        for (const auto& b : terrain->normalLevelsSamplerBindings)
+          terrainBinds.push_back(b);
+        for (const auto& b : terrain->albedoLevelsSamplerBindings)
+          terrainBinds.push_back(b);
+        for (const auto& b : terrain->matdataLevelsSamplerBindings)
+          terrainBinds.push_back(b);
+        terrainBinds.emplace_back(7, terrain->source.genBinding());
+        terrainBinds.emplace_back(8, constants->get().genBinding());
+        terrainBinds.emplace_back(9, srpi.vctx->viewParamsBuf.get().genBinding());
+        terrainBinds.emplace_back(10, srpi.vctx->viewDataBuf.genBinding());
+
+        return etna::create_descriptor_set(
+          terrainMeshPipeline->getProg(srpi.pass).getDescriptorLayoutId(0), cmd_buf, terrainBinds);
+      }
+      else
+      {
+        return std::nullopt;
+      }
+    }();
+
     etna::RenderTargetState renderTargets{cmd_buf, srpi.rtargetInfo};
 
     cmd_buf.setDepthBiasEnable(vk::Bool32(srpi.depthBias));
@@ -723,17 +782,8 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     {
       ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
 
-      auto programInfo = staticMeshPipeline->getProg(srpi.pass);
       const auto& pipe = staticMeshPipeline->get(srpi.pass);
-
-      auto set = etna::create_descriptor_set(
-        programInfo.getDescriptorLayoutId(0),
-        cmd_buf,
-        {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
-         etna::Binding{1, srpi.vctx->culledInstancesBuf.genBinding()},
-         etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()},
-         etna::Binding{10, srpi.vctx->viewDataBuf.genBinding()}});
-      std::vector vkSets{set.getVkSet()};
+      std::vector vkSets{sceneDset->getVkSet()};
 
       if (passHasFragmentStage(srpi.pass))
       {
@@ -760,34 +810,14 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     {
       ETNA_PROFILE_GPU(cmd_buf, terrain);
 
-      auto programInfo = terrainMeshPipeline->getProg(srpi.pass);
       const auto& pipe = terrainMeshPipeline->get(srpi.pass);
 
-      std::vector<etna::Binding> bindings{};
-      bindings.reserve(
-        terrain->geometryLevelsSamplerBindings.size() +
-        terrain->normalLevelsSamplerBindings.size() + terrain->albedoLevelsSamplerBindings.size() +
-        terrain->matdataLevelsSamplerBindings.size() + 4);
-      bindings.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
-      bindings.emplace_back(1, srpi.vctx->culledInstancesBuf.genBinding());
-      for (const auto& b : terrain->geometryLevelsSamplerBindings)
-        bindings.push_back(b);
-      for (const auto& b : terrain->normalLevelsSamplerBindings)
-        bindings.push_back(b);
-      for (const auto& b : terrain->albedoLevelsSamplerBindings)
-        bindings.push_back(b);
-      for (const auto& b : terrain->matdataLevelsSamplerBindings)
-        bindings.push_back(b);
-      bindings.emplace_back(7, terrain->source.genBinding());
-      bindings.emplace_back(8, constants->get().genBinding());
-      bindings.emplace_back(9, srpi.vctx->viewParamsBuf.get().genBinding());
-      bindings.emplace_back(10, srpi.vctx->viewDataBuf.genBinding());
-
-      auto set =
-        etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
-
       cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, {set.getVkSet()}, {});
+        vk::PipelineBindPoint::eGraphics,
+        pipe.getVkPipelineLayout(),
+        0,
+        {terrainDset->getVkSet()},
+        {});
 
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
 
@@ -857,6 +887,8 @@ void WorldRenderer::renderWorld(
 
         auto set =
           etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
+        etna::flush_barriers(cmd_buf);
+
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
           generateClipmapPipeline.getVkPipelineLayout(),
@@ -941,6 +973,8 @@ void WorldRenderer::renderWorld(
 
         auto set =
           etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, bindings);
+        etna::flush_barriers(cmd_buf);
+
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
           generateTerrainChunkHeightBoundsPipeline.getVkPipelineLayout(),
@@ -1132,6 +1166,14 @@ void WorldRenderer::renderWorld(
 
             transferMat(j + i * 6, pointLightViews[i][j]);
           }
+
+          etna::set_state(
+            cmd_buf,
+            map.get(),
+            vk::PipelineStageFlagBits2::eFragmentShader,
+            vk::AccessFlagBits2::eShaderRead,
+            vk::ImageLayout::eShaderReadOnlyOptimal,
+            vk::ImageAspectFlagBits::eDepth);
         }
 
         pointLightsSettingsDirty = false;
@@ -1230,13 +1272,13 @@ void WorldRenderer::renderWorld(
             const auto maxX = dirl.shadowmapCascades[j].maxX;
             const auto minY = dirl.shadowmapCascades[j].minY;
             const auto maxY = dirl.shadowmapCascades[j].maxY;
-            const auto minZ = dirl.shadowmapCascades[j].minZ;
             const auto maxZ = dirl.shadowmapCascades[j].maxZ;
 
             // @TODO: pull stuff out
             OrthoCamera cam{};
 
-            cam.zNear = minZ - CSM_CORRIDOR_SIZE - 0.001f;
+            // Refined via depth bounds from culling on the gpu
+            cam.zNear = -10000.f;
             cam.zFar = maxZ + 0.001f;
 
             const auto xExt = (maxX - minX) * 0.5f;
@@ -1571,11 +1613,18 @@ void WorldRenderer::drawGui()
       if (drawTerrain)
       {
         const bool prevDetailOn = drawTerrainSplattedDetail;
+        const bool prevTerrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
+        const bool prevTerrainNoisePeriod = terrainNoisePeriod;
         ImGui::Checkbox("Draw terrain splatted details", &drawTerrainSplattedDetail);
-        if (prevDetailOn != drawTerrainSplattedDetail)
-          queueClipmapInvalidation();
         ImGui::SliderFloat("Terrain noise rel amplitude", &terrainNoiseRelHeightAmp, 0.f, 0.2f);
         ImGui::SliderFloat("Terrain noise period", &terrainNoisePeriod, 0.0001f, 2.f);
+        if (
+          prevDetailOn != drawTerrainSplattedDetail ||
+          !shader_feq(prevTerrainNoiseRelHeightAmp, terrainNoiseRelHeightAmp) ||
+          !shader_feq(prevTerrainNoisePeriod, terrainNoisePeriod))
+        {
+          queueClipmapInvalidation();
+        }
       }
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
