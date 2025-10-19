@@ -94,7 +94,11 @@ struct OrthoCamera
 };
 
 inline ViewParams view_params_for_cam(
-  const Camera& cam, float aspect, bool need_depth_bounds, float csm_split_lambda = -1.f)
+  const Camera& cam,
+  float aspect,
+  bool need_depth_bounds,
+  float csm_split_lambda = -1.f,
+  float csm_shadow_dist = FLT_MAX)
 {
   ViewParams params{};
   params.type = ViewType::PERSPECTIVE;
@@ -118,16 +122,16 @@ inline ViewParams view_params_for_cam(
   if (csm_split_lambda >= 0.f && csm_split_lambda <= 1.f)
   {
     float* splits = reinterpret_cast<float*>(params.csmFrustumSplits);
+    const float zfar =
+      glm::clamp(csm_shadow_dist, params.viewFrustum.nearZ, params.viewFrustum.farZ);
 
     for (int i = 0; i < CSM_CASCADE_COUNT; ++i)
     {
       const int splitIdx = i + 1;
       const float cUni = params.viewFrustum.nearZ +
-        (params.viewFrustum.farZ - params.viewFrustum.nearZ) * float(splitIdx) /
-          float(CSM_CASCADE_COUNT);
+        (zfar - params.viewFrustum.nearZ) * float(splitIdx) / float(CSM_CASCADE_COUNT);
       const float cLog = params.viewFrustum.nearZ *
-        glm::pow(params.viewFrustum.farZ / params.viewFrustum.nearZ,
-                 float(splitIdx) / float(CSM_CASCADE_COUNT));
+        glm::pow(zfar / params.viewFrustum.nearZ, float(splitIdx) / float(CSM_CASCADE_COUNT));
       splits[i] = csm_split_lambda * cLog + (1.f - csm_split_lambda) * cUni;
     }
   }

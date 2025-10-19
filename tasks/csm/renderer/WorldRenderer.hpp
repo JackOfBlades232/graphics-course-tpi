@@ -266,6 +266,7 @@ private:
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
   float acesExposure = 2.f;
   float csmSplitLambda = 0.5f;
+  float csmShadowDist = 400.f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
 
 private:

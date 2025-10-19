@@ -629,7 +629,8 @@ void WorldRenderer::update(const FramePacket& packet)
 
   {
     auto& lights = sceneMgr->lightsRW();
-    const auto mainViewParams = view_params_for_cam(mainCam, aspect(), false, csmSplitLambda);
+    const auto mainViewParams =
+      view_params_for_cam(mainCam, aspect(), false, csmSplitLambda, csmShadowDist);
     const auto [xNear, yNear, zNear, zFar] = mainViewParams.viewFrustum;
 
     const auto invView = glm::inverse(mainViewParams.mView);
@@ -1348,7 +1349,7 @@ void WorldRenderer::renderWorld(
         cmd_buf,
         {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
          .vctx = &mainViewContext.value(),
-         .vparams = view_params_for_cam(mainCam, aspect(), false, csmSplitLambda),
+         .vparams = view_params_for_cam(mainCam, aspect(), false, csmSplitLambda, csmShadowDist),
          .rtargetInfo = {
            {{0, 0}, {resolution.x, resolution.y}},
            {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
@@ -1737,7 +1738,11 @@ void WorldRenderer::drawGui()
         "directional", directionalLightShadowsSettings, directionalLightsSettingsDirty);
 
       if (directionalLightShadowsSettings.enable)
+      {
         ImGui::SliderFloat("CSM split lambda", &csmSplitLambda, 0.f, 1.f);
+        ImGui::SliderFloat("CSM shadow distance", &csmShadowDist, mainCam.zNear, mainCam.zFar);
+        csmShadowDist = glm::clamp(csmShadowDist, mainCam.zNear, mainCam.zFar);
+      }
 
       ImGui::Checkbox("Draw debug cascades", &drawCascadesInSolidColor);
 
@@ -1925,6 +1930,7 @@ void WorldRenderer::loadDebugConfig()
   histEqTonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
   acesExposure = unwrap(reader.read<float>());
   csmSplitLambda = unwrap(reader.read<float>());
+  csmShadowDist = unwrap(reader.read<float>());
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
 
   validate_hist_tonemapping_coeffs(
@@ -1989,6 +1995,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(histEqTonemappingMaxAdmissibleLum));
   ETNA_VERIFY(writer.write(acesExposure));
   ETNA_VERIFY(writer.write(csmSplitLambda));
+  ETNA_VERIFY(writer.write(csmShadowDist));
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());

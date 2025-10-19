@@ -196,7 +196,7 @@ void main(void)
 
   // For directional shadows
   int cascade = 0;
-  while (cascade < CSM_CASCADE_COUNT - 1 && viewPos.z > get_frustum_split(viewParams, cascade))
+  while (cascade < CSM_CASCADE_COUNT && viewPos.z > get_frustum_split(viewParams, cascade))
     ++cascade;
 
   if (constants.drawCascadesInSolidColor != 0)
@@ -204,7 +204,9 @@ void main(void)
     const vec3 DEBUG_CASCADE_COLORS[4] = {
       vec3(0.1), vec3(0.3), vec3(0.6), vec3(1.)};
 
-    out_fragColor = vec4(DEBUG_CASCADE_COLORS[cascade & 3], 1.f);
+    out_fragColor = cascade == CSM_CASCADE_COUNT
+      ? vec4(1.f, 0.f, 1.f, 1.f)
+      : vec4(DEBUG_CASCADE_COLORS[cascade & 3], 1.f);
     return;
   }
 
@@ -218,7 +220,7 @@ void main(void)
 
     float shadow = 1.f;
 
-    if (constants.useDirectionalLightShadows != 0)
+    if (constants.useDirectionalLightShadows != 0 && cascade < CSM_CASCADE_COUNT)
     {
       const vec4 posLightClipSpace = mats.directionalLightMats[i][cascade] * vec4(pos, 1.f);
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz; // No perspective divide cuz ortho
