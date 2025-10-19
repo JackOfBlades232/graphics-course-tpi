@@ -656,6 +656,15 @@ void WorldRenderer::update(const FramePacket& packet)
         invView * glm::vec4{-xMax, -yMax, zRangeMax, 1.f},
         invView * glm::vec4{xMax, -yMax, zRangeMax, 1.f}};
 
+      const float centerZ = (xMax * xMax + yMax * yMax + zRangeMax * zRangeMax - xMin * xMin -
+                             yMin * yMin - zRangeMin * zRangeMin) /
+        (2.f * (zRangeMax - zRangeMin));
+      const glm::vec4 centerWorld = invView * glm::vec4{0.f, 0.f, centerZ, 1.f};
+
+      const float rad = glm::length(subfrustumVerticesWorld[0] - centerWorld);
+
+      const float texelSize = (2.f * rad) / float(CSM_CASCADE_RESOLUTION);
+
       for (auto& dirl : std::span{lights.directionalLights, lights.directionalLightsCount})
       {
         auto& cascade = dirl.shadowmapCascades[i];
@@ -669,41 +678,30 @@ void WorldRenderer::update(const FramePacket& packet)
         cam.lookAt({}, dir, up);
         const auto mLightView = cam.viewTm();
 
-        cascade.minX = FLT_MAX;
-        cascade.maxX = -FLT_MAX;
-        cascade.minY = FLT_MAX;
-        cascade.maxY = -FLT_MAX;
+        const auto centerView = mLightView * centerWorld;
+
+        const float baseMinX = centerView.x - rad;
+        const float baseMaxX = centerView.x + rad;
+        const float baseMinY = centerView.y - rad;
+        const float baseMaxY = centerView.y + rad;
+
+        auto snapToGrid = [&](float mn, float mx, float& outmn, float& outmx) {
+          outmn = roundf(mn / texelSize) * texelSize;
+          outmx = mx + (outmn - mn);
+        };
+
+        snapToGrid(baseMinX, baseMaxX, cascade.minX, cascade.maxX);
+        snapToGrid(baseMinY, baseMaxY, cascade.minY, cascade.maxY);
+
         cascade.minZ = FLT_MAX;
         cascade.maxZ = -FLT_MAX;
 
         for (const auto& v : subfrustumVerticesWorld)
         {
           const auto viewV = mLightView * v;
-          cascade.minX = std::min(cascade.minX, viewV.x);
-          cascade.maxX = std::max(cascade.maxX, viewV.x);
-          cascade.minY = std::min(cascade.minY, viewV.y);
-          cascade.maxY = std::max(cascade.maxY, viewV.y);
           cascade.minZ = std::min(cascade.minZ, viewV.z);
           cascade.maxZ = std::max(cascade.maxZ, viewV.z);
         }
-
-#if 0
-        const float xExt = cascade.maxX - cascade.minX;
-        const float yExt = cascade.maxY - cascade.minY;
-
-        if (xExt > yExt)
-        {
-          cascade.minY -= 0.5f * (xExt - yExt);
-          cascade.maxY += 0.5f * (xExt - yExt);
-        }
-        else
-        {
-          cascade.minX -= 0.5f * (yExt - xExt);
-          cascade.maxX += 0.5f * (yExt - xExt);
-        }
-#endif
-
-        // @TODO: try snapping to some grid to avoid rasterization artifacts
       }
     }
   }
@@ -1458,7 +1456,7 @@ void WorldRenderer::drawGui()
       constantsData.playerWorldPos.x,
       constantsData.playerWorldPos.y,
       constantsData.playerWorldPos.z);
-    if (terrain)
+    if (drawTerrain)
     {
       ImGui::Text(
         "Last toroidal update pos: [%.3f, %.3f]",
@@ -1468,6 +1466,20 @@ void WorldRenderer::drawGui()
         "Toroidal offset: [%.3f, %.3f]",
         constantsData.toroidalOffset.x,
         constantsData.toroidalOffset.y);
+    }
+    if (directionalLightShadowsSettings.enable)
+    {
+      std::string text = std::format("Csm splits: [{}]{{{}", CSM_CASCADE_COUNT, mainCam.zNear);
+      const ViewParams mainCamParams =
+        view_params_for_cam(mainCam, aspect(), false, csmSplitLambda, csmShadowDist);
+      for (float split : std::span{
+             reinterpret_cast<const float*>(mainCamParams.csmFrustumSplits), CSM_CASCADE_COUNT})
+      {
+        text.append(", ");
+        text.append(std::to_string(split));
+      }
+      text.append("}");
+      ImGui::Text("%s", text.c_str());
     }
     ImGui::End();
   }

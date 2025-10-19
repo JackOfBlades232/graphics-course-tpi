@@ -16,7 +16,7 @@
     + Patch matrices for lights
   * Cascades
     + Fix frustum split
-    * Try fixed pixel size (largest possible frustum bb) + pixel sized increments
+    + Try fixed pixel size (largest possible frustum bb) + pixel sized increments
     * Investigate depth interpolation in raster
     * Read papers front to back
   * Artifacts
