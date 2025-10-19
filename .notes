@@ -17,14 +17,14 @@
   * Cascades
     + Fix frustum split
     + Try fixed pixel size (largest possible frustum bb) + pixel sized increments
+    * Try separate shadow pass with downsample + upsample for blur
     * Investigate depth interpolation in raster
-    * Read papers front to back
   * Artifacts
     + Fix weird black artifacts on screen edge
     * Weird acne-like 'prints' on terrain with depth bounds enabled
     * Shadows are all over the place near zFar and when flying away from scene
   * Point & spot lights
-    * Write out depth bias formulas to eval value ranges
+    * Check remaining issues
     * Try linear depth (may need to disable perp interpolation for raster)
     * Try additional depth bias calculation in shaders
 
