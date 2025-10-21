@@ -47,14 +47,14 @@ void main(void)
   const mat4 modelMatrix = instanceMatrices[inst.instId];
   const uint matId = inst.materialId;
 
-  const vec4 wNorm = vec4(dequantize3fnorm(floatBitsToInt(vPosNorm.w)), 0.0f);
+  const vec4 wNorm = vec4(dequantize3fnorm(floatBitsToInt(vPosNorm.w)), 0.f);
   const vec4 wTang = dequantize3f1snorm(floatBitsToInt(vTexCoordAndTang.z));
 
-  vOut.wPos     = (modelMatrix * vec4(vPosNorm.xyz, 1.0f)).xyz;
+  vOut.wPos     = (modelMatrix * vec4(vPosNorm.xyz, 1.f)).xyz;
   vOut.wNorm    = normalize(mat3(transpose(inverse(modelMatrix))) * wNorm.xyz);
   vOut.wTangent = vec4(normalize(mat3(transpose(inverse(modelMatrix))) * wTang.xyz), wTang.w);                 
   vOut.texCoord = vTexCoordAndTang.xy;
   vOut.matId    = matId;
 
-  gl_Position   = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(vOut.wPos, 1.0);
+  gl_Position   = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(vOut.wPos, 1.f);
 }

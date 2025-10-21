@@ -23,13 +23,10 @@ layout(binding = 2, set = 0) readonly buffer light_mats_t
 layout(binding = 3, set = 0) uniform sampler2D gbufAlbedo;
 layout(binding = 4, set = 0) uniform sampler2D gbufMaterial;
 layout(binding = 5, set = 0) uniform sampler2D gbufNormal;
+layout(binding = 6, set = 0) uniform sampler2D gbufPos;
 
-layout(binding = 6, set = 0) uniform sampler2D gbufDepth;
+layout(binding = 7, set = 0) uniform sampler2D gbufDepth;
 
-layout(binding = 7, set = 0) uniform skybox_t
-{
-  SkyboxSourceData skybox;
-};
 layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
@@ -41,6 +38,11 @@ layout(binding = 9, set = 0) uniform view_params_t
 layout(binding = 10, set = 0) readonly buffer view_data_t
 {
   ViewData viewData;
+};
+
+layout(binding = 11, set = 0) uniform skybox_t
+{
+  SkyboxSourceData skybox;
 };
 
 #include "bindless.glsl.inc"
@@ -166,7 +168,8 @@ void main(void)
   const mat4 invView = inverse(viewParams.mView);
   const vec3 camPos = invView[3].xyz / invView[3].w;
 
-  const vec3 pos = depth_and_tc_to_pos(min(depth, 1.f), surf.texCoord);
+  const vec3 reconstructedPos = depth_and_tc_to_pos(min(depth, 1.f), surf.texCoord);
+  const vec3 pos = texture(gbufPos, surf.texCoord).xyz; //reconstructedPos;
   const vec3 viewVec = normalize(camPos - pos);
   const vec3 viewPos = (viewParams.mView * vec4(pos, 1.f)).xyz;
 
@@ -175,7 +178,7 @@ void main(void)
     if (constants.useSkybox == 0)
       out_fragColor = vec4(0.f, 0.f, 0.f, 1.f);
     else
-      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, -viewVec);
+      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, reconstructedPos - camPos);
     return;
   }
 

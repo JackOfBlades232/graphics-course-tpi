@@ -188,6 +188,7 @@ private:
 
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
+  etna::Image gbufPos; // @TODO: look for different solutions for shadow test errors
   etna::Image mainViewDepth;
 
   etna::Buffer lightMatricesBuf;

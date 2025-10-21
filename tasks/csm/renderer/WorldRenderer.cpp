@@ -135,6 +135,14 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
+  createManagedImage(
+    gbufPos,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "gbuffer_pos",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+
   defaultSampler = etna::Sampler(
     etna::Sampler::CreateInfo{
       .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
@@ -470,12 +478,18 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
                .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                  vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
              },
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
            },
          .logicOp = vk::LogicOp::eSet},
       .fragmentShaderOutput =
         {
           .colorAttachmentFormats = // @TODO: save these into vars
           {vk::Format::eR32G32B32A32Sfloat,
+           vk::Format::eR32G32B32A32Sfloat,
            vk::Format::eR32G32B32A32Sfloat,
            vk::Format::eR32G32B32A32Sfloat},
           .depthAttachmentFormat = vk::Format::eD32Sfloat,
@@ -510,12 +524,18 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
                .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                  vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
              },
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
            },
          .logicOp = vk::LogicOp::eSet},
       .fragmentShaderOutput =
         {
           .colorAttachmentFormats = // @TODO: save these into vars
           {vk::Format::eR32G32B32A32Sfloat,
+           vk::Format::eR32G32B32A32Sfloat,
            vk::Format::eR32G32B32A32Sfloat,
            vk::Format::eR32G32B32A32Sfloat},
           .depthAttachmentFormat = vk::Format::eD32Sfloat,
@@ -1352,7 +1372,8 @@ void WorldRenderer::renderWorld(
            {{0, 0}, {resolution.x, resolution.y}},
            {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
             {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
-            {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
+            {.image = gbufNormal.get(), .view = gbufNormal.getView({})},
+            {.image = gbufPos.get(), .view = gbufPos.getView({})}},
            {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}}});
     }
 
@@ -1372,12 +1393,14 @@ void WorldRenderer::renderWorld(
          etna::Binding{
            5, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
-           6,
+           6, gbufPos.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+         etna::Binding{
+           7,
            mainViewDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-         etna::Binding{7, (skybox ? skybox->source : stubUniBuffer).genBinding()},
          etna::Binding{8, constants->get().genBinding()},
          etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
-         etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});
+         etna::Binding{10, mainViewContext->viewDataBuf.genBinding()},
+         etna::Binding{11, (skybox ? skybox->source : stubUniBuffer).genBinding()}});
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,

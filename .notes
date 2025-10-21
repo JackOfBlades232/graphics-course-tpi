@@ -19,10 +19,10 @@
     + Try fixed pixel size (largest possible frustum bb) + pixel sized increments
     * Try separate shadow pass with downsample + upsample for blur
     * Investigate depth interpolation in raster
-  * Artifacts
+  + Artifacts
     + Fix weird black artifacts on screen edge
-    * Weird acne-like 'prints' on terrain with depth bounds enabled
-    * Shadows are all over the place near zFar and when flying away from scene
+    + Weird acne-like 'prints' on terrain with depth bounds enabled
+    + Shadows are all over the place near zFar and when flying away from scene
   * Point & spot lights
     * Check remaining issues
     * Try linear depth (may need to disable perp interpolation for raster)

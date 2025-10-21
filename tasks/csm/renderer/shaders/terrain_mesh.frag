@@ -12,6 +12,7 @@
 layout(location = 0) out vec4 out_fragAlbedo;
 layout(location = 1) out vec3 out_fragMaterial;
 layout(location = 2) out vec3 out_fragNormal;
+layout(location = 3) out vec3 out_fragPos;
 
 layout(binding = 8, set = 0) uniform constants_t
 {
@@ -39,5 +40,6 @@ void main(void)
   out_fragAlbedo = surfaceColor;
   out_fragMaterial = materialData;
   out_fragNormal = normal;
+  out_fragPos = surf.wPos;
 }
 
