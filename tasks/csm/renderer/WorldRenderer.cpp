@@ -656,14 +656,20 @@ void WorldRenderer::update(const FramePacket& packet)
         invView * glm::vec4{-xMax, -yMax, zRangeMax, 1.f},
         invView * glm::vec4{xMax, -yMax, zRangeMax, 1.f}};
 
-      const float centerZ = (xMax * xMax + yMax * yMax + zRangeMax * zRangeMax - xMin * xMin -
-                             yMin * yMin - zRangeMin * zRangeMin) /
-        (2.f * (zRangeMax - zRangeMin));
-      const glm::vec4 centerWorld = invView * glm::vec4{0.f, 0.f, centerZ, 1.f};
+      const glm::vec4 centerWorld = [&] {
+        auto res = glm::vec4{};
+        for (const auto& v : subfrustumVerticesWorld)
+          res += v;
+        return res * 0.125f;
+      }();
+      const float radWorld = [&] {
+        auto res = 0.f;
+        for (const auto& v : subfrustumVerticesWorld)
+          res = std::max(res, glm::length(v - centerWorld));
+        return res;
+      }();
 
-      const float rad = glm::length(subfrustumVerticesWorld[0] - centerWorld);
-
-      const float texelSize = (2.f * rad) / float(CSM_CASCADE_RESOLUTION);
+      const float texelSize = (2.f * radWorld) / float(CSM_CASCADE_RESOLUTION);
 
       for (auto& dirl : std::span{lights.directionalLights, lights.directionalLightsCount})
       {
@@ -678,20 +684,14 @@ void WorldRenderer::update(const FramePacket& packet)
         cam.lookAt({}, dir, up);
         const auto mLightView = cam.viewTm();
 
-        const auto centerView = mLightView * centerWorld;
+        auto centerView = mLightView * centerWorld;
+        centerView.x = roundf(centerView.x / texelSize) * texelSize;
+        centerView.y = roundf(centerView.y / texelSize) * texelSize;
 
-        const float baseMinX = centerView.x - rad;
-        const float baseMaxX = centerView.x + rad;
-        const float baseMinY = centerView.y - rad;
-        const float baseMaxY = centerView.y + rad;
-
-        auto snapToGrid = [&](float mn, float mx, float& outmn, float& outmx) {
-          outmn = roundf(mn / texelSize) * texelSize;
-          outmx = mx + (outmn - mn);
-        };
-
-        snapToGrid(baseMinX, baseMaxX, cascade.minX, cascade.maxX);
-        snapToGrid(baseMinY, baseMaxY, cascade.minY, cascade.maxY);
+        cascade.minX = centerView.x - radWorld;
+        cascade.maxX = centerView.x + radWorld;
+        cascade.minY = centerView.y - radWorld;
+        cascade.maxY = centerView.y + radWorld;
 
         cascade.minZ = FLT_MAX;
         cascade.maxZ = -FLT_MAX;
@@ -1376,7 +1376,8 @@ void WorldRenderer::renderWorld(
            mainViewDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{7, (skybox ? skybox->source : stubUniBuffer).genBinding()},
          etna::Binding{8, constants->get().genBinding()},
-         etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()}});
+         etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
+         etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
@@ -1723,18 +1724,18 @@ void WorldRenderer::drawGui()
             ImGui::SliderFloat(
               fmt::format("({}) Depth bias const factor", name).c_str(),
               &settings.depthBiasConstantFactor,
-              0.f,
-              3.f);
+              -12.f,
+              12.f);
             ImGui::SliderFloat(
               fmt::format("({}) Depth bias clamp", name).c_str(),
               &settings.depthBiasClamp,
-              0.f,
-              3.f);
+              -12.f,
+              12.f);
             ImGui::SliderFloat(
               fmt::format("({}) Depth bias slope factor", name).c_str(),
               &settings.depthBiasSlopeFactor,
-              0.f,
-              3.f);
+              -12.f,
+              12.f);
           }
 
           ImGui::Checkbox(

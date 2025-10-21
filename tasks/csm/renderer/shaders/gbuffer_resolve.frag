@@ -38,6 +38,10 @@ layout(binding = 9, set = 0) uniform view_params_t
 {
   ViewParams viewParams;
 };
+layout(binding = 10, set = 0) readonly buffer view_data_t
+{
+  ViewData viewData;
+};
 
 #include "bindless.glsl.inc"
 
@@ -49,7 +53,7 @@ layout(location = 0) in VS_OUT
 vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 {
   const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
-  const vec4 posHom = inverse(viewParams.mProjView) * cameraToScreen;
+  const vec4 posHom = inverse(calc_adjusted_viewproj_mat(viewParams, viewData)) * cameraToScreen;
   return posHom.xyz / posHom.w;
 }
 
@@ -180,17 +184,13 @@ void main(void)
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
 
   const uint mat = uint(matData.x); 
-
-  if (mat != MATERIAL_PBR && mat != MATERIAL_DIFFUSE)
-  {
-    out_fragColor = vec4(1.f, 0.f, 1.f, 1.f);
-    return;
-  }
   
   // Calculate lighting
   
   // @TODO: parametrize
   const float ambient = 0.001f;
+
+  vec4 debugMultiplier = vec4(1.f);
 
   vec3 color = ambient * albedo;
 
@@ -202,11 +202,16 @@ void main(void)
   if (constants.drawCascadesInSolidColor != 0)
   {
     const vec3 DEBUG_CASCADE_COLORS[4] = {
-      vec3(0.1), vec3(0.3), vec3(0.6), vec3(1.)};
+      vec3(1.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 1.f)};
 
-    out_fragColor = cascade == CSM_CASCADE_COUNT
+    debugMultiplier = cascade == CSM_CASCADE_COUNT
       ? vec4(1.f, 0.f, 1.f, 1.f)
       : vec4(DEBUG_CASCADE_COLORS[cascade & 3], 1.f);
+  }
+
+  if (mat != MATERIAL_PBR && mat != MATERIAL_DIFFUSE)
+  {
+    out_fragColor = debugMultiplier * vec4(1.f, 0.f, 1.f, 1.f);
     return;
   }
 
@@ -408,5 +413,5 @@ void main(void)
       color += shadow * calculate_diffuse(normal, fromPosDir, albedo, lightColor);
   }
 
-  out_fragColor = vec4(color, 1.0f);
+  out_fragColor = debugMultiplier * vec4(color, 1.0f);
 }

@@ -80,7 +80,7 @@ struct ViewData
 
 #define CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD 32
 
-shader_inline shader_mat4 patch_depth_bounds_proj(shader_mat4 pm, float znear, float zfar)
+shader_inline shader_mat4 patch_depth_bounds_persp(shader_mat4 pm, float znear, float zfar)
 {
   const float invZRng = 1.f / (zfar - znear);
   pm[2][2] = zfar * invZRng;
@@ -128,7 +128,7 @@ mat4 calc_adjusted_viewproj_mat(in ViewParams params, in ViewData data)
   const mat4 pm = params.mProjView * inverse(params.mView); // @SPEED piggy!
   mat4 adjPm;
   if (params.type == VIEW_TYPE_PERSPECTIVE)
-    adjPm = patch_depth_bounds_proj(pm, zNearFar.x, zNearFar.y);
+    adjPm = patch_depth_bounds_persp(pm, zNearFar.x, zNearFar.y);
   else // VIEW_TYPE_ORTHO
     adjPm = patch_depth_bounds_ortho(pm, zNearFar.x, zNearFar.y);
   return adjPm * params.mView;

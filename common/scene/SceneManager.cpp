@@ -608,7 +608,7 @@ SceneManager::ProcessedLights SceneManager::processLights(
   samplers.emplace_back(
     etna::Sampler::CreateInfo{
       .filter = vk::Filter::eNearest,
-      .addressMode = vk::SamplerAddressMode::eClampToEdge,
+      .addressMode = vk::SamplerAddressMode::eClampToBorder,
       .name = "<shadowmap_sampler>"});
 
   auto nextShadowTexSmpId = [&, this] {
