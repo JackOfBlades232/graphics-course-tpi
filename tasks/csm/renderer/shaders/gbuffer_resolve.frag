@@ -23,7 +23,6 @@ layout(binding = 2, set = 0) readonly buffer light_mats_t
 layout(binding = 3, set = 0) uniform sampler2D gbufAlbedo;
 layout(binding = 4, set = 0) uniform sampler2D gbufMaterial;
 layout(binding = 5, set = 0) uniform sampler2D gbufNormal;
-layout(binding = 6, set = 0) uniform sampler2D gbufPos;
 
 layout(binding = 7, set = 0) uniform sampler2D gbufDepth;
 
@@ -168,12 +167,12 @@ void main(void)
   const mat4 invView = inverse(viewParams.mView);
   const vec3 camPos = invView[3].xyz / invView[3].w;
 
-  const vec3 reconstructedPos = depth_and_tc_to_pos(min(depth, 1.f), surf.texCoord);
-  const vec3 pos = texture(gbufPos, surf.texCoord).xyz; //reconstructedPos;
+  const vec3 reconstructedPos = depth_and_tc_to_pos(max(depth, 0.f), surf.texCoord);
+  const vec3 pos = reconstructedPos; //texture(gbufPos, surf.texCoord).xyz;
   const vec3 viewVec = normalize(camPos - pos);
   const vec3 viewPos = (viewParams.mView * vec4(pos, 1.f)).xyz;
 
-  if (depth >= 1.f)
+  if (depth <= 0.f)
   {
     if (constants.useSkybox == 0)
       out_fragColor = vec4(0.f, 0.f, 0.f, 1.f);
@@ -371,7 +370,7 @@ void main(void)
     {
       const vec4 posLightClipSpace = mats.spotLightMats[i] * vec4(pos, 1.f);
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
-      const vec2 shadowUv = vec2(-posLightSpaceNDC.x, posLightSpaceNDC.y) * 0.5f + 0.5f;
+      const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
 
       const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x;
 

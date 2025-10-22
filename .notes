@@ -1,37 +1,11 @@
   CSM
-+ Prepare the frustum split
-+ Calculate view space viewports
-+ Cpu matrix calculation
-+ Gpu matrix calculation
-+ Render cascades cpu side
-+ Sample with matrix in resolve
-+ PCF
-+ Optimize sm rendering with dirty lights
-
-* Stabilize visuals
-  + Investigate tightening depth bounds
-    + Try collecting minz maxz in frustum culling and passing it as payload
-    + Calculate min/max over the buffer
-    + For beter bounds, calc terrain chunk bboxes
-    + Patch matrices for lights
-  * Cascades
-    + Fix frustum split
-    + Try fixed pixel size (largest possible frustum bb) + pixel sized increments
-    * Try separate shadow pass with downsample + upsample for blur
-    * Investigate depth interpolation in raster
-  + Artifacts
-    + Fix weird black artifacts on screen edge
-    + Weird acne-like 'prints' on terrain with depth bounds enabled
-    + Shadows are all over the place near zFar and when flying away from scene
-  * Point & spot lights
-    * Check remaining issues
-    * Try linear depth (may need to disable perp interpolation for raster)
-    * Try additional depth bias calculation in shaders
+* Soft shadows & perspective aliasing
+  * Try hardware-style pcf
+  * Try PCF blending for cascades
+  * Try separate shadow pass with downsample + upsample for blur
+  * VSM option
+  * ESM option
 
 * Sort out depth bias clamp seemingly not working
-* Sort out lights spuriously rebuilding in lovely_town scene
 
-* PCF blending for cascades
-* VSM option
-* ESM option
 

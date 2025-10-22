@@ -35,13 +35,21 @@ WorldRenderer::MeshPipeline::MeshPipeline(
   const char* vertex_prog_name,
   const etna::GraphicsPipeline::CreateInfo& ci)
 {
-  pipelines[size_t(SceneRenderingPass::COLOR)] = pipeman.createGraphicsPipeline(prog_name, ci);
+  auto nci = ci;
+  pipelines[size_t(SceneRenderingPass::COLOR)][size_t(DepthFlavour::NORMAL)] =
+    pipeman.createGraphicsPipeline(prog_name, nci);
+  nci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
+  pipelines[size_t(SceneRenderingPass::COLOR)][size_t(DepthFlavour::REVERSE)] =
+    pipeman.createGraphicsPipeline(prog_name, nci);
   programs[size_t(SceneRenderingPass::COLOR)].emplace(etna::get_shader_program(prog_name));
 
   {
     auto wci = ci;
     wci.rasterizationConfig.polygonMode = vk::PolygonMode::eLine;
-    pipelines[size_t(SceneRenderingPass::WIRE_COLOR)] =
+    pipelines[size_t(SceneRenderingPass::WIRE_COLOR)][size_t(DepthFlavour::NORMAL)] =
+      pipeman.createGraphicsPipeline(prog_name, wci);
+    wci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
+    pipelines[size_t(SceneRenderingPass::WIRE_COLOR)][size_t(DepthFlavour::REVERSE)] =
       pipeman.createGraphicsPipeline(prog_name, wci);
     programs[size_t(SceneRenderingPass::WIRE_COLOR)].emplace(etna::get_shader_program(prog_name));
   }
@@ -54,7 +62,10 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eBack;
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBias);
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBiasEnable);
-    pipelines[size_t(SceneRenderingPass::SHADOW)] =
+    pipelines[size_t(SceneRenderingPass::SHADOW)][size_t(DepthFlavour::NORMAL)] =
+      pipeman.createGraphicsPipeline(vertex_prog_name, sci);
+    sci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
+    pipelines[size_t(SceneRenderingPass::SHADOW)][size_t(DepthFlavour::REVERSE)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
     programs[size_t(SceneRenderingPass::SHADOW)].emplace(
       etna::get_shader_program(vertex_prog_name));
@@ -68,7 +79,10 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.rasterizationConfig.cullMode = vk::CullModeFlagBits::eFront;
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBias);
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBiasEnable);
-    pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)] =
+    pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)][size_t(DepthFlavour::NORMAL)] =
+      pipeman.createGraphicsPipeline(vertex_prog_name, sci);
+    sci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
+    pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)][size_t(DepthFlavour::REVERSE)] =
       pipeman.createGraphicsPipeline(vertex_prog_name, sci);
     programs[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)].emplace(
       etna::get_shader_program(vertex_prog_name));
@@ -132,14 +146,6 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "gbuffer_normal",
-      .format = vk::Format::eR32G32B32A32Sfloat,
-      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
-
-  createManagedImage(
-    gbufPos,
-    etna::Image::CreateInfo{
-      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-      .name = "gbuffer_pos",
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
@@ -478,18 +484,12 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
                .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                  vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
              },
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-             },
            },
          .logicOp = vk::LogicOp::eSet},
       .fragmentShaderOutput =
         {
           .colorAttachmentFormats = // @TODO: save these into vars
           {vk::Format::eR32G32B32A32Sfloat,
-           vk::Format::eR32G32B32A32Sfloat,
            vk::Format::eR32G32B32A32Sfloat,
            vk::Format::eR32G32B32A32Sfloat},
           .depthAttachmentFormat = vk::Format::eD32Sfloat,
@@ -524,18 +524,12 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
                .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                  vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
              },
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-             },
            },
          .logicOp = vk::LogicOp::eSet},
       .fragmentShaderOutput =
         {
           .colorAttachmentFormats = // @TODO: save these into vars
           {vk::Format::eR32G32B32A32Sfloat,
-           vk::Format::eR32G32B32A32Sfloat,
            vk::Format::eR32G32B32A32Sfloat,
            vk::Format::eR32G32B32A32Sfloat},
           .depthAttachmentFormat = vk::Format::eD32Sfloat,
@@ -650,7 +644,7 @@ void WorldRenderer::update(const FramePacket& packet)
   {
     auto& lights = sceneMgr->lightsRW();
     const auto mainViewParams =
-      view_params_for_cam(mainCam, aspect(), false, csmSplitLambda, csmShadowDist);
+      view_params_for_cam(mainCam, aspect(), false, false, csmSplitLambda, csmShadowDist);
     const auto [xNear, yNear, zNear, zFar] = mainViewParams.viewFrustum;
 
     const auto invView = glm::inverse(mainViewParams.mView);
@@ -736,6 +730,9 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
   srpi.vctx->update(srpi.vparams);
   viewCtxMgr->cullForView(cmd_buf, *srpi.vctx, srpi.vparams, constants->get());
 
+  if (srpi.vparams.needReverseZ)
+    srpi.rtargetInfo.depthAttachment.clearDepthStencilValue = {0.f, 0};
+
   {
     ETNA_PROFILE_GPU(cmd_buf, renderScene);
 
@@ -801,7 +798,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     {
       ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
 
-      const auto& pipe = staticMeshPipeline->get(srpi.pass);
+      const auto& pipe = staticMeshPipeline->get(srpi.pass, srpi.vparams.needReverseZ);
       std::vector vkSets{sceneDset->getVkSet()};
 
       if (passHasFragmentStage(srpi.pass))
@@ -829,7 +826,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     {
       ETNA_PROFILE_GPU(cmd_buf, terrain);
 
-      const auto& pipe = terrainMeshPipeline->get(srpi.pass);
+      const auto& pipe = terrainMeshPipeline->get(srpi.pass, srpi.vparams.needReverseZ);
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
@@ -1172,7 +1169,7 @@ void WorldRenderer::renderWorld(
                  ? SceneRenderingPass::SHADOW_FRONT_CULLED
                  : SceneRenderingPass::SHADOW,
                .vctx = &pointLightViews[i][j],
-               .vparams = view_params_for_cam(cam, 1.f, false),
+               .vparams = view_params_for_cam(cam, 1.f, true, false), // @TODO: reverse depth is broken on point lights
                .rtargetInfo =
                  {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
                   {},
@@ -1229,11 +1226,11 @@ void WorldRenderer::renderWorld(
 
           // @TODO: pull stuff out
           Camera cam{};
-          const auto up =
-            std::max(fabsf(spot.direction.x), fabsf(spot.direction.z)) < SHADER_EPSILON
+          const auto dir = glm::normalize(spot.direction);
+          const auto up = std::max(fabsf(dir.x), fabsf(dir.z)) < SHADER_EPSILON
             ? glm::vec3(0.f, 0.f, 1.f)
             : glm::vec3(0.f, 1.f, 0.f);
-          cam.lookAt(spot.position, spot.position + spot.direction, up);
+          cam.lookAt(spot.position, spot.position + dir, up);
           cam.fov = spot.outerConeAngle * 180.f / M_PI;
           cam.zNear = 0.001f;
           cam.zFar = spot.range + 0.001f;
@@ -1244,7 +1241,7 @@ void WorldRenderer::renderWorld(
                ? SceneRenderingPass::SHADOW_FRONT_CULLED
                : SceneRenderingPass::SHADOW,
              .vctx = &spotLightViews[i],
-             .vparams = view_params_for_cam(cam, 1.f, false),
+             .vparams = view_params_for_cam(cam, 1.f, true, false), // @TODO: reverse depth is broken on spot lights
              .rtargetInfo =
                {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
                 {},
@@ -1367,13 +1364,13 @@ void WorldRenderer::renderWorld(
         cmd_buf,
         {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
          .vctx = &mainViewContext.value(),
-         .vparams = view_params_for_cam(mainCam, aspect(), false, csmSplitLambda, csmShadowDist),
+         .vparams =
+           view_params_for_cam(mainCam, aspect(), false, true, csmSplitLambda, csmShadowDist),
          .rtargetInfo = {
            {{0, 0}, {resolution.x, resolution.y}},
            {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
             {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
-            {.image = gbufNormal.get(), .view = gbufNormal.getView({})},
-            {.image = gbufPos.get(), .view = gbufPos.getView({})}},
+            {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
            {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}}});
     }
 
@@ -1392,8 +1389,6 @@ void WorldRenderer::renderWorld(
            gbufMaterial.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
            5, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-         etna::Binding{
-           6, gbufPos.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
            7,
            mainViewDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
@@ -1495,7 +1490,7 @@ void WorldRenderer::drawGui()
     {
       std::string text = std::format("Csm splits: [{}]{{{}", CSM_CASCADE_COUNT, mainCam.zNear);
       const ViewParams mainCamParams =
-        view_params_for_cam(mainCam, aspect(), false, csmSplitLambda, csmShadowDist);
+        view_params_for_cam(mainCam, aspect(), false, false, csmSplitLambda, csmShadowDist);
       for (float split : std::span{
              reinterpret_cast<const float*>(mainCamParams.csmFrustumSplits), CSM_CASCADE_COUNT})
       {

@@ -62,8 +62,21 @@ private:
 
     COUNT
   };
-
   static constexpr size_t SCENE_RPASS_COUNT = size_t(SceneRenderingPass::COUNT);
+
+  enum class DepthFlavour
+  {
+    NORMAL,
+    REVERSE,
+
+    COUNT
+  };
+  static constexpr size_t DEPTH_FLAVOUR_COUNT = size_t(DepthFlavour::COUNT);
+
+  static DepthFlavour getDepthFlavour(bool reverse_z)
+  {
+    return reverse_z ? DepthFlavour::REVERSE : DepthFlavour::NORMAL;
+  }
 
   struct SceneRenderPassInfo
   {
@@ -79,7 +92,7 @@ private:
 
   struct MeshPipeline
   {
-    etna::GraphicsPipeline pipelines[SCENE_RPASS_COUNT];
+    etna::GraphicsPipeline pipelines[SCENE_RPASS_COUNT][DEPTH_FLAVOUR_COUNT];
     std::optional<etna::ShaderProgramInfo> programs[SCENE_RPASS_COUNT];
 
     MeshPipeline(
@@ -90,9 +103,9 @@ private:
 
     MeshPipeline() = default;
 
-    const etna::GraphicsPipeline& get(SceneRenderingPass pass) const
+    const etna::GraphicsPipeline& get(SceneRenderingPass pass, bool reverse_z = false) const
     {
-      return pipelines[size_t(pass)];
+      return pipelines[size_t(pass)][size_t(getDepthFlavour(reverse_z))];
     }
     const etna::ShaderProgramInfo& getProg(SceneRenderingPass pass) const
     {
@@ -188,7 +201,6 @@ private:
 
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
-  etna::Image gbufPos; // @TODO: look for different solutions for shadow test errors
   etna::Image mainViewDepth;
 
   etna::Buffer lightMatricesBuf;

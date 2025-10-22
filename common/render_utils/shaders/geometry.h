@@ -68,7 +68,8 @@ struct ViewParams
   shader_vec4 csmFrustumSplits[SHADER_MAX((CSM_CASCADE_COUNT - 1) / 4 + 1, 2)];
   ViewType type;
   shader_uint needDepthBounds;
-  shader_uint pad1_, pad2_;
+  shader_uint needReverseZ;
+  shader_uint pad1_;
 };
 
 // Calculated on the GPU
@@ -126,11 +127,13 @@ mat4 calc_adjusted_viewproj_mat(in ViewParams params, in ViewData data)
     return params.mProjView;
   const vec2 zNearFar = get_corrected_depth_bounds(params, data);
   const mat4 pm = params.mProjView * inverse(params.mView); // @SPEED piggy!
+  const float znr = params.needReverseZ != 0 ? zNearFar.y : zNearFar.x;
+  const float zfr = params.needReverseZ != 0 ? zNearFar.x : zNearFar.y;
   mat4 adjPm;
   if (params.type == VIEW_TYPE_PERSPECTIVE)
-    adjPm = patch_depth_bounds_persp(pm, zNearFar.x, zNearFar.y);
+    adjPm = patch_depth_bounds_persp(pm, znr, zfr);
   else // VIEW_TYPE_ORTHO
-    adjPm = patch_depth_bounds_ortho(pm, zNearFar.x, zNearFar.y);
+    adjPm = patch_depth_bounds_ortho(pm, znr, zfr);
   return adjPm * params.mView;
 }
 

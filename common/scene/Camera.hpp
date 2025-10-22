@@ -97,15 +97,20 @@ inline ViewParams view_params_for_cam(
   const Camera& cam,
   float aspect,
   bool need_depth_bounds,
+  bool need_reverse_z,
   float csm_split_lambda = -1.f,
   float csm_shadow_dist = FLT_MAX)
 {
   ViewParams params{};
   params.type = ViewType::PERSPECTIVE;
 
+  Camera pcam = cam;
+  if (need_reverse_z)
+    std::swap(pcam.zNear, pcam.zFar);
+
   // calc camera matrix
   {
-    const auto proj = cam.projTm(aspect);
+    const auto proj = pcam.projTm(aspect);
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
   }
@@ -137,6 +142,7 @@ inline ViewParams view_params_for_cam(
   }
 
   params.needDepthBounds = shader_uint(need_depth_bounds);
+  params.needReverseZ = shader_uint(need_reverse_z);
 
   return params;
 }
@@ -163,6 +169,7 @@ inline ViewParams view_params_for_cam(
   }
 
   params.needDepthBounds = shader_uint(need_depth_bounds);
+  params.needReverseZ = 0u;
 
   return params;
 }
