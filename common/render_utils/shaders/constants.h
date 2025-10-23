@@ -46,6 +46,7 @@ struct Constants
   float acesExposure;
 
   float csmSplitLambda;
+  float csmBlendingBeltSize;
 };
 
 #endif // CONSTANTS_H_INCLUDED

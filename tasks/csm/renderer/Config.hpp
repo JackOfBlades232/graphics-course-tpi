@@ -12,6 +12,6 @@ struct Config
   SceneMultiplexing testMultiplexing{};
 
   std::string debugConfigFile{"./debug_config.bin"};
-  uint32_t debugConfigFileFormatVer = 13;
+  uint32_t debugConfigFileFormatVer = 15;
   bool useDebugConfig = true;
 };

@@ -576,6 +576,8 @@ void WorldRenderer::update(const FramePacket& packet)
   {
     dt = prevTime >= 0.f ? (packet.currentTime - prevTime) : 0.f;
     prevTime = packet.currentTime;
+
+    ++frame;
   }
 
   {
@@ -639,6 +641,7 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.acesExposure = acesExposure;
 
     constantsData.csmSplitLambda = csmSplitLambda;
+    constantsData.csmBlendingBeltSize = csmBlendingBeltSize;
   }
 
   {
@@ -653,8 +656,8 @@ void WorldRenderer::update(const FramePacket& packet)
 
     for (int i = 0; i < CSM_CASCADE_COUNT; ++i)
     {
-      const float zRangeMin = i == 0 ? zNear : splits[i - 1];
-      const float zRangeMax = splits[i];
+      const float zRangeMin = std::max(i == 0 ? zNear : splits[i - 1] - csmBlendingBeltSize, zNear);
+      const float zRangeMax = std::min(splits[i] + csmBlendingBeltSize, zFar);
       const float xMin = xNear * zRangeMin / zNear;
       const float xMax = xNear * zRangeMax / zNear;
       const float yMin = yNear * zRangeMin / zNear;
@@ -1118,6 +1121,9 @@ void WorldRenderer::renderWorld(
 
       // @TODO: cull lights outside of frustum. Maybe also draw sm-s on demand?
 
+      constexpr size_t MAX_STATIC_LIGHTS_PER_FRAME = 32;
+      size_t processedStaticLights = 0;
+
       if (pointLightShadowsSettings.enable)
       {
         for (size_t i = 0;
@@ -1132,6 +1138,10 @@ void WorldRenderer::renderWorld(
           {
             continue;
           }
+
+          if (processedStaticLights >= MAX_STATIC_LIGHTS_PER_FRAME)
+            break;
+          ++processedStaticLights;
 
           prevLights.pointLights[i] = point;
 
@@ -1169,7 +1179,8 @@ void WorldRenderer::renderWorld(
                  ? SceneRenderingPass::SHADOW_FRONT_CULLED
                  : SceneRenderingPass::SHADOW,
                .vctx = &pointLightViews[i][j],
-               .vparams = view_params_for_cam(cam, 1.f, true, false), // @TODO: reverse depth is broken on point lights
+               .vparams = view_params_for_cam(
+                 cam, 1.f, true, false), // @TODO: reverse depth is broken on point lights
                .rtargetInfo =
                  {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
                   {},
@@ -1195,10 +1206,9 @@ void WorldRenderer::renderWorld(
         pointLightsSettingsDirty = false;
       }
 
+
       if (spotLightShadowsSettings.enable)
       {
-        // @TODO : why the fuck is this not functioning?
-
         cmd_buf.setDepthBiasEnable(spotLightShadowsSettings.depthBias ? VK_TRUE : VK_FALSE);
         cmd_buf.setDepthBias(
           spotLightShadowsSettings.depthBiasConstantFactor,
@@ -1218,6 +1228,10 @@ void WorldRenderer::renderWorld(
           {
             continue;
           }
+
+          if (processedStaticLights >= MAX_STATIC_LIGHTS_PER_FRAME)
+            break;
+          ++processedStaticLights;
 
           prevLights.spotLights[i] = spot;
 
@@ -1241,7 +1255,8 @@ void WorldRenderer::renderWorld(
                ? SceneRenderingPass::SHADOW_FRONT_CULLED
                : SceneRenderingPass::SHADOW,
              .vctx = &spotLightViews[i],
-             .vparams = view_params_for_cam(cam, 1.f, true, false), // @TODO: reverse depth is broken on spot lights
+             .vparams = view_params_for_cam(
+               cam, 1.f, true, false), // @TODO: reverse depth is broken on spot lights
              .rtargetInfo =
                {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
                 {},
@@ -1771,6 +1786,7 @@ void WorldRenderer::drawGui()
       if (directionalLightShadowsSettings.enable)
       {
         ImGui::SliderFloat("CSM split lambda", &csmSplitLambda, 0.f, 1.f);
+        ImGui::SliderFloat("CSM blending belt size", &csmBlendingBeltSize, 0.f, 0.6f);
         ImGui::SliderFloat("CSM shadow distance", &csmShadowDist, mainCam.zNear, mainCam.zFar);
         csmShadowDist = glm::clamp(csmShadowDist, mainCam.zNear, mainCam.zFar);
       }
@@ -1961,6 +1977,7 @@ void WorldRenderer::loadDebugConfig()
   histEqTonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
   acesExposure = unwrap(reader.read<float>());
   csmSplitLambda = unwrap(reader.read<float>());
+  csmBlendingBeltSize = unwrap(reader.read<float>());
   csmShadowDist = unwrap(reader.read<float>());
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
 
@@ -2026,6 +2043,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(histEqTonemappingMaxAdmissibleLum));
   ETNA_VERIFY(writer.write(acesExposure));
   ETNA_VERIFY(writer.write(csmSplitLambda));
+  ETNA_VERIFY(writer.write(csmBlendingBeltSize));
   ETNA_VERIFY(writer.write(csmShadowDist));
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
 

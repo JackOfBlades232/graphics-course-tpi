@@ -1,11 +1,5 @@
-  CSM
+CSM
 * Soft shadows & perspective aliasing
-  * Try hardware-style pcf
-  * Try PCF blending for cascades
-  * Try separate shadow pass with downsample + upsample for blur
   * VSM option
-  * ESM option
-
-* Sort out depth bias clamp seemingly not working
 
 

@@ -133,7 +133,7 @@ enum class ShadowTechnique
   PCF7X7,
   PCF9X9,
 
-  // @TODO: VSM, ESM
+  // @TODO: VSM
 
   COUNT
 };

@@ -245,6 +245,8 @@ private:
   float prevTime = -1.f;
   float dt = 0.f;
 
+  int frame = -1;
+
   glm::uvec2 resolution;
   const Config& cfg;
 
@@ -285,6 +287,7 @@ private:
   float acesExposure = 2.f;
   float csmSplitLambda = 0.5f;
   float csmShadowDist = 400.f;
+  float csmBlendingBeltSize = 0.03f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
 
 private:

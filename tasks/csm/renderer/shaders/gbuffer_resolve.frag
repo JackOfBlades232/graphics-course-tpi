@@ -159,6 +159,89 @@ float calculate_angular_attenuation(float cosine, float inner_cos, float outer_c
   return 1.f - angularAttenuation;
 }
 
+float calculate_csm_shadow_pcf_no_blend(int lid, int cid, vec3 pos)
+{
+  const vec4 posLightClipSpace = mats.directionalLightMats[lid][cid] * vec4(pos, 1.f);
+  const vec3 posLightSpaceNDC = posLightClipSpace.xyz; // No perspective divide cuz ortho
+  const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
+
+  float shadow = sample_bindless_tex_shadow_lod(
+    lights.directionalLights[lid].shadowmapCascades[cid].map, vec3(shadowUv, posLightSpaceNDC.z), 0.f);
+
+  if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.directionalLightShadowsTechnique))
+  {
+    const int gridDim = PCF_KERNEL_SIZES[constants.directionalLightShadowsTechnique];
+    const int mid = gridDim / 2 + 1;
+
+    const vec2 uvStep = vec2(1.f / CSM_CASCADE_RESOLUTION);
+    const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
+
+    float sampleCount = 1.f;
+
+    for (int y = 0; y < gridDim; ++y)
+      for (int x = 0; x < gridDim; ++x)
+      {
+        if (x == mid && y == mid)
+          continue;
+
+        const vec2 uv = uvBase + uvStep * vec2(float(x), float(y));
+        const float w = pcf_kernel_weight(x, y, constants.directionalLightShadowsTechnique);
+
+        shadow += w * sample_bindless_tex_shadow_lod(
+          lights.directionalLights[lid].shadowmapCascades[cid].map, vec3(uv, posLightSpaceNDC.z), 0.f);
+        sampleCount += w;
+      }
+
+    shadow /= sampleCount;
+  }
+
+  return shadow;
+}
+
+float calculate_csm_shadow_pcf(int lid, int cid, vec3 pos, float z_from_start, float z_from_end)
+{
+  float base = calculate_csm_shadow_pcf_no_blend(lid, cid, pos);
+  float prev = 0.f;
+  float next = 0.f;
+
+  float basew = 1.f;
+  float prevw = 0.f;
+  float nextw = 0.f;
+
+  // @TODO: non-linear blend without more samplings (sigmoid?)
+  if (cid > 0 && z_from_start <= constants.csmBlendingBeltSize)
+  {
+    prevw = 0.5f * (constants.csmBlendingBeltSize - z_from_start) / constants.csmBlendingBeltSize;
+    prev = calculate_csm_shadow_pcf_no_blend(lid, cid - 1, pos);
+  }
+
+  if (z_from_end <= constants.csmBlendingBeltSize)
+  {
+    nextw = (constants.csmBlendingBeltSize - z_from_end) / constants.csmBlendingBeltSize;
+    if (cid < CSM_CASCADE_COUNT - 1)
+    {
+      next = calculate_csm_shadow_pcf_no_blend(lid, cid + 1, pos);
+      nextw *= 0.5f;
+    }
+    else
+    {
+      next = 1.f;
+    }
+  }
+
+  if (prevw > 0.f || nextw > 0.f)
+  {
+    if (prevw > 0.f && nextw > 0.f)
+    {
+      prevw *= 0.5f;
+      nextw *= 0.5f;
+    }
+    basew = 1.f - prevw - nextw;
+  }
+
+  return base * basew + prev * prevw + next * nextw;
+}
+
 void main(void)
 {
   // Unpack gbuffer
@@ -198,8 +281,29 @@ void main(void)
 
   // For directional shadows
   int cascade = 0;
-  while (cascade < CSM_CASCADE_COUNT && viewPos.z > get_frustum_split(viewParams, cascade))
+  float zIntoCascadeStart = 0.f;
+  float zIntoCascadeEnd = 0.f;
+  float zCascadeSize = 0.f;
+  float prevSplit = 0.f;
+  float split = viewParams.viewFrustum.nearZ;
+  while (cascade < CSM_CASCADE_COUNT)
+  {
+    zIntoCascadeStart = viewPos.z - split;
+    split = get_frustum_split(viewParams, cascade);
+    zIntoCascadeEnd = split - viewPos.z;
+    zCascadeSize = split - prevSplit;
+
+    if (viewPos.z <= split)
+      break;
+
+    prevSplit = split;
+
     ++cascade;
+  }
+
+  float zNextCascadeSize = zCascadeSize;
+  if (cascade < CSM_CASCADE_COUNT - 1)
+    zNextCascadeSize = get_frustum_split(viewParams, cascade + 1) - split;
 
   if (constants.drawCascadesInSolidColor != 0)
   {
@@ -219,7 +323,7 @@ void main(void)
 
   // @TODO: take the cascade that we overlap w/, get the coeff from the overlap region (manhattan metric), and blend via that
 
-  for (uint i = 0; i < lights.directionalLightsCount; ++i)
+  for (int i = 0; i < lights.directionalLightsCount; ++i)
   {
     const vec3 lightIntensity = 
       lights.directionalLights[i].color * lights.directionalLights[i].intensity;
@@ -229,42 +333,12 @@ void main(void)
 
     if (constants.useDirectionalLightShadows != 0 && cascade < CSM_CASCADE_COUNT)
     {
-      const vec4 posLightClipSpace = mats.directionalLightMats[i][cascade] * vec4(pos, 1.f);
-      const vec3 posLightSpaceNDC = posLightClipSpace.xyz; // No perspective divide cuz ortho
-      const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
-
       if (SHADOW_TECHNIQUE_IS_PCF(constants.directionalLightShadowsTechnique))
       {
-      shadow = sample_bindless_tex_shadow_lod(
-        lights.directionalLights[i].shadowmapCascades[cascade].map, vec3(shadowUv, posLightSpaceNDC.z), 0.f);
-
-        if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.directionalLightShadowsTechnique))
-        {
-          const int gridDim = PCF_KERNEL_SIZES[constants.directionalLightShadowsTechnique];
-          const int mid = gridDim / 2 + 1;
-
-          const vec2 uvStep = vec2(1.f / CSM_CASCADE_RESOLUTION);
-          const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
-
-          float sampleCount = 1.f;
-
-          for (int y = 0; y < gridDim; ++y)
-            for (int x = 0; x < gridDim; ++x)
-            {
-              if (x == mid && y == mid)
-                continue;
-
-              const vec2 uv = uvBase + uvStep * vec2(float(x), float(y));
-              const float w = pcf_kernel_weight(x, y, constants.directionalLightShadowsTechnique);
-
-              shadow += w * sample_bindless_tex_shadow_lod(
-                lights.directionalLights[i].shadowmapCascades[cascade].map, vec3(uv, posLightSpaceNDC.z), 0.f);
-              sampleCount += w;
-            }
-
-          shadow /= sampleCount;
-        }
+        shadow = calculate_csm_shadow_pcf(
+          i, cascade, pos, zIntoCascadeStart / zCascadeSize, zIntoCascadeEnd / zNextCascadeSize);
       }
+      // ...
     }
 
     if (mat == MATERIAL_PBR)
@@ -273,7 +347,7 @@ void main(void)
       color += shadow * calculate_diffuse(normal, lightDir, albedo, lightIntensity);
   }
 
-  for (uint i = 0; i < lights.pointLightsCount; ++i)
+  for (int i = 0; i < lights.pointLightsCount; ++i)
   {
     const vec3 lightIntensity = lights.pointLights[i].color * lights.pointLights[i].intensity;
     const float lightAttenuation =
@@ -346,7 +420,7 @@ void main(void)
       color += shadow * calculate_diffuse(normal, lightDir, albedo, lightColor);
   }
 
-  for (uint i = 0; i < lights.spotLightsCount; ++i)
+  for (int i = 0; i < lights.spotLightsCount; ++i)
   {
     const vec3 lightIntensity = lights.spotLights[i].color * lights.spotLights[i].intensity;
     const float lightAttenuation =
