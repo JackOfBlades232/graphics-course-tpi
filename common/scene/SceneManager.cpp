@@ -607,9 +607,10 @@ SceneManager::ProcessedLights SceneManager::processLights(
   const SmpId shadowSamplerId = SmpId(samplers.size());
   samplers.emplace_back(
     etna::Sampler::CreateInfo{
-      .filter = vk::Filter::eNearest,
+      .filter = vk::Filter::eLinear,
       .addressMode = vk::SamplerAddressMode::eClampToBorder,
-      .name = "<shadowmap_sampler>"});
+      .name = "<shadowmap_sampler>",
+      .compareEnable = true});
 
   auto nextShadowTexSmpId = [&, this] {
     ETNA_ASSERT(textures.size() <= 65535);

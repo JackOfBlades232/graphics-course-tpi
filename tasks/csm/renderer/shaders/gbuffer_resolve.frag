@@ -233,40 +233,37 @@ void main(void)
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz; // No perspective divide cuz ortho
       const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
 
-      const float lDepth = sample_bindless_tex_lod(
-        lights.directionalLights[i].shadowmapCascades[cascade].map, shadowUv, 0.f).x;
-
-      shadow = (
-        shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
-        shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
-        lDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
-
-      if (constants.directionalLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
+      if (SHADOW_TECHNIQUE_IS_PCF(constants.directionalLightShadowsTechnique))
       {
-        const int gridDim = 4; // @TODO: make a param
+      shadow = sample_bindless_tex_shadow_lod(
+        lights.directionalLights[i].shadowmapCascades[cascade].map, vec3(shadowUv, posLightSpaceNDC.z), 0.f);
 
-        const vec2 uvStep = vec2(1.f / CSM_CASCADE_RESOLUTION);
-        const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
+        if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.directionalLightShadowsTechnique))
+        {
+          const int gridDim = PCF_KERNEL_SIZES[constants.directionalLightShadowsTechnique];
+          const int mid = gridDim / 2 + 1;
 
-        float sampleCount = 1.f;
+          const vec2 uvStep = vec2(1.f / CSM_CASCADE_RESOLUTION);
+          const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
 
-        for (int y = 0; y < gridDim; ++y)
-          for (int x = 0; x < gridDim; ++x)
-          {
-            if (x == 0 && y == 0)
-              continue;
+          float sampleCount = 1.f;
 
-            const float lsDepth = sample_bindless_tex_lod(
-              lights.directionalLights[i].shadowmapCascades[cascade].map, uvBase + uvStep * vec2(float(x), float(y)), 0.f).x;
+          for (int y = 0; y < gridDim; ++y)
+            for (int x = 0; x < gridDim; ++x)
+            {
+              if (x == mid && y == mid)
+                continue;
 
-            shadow += (
-              shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
-              shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
-              lsDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
-            sampleCount += 1.f;
-          }
+              const vec2 uv = uvBase + uvStep * vec2(float(x), float(y));
+              const float w = pcf_kernel_weight(x, y, constants.directionalLightShadowsTechnique);
 
-        shadow /= sampleCount;
+              shadow += w * sample_bindless_tex_shadow_lod(
+                lights.directionalLights[i].shadowmapCascades[cascade].map, vec3(uv, posLightSpaceNDC.z), 0.f);
+              sampleCount += w;
+            }
+
+          shadow /= sampleCount;
+        }
       }
     }
 
@@ -291,7 +288,6 @@ void main(void)
     if (constants.usePointLightShadows != 0)
     {
       const vec3 sampleDir = -vec3(lightDir.x, lightDir.y, -lightDir.z);
-      const float lDepth = sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sampleDir, 0.f).x;
 
       // @TODO: pull out?
       const uint faceIdx =
@@ -302,41 +298,45 @@ void main(void)
       const vec4 posLightClipSpace = mats.pointLightMats[i][faceIdx] * vec4(pos, 1.f);
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
 
-      shadow = lDepth < posLightSpaceNDC.z ? 0.f : 1.f;
-
-      if (constants.pointLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
+      if (SHADOW_TECHNIQUE_IS_PCF(constants.pointLightShadowsTechnique))
       {
-        const int gridDim = 4; // @TODO: make a param
+        shadow = sample_bindless_tex_cube_shadow_lod(
+          lights.pointLights[i].shadowmap, vec4(sampleDir, posLightSpaceNDC.z), 0.f);
 
-        const float faceExt = 
-          (faceIdx == 0 || faceIdx == 1) ? abs(sampleDir.x) :
-          (faceIdx == 2 || faceIdx == 3) ? abs(sampleDir.y) :
-          abs(sampleDir.z);
+        if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.pointLightShadowsTechnique))
+        {
+          const int gridDim = PCF_KERNEL_SIZES[constants.pointLightShadowsTechnique];
+          const int mid = gridDim / 2 + 1;
 
-        const vec3 baseDir = sampleDir / faceExt;
+          const float faceExt =
+            (faceIdx == 0 || faceIdx == 1) ? abs(sampleDir.x) :
+            (faceIdx == 2 || faceIdx == 3) ? abs(sampleDir.y) :
+            abs(sampleDir.z);
 
-        // PCF is symmetrical => dir does not matter
-        const vec3 ud = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 2 || faceIdx == 3) ? vec3(1.f, 0.f, 0.f) : vec3(0.f, 1.f, 0.f));
-        const vec3 vd = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 4 || faceIdx == 5) ? vec3(1.f, 0.f, 0.f) : vec3(0.f, 0.f, 1.f));
+          const vec3 baseDir = sampleDir / faceExt;
 
-        float sampleCount = 1.f;
+          // PCF is symmetrical => dir does not matter
+          const vec3 ud = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 2 || faceIdx == 3) ? vec3(1.f, 0.f, 0.f) : vec3(0.f, 1.f, 0.f));
+          const vec3 vd = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 4 || faceIdx == 5) ? vec3(1.f, 0.f, 0.f) : vec3(0.f, 0.f, 1.f));
 
-        for (int y = 0; y < gridDim; ++y)
-          for (int x = 0; x < gridDim; ++x)
-          {
-            if (x == 0 && y == 0)
-              continue;
+          float sampleCount = 1.f;
 
-            const vec3 sdir = normalize(baseDir + (float(x) - float(gridDim) * 0.5f) * ud + (float(y) - float(gridDim) * 0.5f) * vd);
+          for (int y = 0; y < gridDim; ++y)
+            for (int x = 0; x < gridDim; ++x)
+            {
+              if (x == mid && y == mid)
+                continue;
 
-            const float lsDepth =
-              sample_bindless_tex_cube_lod(lights.pointLights[i].shadowmap, sdir, 0.f).x;
+              const vec3 sdir = normalize(baseDir + (float(x) - float(gridDim) * 0.5f) * ud + (float(y) - float(gridDim) * 0.5f) * vd);
+              const float w = pcf_kernel_weight(x, y, constants.pointLightShadowsTechnique);
 
-            shadow += lsDepth < posLightSpaceNDC.z ? 0.f : 1.f;
-            sampleCount += 1.f;
-          }
+              shadow += w * sample_bindless_tex_cube_shadow_lod(
+                lights.pointLights[i].shadowmap, vec4(sdir, posLightSpaceNDC.z), 0.f);
+              sampleCount += w;
+            }
 
-        shadow /= sampleCount;
+          shadow /= sampleCount;
+        }
       }
     }
 
@@ -372,40 +372,38 @@ void main(void)
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
       const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
 
-      const float lDepth = sample_bindless_tex_lod(lights.spotLights[i].shadowmap, shadowUv, 0.f).x;
-
-      shadow = (
-        shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
-        shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
-        lDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
-
-      // @TODO: pull out
-      if (constants.spotLightShadowsTechnique == SHADOW_TECHNIQUE_PCF)
+      if (SHADOW_TECHNIQUE_IS_PCF(constants.spotLightShadowsTechnique))
       {
-        const int gridDim = 4; // @TODO: make a param
+        shadow = sample_bindless_tex_shadow_lod(
+          lights.spotLights[i].shadowmap, vec3(shadowUv, posLightSpaceNDC.z), 0.f);
 
-        const vec2 uvStep = vec2(1.f / SPOT_SM_RESOLUTION);
-        const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
+        // @TODO: pull out
+        if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.spotLightShadowsTechnique))
+        {
+          const int gridDim = PCF_KERNEL_SIZES[constants.spotLightShadowsTechnique];
+          const int mid = gridDim / 2 + 1;
 
-        float sampleCount = 1.f;
+          const vec2 uvStep = vec2(1.f / SPOT_SM_RESOLUTION);
+          const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
 
-        for (int y = 0; y < gridDim; ++y)
-          for (int x = 0; x < gridDim; ++x)
-          {
-            if (x == 0 && y == 0)
-              continue;
+          float sampleCount = 1.f;
 
-            const float lsDepth = sample_bindless_tex_lod(
-              lights.spotLights[i].shadowmap, uvBase + uvStep * vec2(float(x), float(y)), 0.f).x;
+          for (int y = 0; y < gridDim; ++y)
+            for (int x = 0; x < gridDim; ++x)
+            {
+              if (x == mid && y == mid)
+                continue;
 
-            shadow += (
-              shadowUv.x < SHADER_EPSILON || shadowUv.x > 1.f - SHADER_EPSILON ||
-              shadowUv.y < SHADER_EPSILON || shadowUv.y > 1.f - SHADER_EPSILON ||
-              lsDepth < posLightSpaceNDC.z) ? 0.f : 1.f;
-            sampleCount += 1.f;
-          }
+              const vec2 uv = uvBase + uvStep * vec2(float(x), float(y));
+              const float w = pcf_kernel_weight(x, y, constants.spotLightShadowsTechnique);
 
-        shadow /= sampleCount;
+              shadow += w * sample_bindless_tex_shadow_lod(
+                lights.spotLights[i].shadowmap, vec3(uv, posLightSpaceNDC.z), 0.f);
+              sampleCount += w;
+            }
+
+          shadow /= sampleCount;
+        }
       }
     }
 

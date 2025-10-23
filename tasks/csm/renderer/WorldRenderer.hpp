@@ -161,7 +161,12 @@ private:
   static constexpr size_t SHADOW_TECHNIQUE_COUNT = size_t(ShadowTechnique::COUNT);
 
   static constexpr std::array<std::string_view, SHADOW_TECHNIQUE_COUNT> SHADOW_TECHNIQUE_NAMES = {
-    "Hard", "PCF"};
+    "Simple",
+    "PCF3X3",
+    "PCF5X5",
+    "PCF7X7",
+    "PCF9X9",
+  };
 
   struct ShadowsSettings
   {
@@ -169,7 +174,7 @@ private:
     bool depthBias = true;
     bool frontFaceCull = false;
     uint8_t pad1_{};
-    ShadowTechnique technique = ShadowTechnique::PCF;
+    ShadowTechnique technique = ShadowTechnique::SIMPLE;
     float depthBiasConstantFactor = 0.5f;
     float depthBiasClamp = 0.f;
     float depthBiasSlopeFactor = 3.00f;
