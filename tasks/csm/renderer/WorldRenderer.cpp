@@ -1503,7 +1503,7 @@ void WorldRenderer::drawGui()
     }
     if (directionalLightShadowsSettings.enable)
     {
-      std::string text = std::format("Csm splits: [{}]{{{}", CSM_CASCADE_COUNT, mainCam.zNear);
+      std::string text = fmt::format("Csm splits: [{}]{{{}", CSM_CASCADE_COUNT, mainCam.zNear);
       const ViewParams mainCamParams =
         view_params_for_cam(mainCam, aspect(), false, false, csmSplitLambda, csmShadowDist);
       for (float split : std::span{
@@ -1660,8 +1660,8 @@ void WorldRenderer::drawGui()
       if (drawTerrain)
       {
         const bool prevDetailOn = drawTerrainSplattedDetail;
-        const bool prevTerrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
-        const bool prevTerrainNoisePeriod = terrainNoisePeriod;
+        const float prevTerrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
+        const float prevTerrainNoisePeriod = terrainNoisePeriod;
         ImGui::Checkbox("Draw terrain splatted details", &drawTerrainSplattedDetail);
         ImGui::SliderFloat("Terrain noise rel amplitude", &terrainNoiseRelHeightAmp, 0.f, 0.2f);
         ImGui::SliderFloat("Terrain noise period", &terrainNoisePeriod, 0.0001f, 2.f);

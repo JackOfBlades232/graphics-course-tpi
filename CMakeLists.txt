@@ -4,6 +4,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 project(graphics_course CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Prevent the user from polluting the root directory with build files
 if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
   message(
