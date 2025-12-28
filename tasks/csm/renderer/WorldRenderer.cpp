@@ -90,7 +90,7 @@ WorldRenderer::MeshPipeline::MeshPipeline(
 }
 
 WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
-  : sceneMgr{std::make_unique<SceneManager>()}
+  : sceneMgr{std::make_unique<SceneManager>(wc)}
   , wc{wc}
   , cfg{config}
 {
@@ -385,7 +385,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
   for (size_t i = 0; i < sceneMgr->getTextures().size(); ++i)
   {
-    const auto& tex = sceneMgr->getTextures()[i];
+    const auto& tex = sceneMgr->getTex(TexId(i));
     etna::Image::ViewParams vps{};
     if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
       vps.type = vk::ImageViewType::eCube;
@@ -396,7 +396,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
   {
-    const auto& smp = sceneMgr->getSamplers()[i];
+    const auto& smp = sceneMgr->getSmp(SmpId(i));
     smpBindings.emplace_back(etna::Binding{0, smp.genBinding(), uint32_t(i)});
   }
 
@@ -862,6 +862,42 @@ void WorldRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
+  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
+  memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
+
+  auto readyTids = sceneMgr->tickTextureTransfer(cmd_buf);
+  if (readyTids.size())
+  {
+    std::vector<etna::Binding> newBindings;
+    for (TexId tid : readyTids)
+    {
+      const auto& tex = sceneMgr->getTex(tid);
+      etna::Image::ViewParams vps{};
+      if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
+        vps.type = vk::ImageViewType::eCube;
+      newBindings.emplace_back(
+        etna::Binding{
+          0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(tid)});
+      registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", size_t(tid), tex.getName()));
+    }
+
+    bindlessTexturesDsetFrag.updateBindings(newBindings);
+    bindlessTexturesDsetComp.updateBindings(newBindings);
+
+    if (!initialTransition)
+    {
+      bindlessTexturesDsetFrag.processBarriers(cmd_buf);
+      bindlessTexturesDsetComp.processBarriers(cmd_buf);
+    }
+
+    if (std::any_of(readyTids.begin(), readyTids.end(), [this](TexId tid) {
+          return sceneMgr->isTerrainTexture(tid);
+        }))
+    {
+      queueClipmapInvalidation();
+    }
+  }
+
   // @TODO: unhack
   if (initialTransition)
   {
@@ -874,9 +910,6 @@ void WorldRenderer::renderWorld(
 
     initialTransition = false;
   }
-
-  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
-  memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
 
   {
     ETNA_PROFILE_GPU(cmd_buf, renderDeferred);
@@ -1852,49 +1885,51 @@ void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo
 void WorldRenderer::registerManagedImage(
   const etna::Image& img, std::optional<std::string> name_override)
 {
-  debugDrawers.emplace(
-    name_override ? *name_override : std::string{img.getName()},
-    DebugDrawer{
-      [&img, this](vk::CommandBuffer cb, vk::Image ti, vk::ImageView tiv) {
-        quadRenderer->render(
-          cb,
-          ti,
-          tiv,
-          {{0, 0},
-           {(resolution.y / 2) * img.getExtent().width / img.getExtent().height, resolution.y / 2}},
-          img,
-          defaultSampler,
-          currentDebugTexLayer,
-          currentDebugTexMip,
-          currentDebugTexColorRange,
-          currentDebugTexShowR,
-          currentDebugTexShowG,
-          currentDebugTexShowB,
-          currentDebugTexShowA);
-      },
-      [&img, this] {
-        ImGui::InputInt("Debug texture mip level", (int*)&currentDebugTexMip);
-        ImGui::InputInt("Debug texture layer", (int*)&currentDebugTexLayer);
-        ImGui::InputFloat2("Debug texture color range", &currentDebugTexColorRange.x);
-        ImGui::Checkbox("R", &currentDebugTexShowR);
-        ImGui::SameLine();
-        ImGui::Checkbox("G", &currentDebugTexShowG);
-        ImGui::SameLine();
-        ImGui::Checkbox("B", &currentDebugTexShowB);
-        ImGui::SameLine();
-        ImGui::Checkbox("A", &currentDebugTexShowA);
+  debugDrawers[name_override ? *name_override : std::string{img.getName()}] = DebugDrawer{
+    [&img, this](vk::CommandBuffer cb, vk::Image ti, vk::ImageView tiv) {
+      quadRenderer->render(
+        cb,
+        ti,
+        tiv,
+        {{0, 0},
+         {(resolution.y / 2) * img.getExtent().width / img.getExtent().height, resolution.y / 2}},
+        img,
+        defaultSampler,
+        currentDebugTexLayer,
+        currentDebugTexMip,
+        currentDebugTexColorRange,
+        currentDebugTexShowR,
+        currentDebugTexShowG,
+        currentDebugTexShowB,
+        currentDebugTexShowA);
+    },
+    [&img, this] {
+      ImGui::InputInt("Debug texture mip level", (int*)&currentDebugTexMip);
+      ImGui::InputInt("Debug texture layer", (int*)&currentDebugTexLayer);
+      ImGui::InputFloat2("Debug texture color range", &currentDebugTexColorRange.x);
+      ImGui::Checkbox("R", &currentDebugTexShowR);
+      ImGui::SameLine();
+      ImGui::Checkbox("G", &currentDebugTexShowG);
+      ImGui::SameLine();
+      ImGui::Checkbox("B", &currentDebugTexShowB);
+      ImGui::SameLine();
+      ImGui::Checkbox("A", &currentDebugTexShowA);
 
-        currentDebugTexColorRange.y =
-          std::max(currentDebugTexColorRange.x, currentDebugTexColorRange.y);
+      currentDebugTexColorRange.y =
+        std::max(currentDebugTexColorRange.x, currentDebugTexColorRange.y);
 
-        currentDebugTexMip =
-          uint32_t(glm::clamp(int32_t(currentDebugTexMip), 0, int32_t(img.getMipLevelCount() - 1)));
-        currentDebugTexLayer =
-          uint32_t(glm::clamp(int32_t(currentDebugTexLayer), 0, int32_t(img.getLayerCount() - 1)));
-      }});
+      currentDebugTexMip =
+        uint32_t(glm::clamp(int32_t(currentDebugTexMip), 0, int32_t(img.getMipLevelCount() - 1)));
+      currentDebugTexLayer =
+        uint32_t(glm::clamp(int32_t(currentDebugTexLayer), 0, int32_t(img.getLayerCount() - 1)));
+    }};
 }
 
-static void validate_hist_tonemapping_coeffs(float reg, float refined, float min_lum, float max_lum)
+static void validate_hist_tonemapping_coeffs(
+  [[maybe_unused]] float reg,
+  [[maybe_unused]] float refined,
+  [[maybe_unused]] float min_lum,
+  [[maybe_unused]] float max_lum)
 {
   ETNA_ASSERT(reg >= 0.f && reg <= 1.f);
   ETNA_ASSERT(refined >= 0.f && refined <= 1.f);

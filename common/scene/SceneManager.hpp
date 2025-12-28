@@ -3,7 +3,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <array>
-#include <string>
+
+#include <utils/Common.hpp>
 
 #include <glm/glm.hpp>
 #include <tiny_gltf.h>
@@ -11,6 +12,7 @@
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
 #include <etna/BlockingTransferHelper.hpp>
+#include <etna/PerFrameTransferHelper.hpp>
 #include <etna/VertexInput.hpp>
 #include <etna/GpuSharedResource.hpp>
 #include <etna/DescriptorSet.hpp>
@@ -42,12 +44,51 @@ struct SceneMultiplexing
   glm::vec3 offsets = {};
 };
 
+struct ScenePlanarTextureDesc
+{
+  TexId tid;
+  etna::AsyncImageUploadState gpuUploadState;
+  std::vector<unsigned char> content;
+
+  bool ready() const { return gpuUploadState.done(); }
+};
+
+struct SceneCubeTextureDesc
+{
+  TexId tid;
+  std::array<etna::AsyncImageUploadState, 6> gpuUploadState;
+  std::array<std::vector<unsigned char>, 6> content;
+
+  bool ready() const
+  {
+    return gpuUploadState[0].done() && gpuUploadState[1].done() && gpuUploadState[2].done() &&
+      gpuUploadState[3].done() && gpuUploadState[4].done() && gpuUploadState[5].done();
+  }
+};
+
+using SceneTextureDesc = std::variant<ScenePlanarTextureDesc, SceneCubeTextureDesc>;
+
+inline bool scene_tex_ready(const SceneTextureDesc& desc)
+{
+  return std::visit([](const auto& d) { return d.ready(); }, desc);
+}
+
+inline TexId scene_tex_tid(const SceneTextureDesc& desc)
+{
+  return std::visit([](const auto& d) { return d.tid; }, desc);
+}
+
+inline void cleanup_scene_tex(SceneTextureDesc& desc)
+{
+  std::visit([](auto& d) { d.content = {}; }, desc);
+}
+
 using CsmCascades = std::array<etna::Image, CSM_CASCADE_COUNT>;
 
 class SceneManager
 {
 public:
-  SceneManager();
+  explicit SceneManager(const etna::GpuWorkCount& wc);
 
   void selectScene(std::filesystem::path path, const SceneMultiplexing& multiplex = {});
 
@@ -93,7 +134,27 @@ public:
   std::span<const etna::Image> getTextures() const { return textures; }
   std::span<const etna::Sampler> getSamplers() const { return samplers; }
 
-  const etna::Image& getTex(TexId tid) const { return textures[size_t(tid)]; }
+  const etna::Image& getTex(TexId tid) const
+  {
+    if (size_t(tid) >= sceneTextures.size())
+      return textures[size_t(tid)];
+
+    if (scene_tex_ready(sceneTextures[size_t(tid)]))
+    {
+      return textures[size_t(tid)];
+    }
+    else
+    {
+      return std::visit(
+        [this](const auto& d) -> const etna::Image& {
+          if constexpr (VARIANT_IS(d, ScenePlanarTextureDesc))
+            return planarTexStub;
+          else
+            return cubeTexStub;
+        },
+        sceneTextures[size_t(tid)]);
+    }
+  }
   const etna::Sampler& getSmp(SmpId sid) const { return samplers[size_t(sid)]; }
 
   std::span<const etna::Image> getPointLightMaps() const { return pointLightMaps; }
@@ -116,6 +177,38 @@ public:
     return *terrainData;
   }
 
+  bool isTerrainTexture(TexId tid) const
+  {
+    if (!hasTerrain())
+      return false;
+    if (tid == TexId::INVALID)
+      return false;
+    if (unpack_tex_smp_id_pair(terrainData->heightmapTexSmp).tid == tid)
+      return true;
+    if (unpack_tex_smp_id_pair(terrainData->splattingMaskTexSmp).tid == tid)
+      return true;
+    for (size_t i = 0; i < TERRAIN_MAX_DETAILS; ++i)
+    {
+      MaterialId mid = terrainData->details[i].matId;
+      if (mid == NO_MATERIAL)
+        continue;
+      const Material &mat = materialParams[size_t(mid)];
+      if (unpack_tex_smp_id_pair(mat.normalTexSmp).tid == tid)
+        return true;
+      if (unpack_tex_smp_id_pair(mat.baseColorTexSmp).tid == tid)
+        return true;
+      if (unpack_tex_smp_id_pair(mat.metalnessRoughnessTexSmp).tid == tid)
+        return true;
+      if (unpack_tex_smp_id_pair(mat.diffuseTexSmp).tid == tid)
+        return true;
+      // if (unpack_tex_smp_id_pair(mat.specularGlossinessTexSmp).tid == tid)
+      //   return true;
+      if (unpack_tex_smp_id_pair(mat.heightDisplacementTexSmp).tid == tid)
+        return true;
+    }
+    return false;
+  }
+
   bool hasSkybox() const { return skyboxData.has_value(); }
   const SkyboxSourceData& getSkyboxData() const
   {
@@ -132,6 +225,8 @@ public:
     "KHR_mesh_quantization",
     "JB_terrain",
     "JB_skybox"};
+
+  std::vector<TexId> tickTextureTransfer(vk::CommandBuffer cmd_buf);
 
 private:
   std::optional<tinygltf::Model> loadModel(std::filesystem::path path);
@@ -197,7 +292,8 @@ private:
 private:
   tinygltf::TinyGLTF loader;
   std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
-  etna::BlockingTransferHelper transferHelper;
+  etna::BlockingTransferHelper blockingTransferHelper;
+  etna::PerFrameTransferHelper streamingTransferHelper;
 
   // @NOTE: keeping meshes and relems around can help add live scene editing
   std::vector<RenderElement> renderElements;
@@ -208,6 +304,8 @@ private:
   std::vector<IndirectCommand> sceneDrawCommands;
   std::vector<BBox> bboxes;
   std::vector<CullableInstance> allInstances;
+
+  std::vector<Material> materialParams;
 
   std::span<IndirectCommand> sceneObjectsDrawCommands;
   std::span<IndirectCommand> terrainChunksDrawCommands;
@@ -223,6 +321,12 @@ private:
   std::span<const etna::Image> pointLightMaps{};
   std::span<const etna::Image> spotLightMaps{};
   std::span<const etna::Image> directionalLightCsmCascades{}; // @TODO: should be an mdspan
+
+  std::vector<SceneTextureDesc> sceneTextures{};
+  size_t texturesUploaded = 0;
+  etna::Image planarTexStub;
+  etna::Image cubeTexStub;
+  etna::Sampler samplerStub;
 
   etna::Buffer unifiedVbuf;
   etna::Buffer unifiedIbuf;

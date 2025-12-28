@@ -1,5 +1,7 @@
 #include "Common.hpp"
 
+#include <utils/Common.hpp>
+
 #include <etna/Vulkan.hpp>
 #include <etna/Etna.hpp>
 #include <etna/GlobalContext.hpp>
@@ -16,7 +18,7 @@ void emit_barriers(
   {
     std::visit(
       [&](const auto& b) {
-        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(b)>, vk::BufferMemoryBarrier2>)
+        if constexpr (VARIANT_IS(b, vk::BufferMemoryBarrier2))
           bufferBarriers.push_back(b);
         else
           imageBarriers.push_back(b);

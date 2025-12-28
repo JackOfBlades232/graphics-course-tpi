@@ -8,7 +8,7 @@ nnoremap <Leader>b :!pushd build && cmake --build . && popd<CR>
 if g:os == "Windows"
   nnoremap <Leader>f :!clang-format -i %:p<CR>
 else
-  nnoremap <Leader>f :!clang-format-18 -i %:p<CR>
+  nnoremap <Leader>f :!clang-format-21 -i %:p<CR>
 endif
 
 command! ClangFormat !python3 clang_format_all.py

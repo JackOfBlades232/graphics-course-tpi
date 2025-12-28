@@ -48,6 +48,7 @@ enum class MaterialId : uint32_t
 };
 
 #define NO_TEXTURE_ID pack_tex_smp_id_pair(TexId::INVALID, SmpId::INVALID)
+#define NO_MATERIAL MaterialId::INVALID
 
 #define MATERIAL_MISSING 0
 #define MATERIAL_PBR MaterialType::PBR

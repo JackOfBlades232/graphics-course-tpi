@@ -15,7 +15,7 @@ struct TerrainDetailRule
   shader_vec2 heightRange;
   shader_uint splattingCompId;
   shader_uint splattingCompMask;
-  shader_uint matId;
+  MaterialId matId;
   shader_uint flags;
 };
 

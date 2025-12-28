@@ -96,3 +96,5 @@ static std::array<T, N> array_make(F&& make)
   {                                                                                                \
     f_                                                                                             \
   }
+
+#define VARIANT_IS(v_, t_) (std::is_same_v<std::remove_cvref_t<decltype(v_)>, t_>)
