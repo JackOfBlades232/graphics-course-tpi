@@ -19,6 +19,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <etna/GlobalContext.hpp>
 #include <etna/OneShotCmdMgr.hpp>
+#include <stb_image.h>
 
 #include <filesystem>
 #include <stack>
@@ -27,8 +28,9 @@
 SceneManager::SceneManager(const etna::GpuWorkCount& wc)
   : oneShotCommands{etna::get_context().createOneShotCmdMgr()}
   , blockingTransferHelper{etna::BlockingTransferHelper::CreateInfo{.stagingSize = 4096 * 4096 * 4}}
-  , streamingTransferHelper{
-      etna::PerFrameTransferHelper::CreateInfo{.stagingSize = 4096 * 4096 * 4, .wc = &wc}}
+  , streamingTransferHelper{etna::PerFrameTransferHelper::CreateInfo{
+      .stagingSize = 4096 * 4096 * 4, .wc = &wc}}
+  , streamingThread{[this] { streamingLoop(); }}
 {
 }
 
@@ -586,7 +588,8 @@ SceneManager::ProcessedLights SceneManager::processLights(
   if (directionalOverflowed)
   {
     spdlog::warn(
-      "The model contained more directional lights than supported (max={}), truncated to max count",
+      "The model contained more directional lights than supported (max={}), truncated to max "
+      "count",
       DIRECTIONAL_LIGHT_BUF_SIZE);
   }
 
@@ -758,14 +761,14 @@ void SceneManager::uploadData(
 
 void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexing& multiplex)
 {
+  ETNA_ASSERT(!sceneInited.test(std::memory_order_relaxed));
+
   auto maybeModel = loadModel(path);
   if (!maybeModel.has_value())
     return;
 
-  ETNA_ASSERT(!loaded);
-  loaded = true;
-
   auto model = std::move(*maybeModel);
+  scenePath = path;
 
   // @TODO: prune unreferenced in baker
 
@@ -974,88 +977,25 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     {
       auto& loadedImg = model.images[i];
 
-      ETNA_ASSERT(
-        loadedImg.bits == 8 && loadedImg.component == 4 &&
-        loadedImg.pixel_type ==
-          TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE); // @TODO: support or graciously err
+      // @TODO: adaptive somehow for embedded images?
+      ETNA_ASSERT(loadedImg.image.empty());
+      ETNA_ASSERT(!loadedImg.uri.empty());
 
       // Needed until it's pruned for usage
       const auto format = requiredImageFormats[i] == vk::Format::eUndefined
         ? vk::Format::eR8G8B8A8Unorm
         : requiredImageFormats[i];
 
-      etna::Image img;
+      const bool isCube =
+        skyboxData && cubemapLoadedId >= 0 && model.textures[cubemapLoadedId].source == int(i);
 
-      // @TODO: stream gltf image load
+      auto& st = sceneTextures.emplace_back();
+      st.tid = TexId(i);
+      st.uri = loadedImg.uri;
+      st.format = format;
+      st.isCube = isCube;
 
-      if (skyboxData && cubemapLoadedId >= 0 && model.textures[cubemapLoadedId].source == int(i))
-      {
-        const uint32_t side = uint32_t(loadedImg.width) / 4;
-
-        // @TODO: stream this
-        std::array<std::vector<unsigned char>, 6> imageDatas{};
-        std::array bases{
-          glm::uvec2{2 * side, side},
-          glm::uvec2{0, side},
-          glm::uvec2{side, 0},
-          glm::uvec2{side, 2 * side},
-          glm::uvec2{side, side},
-          glm::uvec2{3 * side, side}};
-
-        for (size_t j = 0; j < 6; ++j)
-        {
-          auto& data = imageDatas[j];
-          const auto& base = bases[j];
-
-          data.resize(side * side * 4);
-          size_t dstId = 0;
-          for (uint32_t y = base.y; y < base.y + side; ++y)
-            for (uint32_t x = base.x; x < base.x + side; ++x)
-            {
-              memcpy(
-                data.data() + dstId,
-                loadedImg.image.data() + (y * uint32_t(loadedImg.width) + x) * 4,
-                4);
-              dstId += 4;
-            }
-        }
-
-        loadedImg.image.clear();
-        loadedImg.image.shrink_to_fit();
-
-        img = create_image(
-          etna::Image::CreateInfo{
-            .extent = {side, side, 1},
-            .name = loadedImg.uri,
-            .format = format,
-            .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-              vk::ImageUsageFlagBits::eTransferDst,
-            .layers = 6,
-            .mipLevels = mip_count_for_dims(side, side),
-            .flags = vk::ImageCreateFlagBits::eCubeCompatible});
-
-        sceneTextures.emplace_back(SceneCubeTextureDesc{TexId(i), {}, std::move(imageDatas)});
-      }
-      else
-      {
-        img = create_image(
-          etna::Image::CreateInfo{
-            .extent = {uint32_t(loadedImg.width), uint32_t(loadedImg.height), 1},
-            .name = loadedImg.uri,
-            .format = format,
-            .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-              vk::ImageUsageFlagBits::eTransferDst,
-            .mipLevels =
-              mip_count_for_dims(uint32_t(loadedImg.width), uint32_t(loadedImg.height))});
-
-        sceneTextures.emplace_back(
-          ScenePlanarTextureDesc{TexId(i), {}, std::move(loadedImg.image)});
-        auto& desc = std::get<ScenePlanarTextureDesc>(sceneTextures.back());
-        desc.gpuUploadState = streamingTransferHelper.startUploadImageAsync(
-          img, 0, 0, {(const std::byte*)desc.content.data(), desc.content.size()});
-      }
-
-      textures.push_back(std::move(img));
+      textures.emplace_back();
     }
 
     {
@@ -1160,27 +1100,12 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
 
   for (auto& st : sceneTextures)
   {
-    std::visit(
-      [&, this](auto& d) {
-        if constexpr (VARIANT_IS(d, ScenePlanarTextureDesc))
-        {
-          d.gpuUploadState = streamingTransferHelper.startUploadImageAsync(
-            textures[size_t(d.tid)], 0, 0, {(const std::byte*)d.content.data(), d.content.size()});
-        }
-        else
-        {
-          for (int j = 0; j < 6; ++j)
-          {
-            d.gpuUploadState[j] = streamingTransferHelper.startUploadImageAsync(
-              textures[size_t(d.tid)],
-              0,
-              j,
-              {(const std::byte*)d.content[j].data(), d.content[j].size()});
-          }
-        }
-      },
-      st);
+    st.uploadStage = (std::atomic<SceneTextureUploadStage>*)st.uploadStageStorage;
+    std::construct_at(st.uploadStage, SceneTextureUploadStage::INIT);
   }
+
+  sceneInited.test_and_set(std::memory_order_release);
+  sceneInited.notify_one();
 }
 
 etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription()
@@ -1211,41 +1136,176 @@ std::vector<TexId> SceneManager::tickTextureTransfer(vk::CommandBuffer cmd_buf)
     {
       for (auto& st : sceneTextures)
       {
+        auto curStage = st.uploadStage->load(std::memory_order_acquire);
+        if (curStage == SceneTextureUploadStage::DONE_LOADING_FROM_DISK)
+        {
+          uint32_t w = st.isCube ? st.as.cube.side : st.as.planar.w;
+          uint32_t h = st.isCube ? st.as.cube.side : st.as.planar.h;
+
+          textures[size_t(st.tid)] = create_image(
+            etna::Image::CreateInfo{
+              .extent = {w, h, 1},
+              .name = st.uri,
+              .format = st.format,
+              .imageUsage = vk::ImageUsageFlagBits::eSampled |
+                vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
+              .layers = st.isCube ? 6u : 1u,
+              .mipLevels = mip_count_for_dims(w, h),
+              .flags =
+                st.isCube ? vk::ImageCreateFlagBits::eCubeCompatible : vk::ImageCreateFlags{}});
+
+          if (st.isCube)
+          {
+            for (int j = 0; j < 6; ++j)
+            {
+              st.as.cube.gpuUploadState[j] = streamingTransferHelper.startUploadImageAsync(
+                textures[size_t(st.tid)],
+                0,
+                j,
+                {(const std::byte*)st.as.cube.content[j].data(), st.as.cube.content[j].size()});
+            }
+          }
+          else
+          {
+            st.as.planar.gpuUploadState = streamingTransferHelper.startUploadImageAsync(
+              textures[size_t(st.tid)],
+              0,
+              0,
+              {(const std::byte*)st.as.planar.content.data(), st.as.planar.content.size()});
+          }
+
+          st.uploadStage->store(
+            SceneTextureUploadStage::UPLOADING_TO_GPU, std::memory_order_release);
+        }
+        else if (curStage != SceneTextureUploadStage::UPLOADING_TO_GPU)
+        {
+          continue;
+        }
+
         if (!upload.hasSpaceThisFrame())
           break;
-        else if (scene_tex_ready(st))
-          continue;
 
-        std::visit(
-          [&](auto& d) {
-            if constexpr (VARIANT_IS(d, ScenePlanarTextureDesc))
+        bool finished = false;
+        if (st.isCube)
+        {
+          int doneFaces = 0;
+          for (auto& us : st.as.cube.gpuUploadState)
+          {
+            if (us.done())
             {
-              if (upload.progressImageUploadAsync(cmd_buf, d.gpuUploadState))
-                gen_mips(cmd_buf, *d.gpuUploadState.dst);
+              ++doneFaces;
             }
             else
             {
-              for (auto& us : d.gpuUploadState)
+              if (upload.progressImageUploadAsync(cmd_buf, us))
               {
-                if (!us.done())
-                {
-                  if (upload.progressImageUploadAsync(cmd_buf, us))
-                    gen_mips(cmd_buf, *us.dst);
-                }
+                gen_mips(cmd_buf, *us.dst);
+                ++doneFaces;
               }
             }
-          },
-          st);
+          }
+          finished = doneFaces == 6;
+        }
+        else
+        {
+          if (upload.progressImageUploadAsync(cmd_buf, st.as.planar.gpuUploadState))
+          {
+            gen_mips(cmd_buf, *st.as.planar.gpuUploadState.dst);
+            finished = true;
+          }
+        }
 
-        if (scene_tex_ready(st))
+        if (finished)
         {
           ++texturesUploaded;
-          cleanup_scene_tex(st);
-          readyTids.push_back(scene_tex_tid(st));
+          st.uploadStage->store(SceneTextureUploadStage::DONE, std::memory_order_release);
+          st.cleanup();
+          readyTids.push_back(st.tid);
         }
       }
     }
   }
 
   return readyTids;
+}
+
+// @TODO: cancellation on premature shutdown
+void SceneManager::streamingLoop()
+{
+  while (!sceneInited.test(std::memory_order_acquire))
+    sceneInited.wait(false, std::memory_order_relaxed);
+
+  auto sceneRoot = scenePath.parent_path();
+
+  for (auto& st : sceneTextures)
+  {
+    st.uploadStage->store(SceneTextureUploadStage::LOADING_FROM_DISK, std::memory_order_release);
+
+    auto texPath = std::filesystem::path{st.uri};
+    auto texFname = texPath.filename();
+    auto realPath = sceneRoot;
+    realPath.append(texFname.string());
+
+    if (realPath.extension() != ".png")
+      ETNA_PANIC("Invalid texture \"{}\", only allowed .png files", texPath);
+
+    int texW, texH, texChannels;
+    unsigned char* texData =
+      stbi_load(to_char_str(realPath.string()).c_str(), &texW, &texH, &texChannels, 4);
+    ETNA_VERIFY(texData);
+    ETNA_VERIFY(texChannels == 4);
+
+    if (st.isCube)
+    {
+      ETNA_ASSERT(texW % 4 == 0);
+      const uint32_t side = uint32_t(texW) / 4;
+      ETNA_ASSERT(uint32_t(texH) == 3 * side);
+
+      std::array<std::vector<unsigned char>, 6> imageDatas{};
+      std::array bases{
+        glm::uvec2{2 * side, side},
+        glm::uvec2{0, side},
+        glm::uvec2{side, 0},
+        glm::uvec2{side, 2 * side},
+        glm::uvec2{side, side},
+        glm::uvec2{3 * side, side}};
+
+      // @TODO: faster, by line, good to measure first
+      for (size_t j = 0; j < 6; ++j)
+      {
+        auto& data = imageDatas[j];
+        const auto& base = bases[j];
+
+        data.resize(side * side * 4);
+        size_t dstId = 0;
+        for (uint32_t y = base.y; y < base.y + side; ++y)
+          for (uint32_t x = base.x; x < base.x + side; ++x)
+          {
+            memcpy(data.data() + dstId, texData + (y * uint32_t(texW) + x) * 4, 4);
+            dstId += 4;
+          }
+      }
+
+      st.as.cube.content = std::move(imageDatas);
+      st.as.cube.side = side;
+    }
+    else
+    {
+      // @SPEED this is also dumbbb
+      std::vector<unsigned char> imageData{};
+      imageData.resize(texH * texW * 4);
+
+      memcpy(imageData.data(), texData, imageData.size());
+
+      st.as.planar.w = uint32_t(texW);
+      st.as.planar.h = uint32_t(texH);
+      st.as.planar.content = std::move(imageData);
+    }
+
+    st.uploadStage->store(
+      SceneTextureUploadStage::DONE_LOADING_FROM_DISK, std::memory_order_release);
+
+    // @SPEED: can be avoided for planar, and for cube with offline repack
+    stbi_image_free(texData);
+  }
 }

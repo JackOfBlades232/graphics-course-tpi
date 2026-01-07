@@ -1,22 +1,13 @@
 #include "App.hpp"
 
+#include <utils/Common.hpp>
+
 #include <tracy/Tracy.hpp>
 
 #include <filesystem>
 #include <string>
 #include <charconv>
 
-
-// @TODO: pull out
-template <class TS>
-  requires(std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
-std::string to_char_str(const TS& s)
-{
-  if constexpr (std::same_as<TS, std::string>)
-    return s;
-  else
-    return std::to_string(s);
-}
 
 App::App(const char* scene_name, std::span<const char* const> argv)
 {

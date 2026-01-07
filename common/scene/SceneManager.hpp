@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <array>
+#include <thread>
+#include <atomic>
 
 #include <utils/Common.hpp>
 
@@ -44,44 +46,65 @@ struct SceneMultiplexing
   glm::vec3 offsets = {};
 };
 
-struct ScenePlanarTextureDesc
+enum class SceneTextureUploadStage
 {
-  TexId tid;
-  etna::AsyncImageUploadState gpuUploadState;
-  std::vector<unsigned char> content;
-
-  bool ready() const { return gpuUploadState.done(); }
+  INIT,
+  LOADING_FROM_DISK,
+  DONE_LOADING_FROM_DISK,
+  UPLOADING_TO_GPU,
+  DONE,
+  FAILED
 };
 
-struct SceneCubeTextureDesc
+struct SceneTextureDesc
 {
-  TexId tid;
-  std::array<etna::AsyncImageUploadState, 6> gpuUploadState;
-  std::array<std::vector<unsigned char>, 6> content;
-
-  bool ready() const
+  TexId tid{TexId::INVALID};
+  std::string uri{};
+  vk::Format format{vk::Format::eUndefined};
+  std::atomic<SceneTextureUploadStage>* uploadStage{nullptr};
+  alignas(SceneTextureUploadStage) uint8_t uploadStageStorage[sizeof(SceneTextureUploadStage)]{};
+  bool isCube = false;
+  struct As
   {
-    return gpuUploadState[0].done() && gpuUploadState[1].done() && gpuUploadState[2].done() &&
-      gpuUploadState[3].done() && gpuUploadState[4].done() && gpuUploadState[5].done();
+    struct Planar
+    {
+      uint32_t w, h;
+      etna::AsyncImageUploadState gpuUploadState;
+      std::vector<unsigned char> content;
+    } planar;
+    struct Cube
+    {
+      uint32_t side;
+      std::array<etna::AsyncImageUploadState, 6> gpuUploadState;
+      std::array<std::vector<unsigned char>, 6> content;
+    } cube;
+  } as;
+
+  SceneTextureDesc() = default;
+  SceneTextureDesc(const SceneTextureDesc&) = default;
+  SceneTextureDesc(SceneTextureDesc&&) = default;
+  SceneTextureDesc& operator=(const SceneTextureDesc&) = default;
+  SceneTextureDesc& operator=(SceneTextureDesc&&) = default;
+
+  ~SceneTextureDesc()
+  {
+    if (uploadStage)
+      std::destroy_at(uploadStage);
+  }
+
+  bool acqReady() const
+  {
+    return uploadStage->load(std::memory_order_acquire) == SceneTextureUploadStage::DONE;
+  }
+
+  void cleanup()
+  {
+    if (isCube)
+      as.cube.content = {};
+    else
+      as.planar.content = {};
   }
 };
-
-using SceneTextureDesc = std::variant<ScenePlanarTextureDesc, SceneCubeTextureDesc>;
-
-inline bool scene_tex_ready(const SceneTextureDesc& desc)
-{
-  return std::visit([](const auto& d) { return d.ready(); }, desc);
-}
-
-inline TexId scene_tex_tid(const SceneTextureDesc& desc)
-{
-  return std::visit([](const auto& d) { return d.tid; }, desc);
-}
-
-inline void cleanup_scene_tex(SceneTextureDesc& desc)
-{
-  std::visit([](auto& d) { d.content = {}; }, desc);
-}
 
 using CsmCascades = std::array<etna::Image, CSM_CASCADE_COUNT>;
 
@@ -136,23 +159,24 @@ public:
 
   const etna::Image& getTex(TexId tid) const
   {
-    if (size_t(tid) >= sceneTextures.size())
-      return textures[size_t(tid)];
+    const auto& t = textures[size_t(tid)];
 
-    if (scene_tex_ready(sceneTextures[size_t(tid)]))
+    if (size_t(tid) >= sceneTextures.size())
+      return t;
+
+    const auto& st = sceneTextures[size_t(tid)];
+    ETNA_ASSERT(st.tid == tid);
+
+    if (st.acqReady())
     {
-      return textures[size_t(tid)];
+      return t;
     }
     else
     {
-      return std::visit(
-        [this](const auto& d) -> const etna::Image& {
-          if constexpr (VARIANT_IS(d, ScenePlanarTextureDesc))
-            return planarTexStub;
-          else
-            return cubeTexStub;
-        },
-        sceneTextures[size_t(tid)]);
+      if (st.isCube)
+        return cubeTexStub;
+      else
+        return planarTexStub;
     }
   }
   const etna::Sampler& getSmp(SmpId sid) const { return samplers[size_t(sid)]; }
@@ -192,7 +216,7 @@ public:
       MaterialId mid = terrainData->details[i].matId;
       if (mid == NO_MATERIAL)
         continue;
-      const Material &mat = materialParams[size_t(mid)];
+      const Material& mat = materialParams[size_t(mid)];
       if (unpack_tex_smp_id_pair(mat.normalTexSmp).tid == tid)
         return true;
       if (unpack_tex_smp_id_pair(mat.baseColorTexSmp).tid == tid)
@@ -289,8 +313,12 @@ private:
     std::span<const CullableInstance> instances,
     std::span<const Material> material_params);
 
+  void streamingLoop();
+
 private:
   tinygltf::TinyGLTF loader;
+  std::filesystem::path scenePath;
+
   std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
   etna::BlockingTransferHelper blockingTransferHelper;
   etna::PerFrameTransferHelper streamingTransferHelper;
@@ -328,6 +356,9 @@ private:
   etna::Image cubeTexStub;
   etna::Sampler samplerStub;
 
+  std::jthread streamingThread;
+  std::atomic_flag sceneInited{};
+
   etna::Buffer unifiedVbuf;
   etna::Buffer unifiedIbuf;
 
@@ -337,6 +368,4 @@ private:
   etna::Buffer indirectDrawBuf;
   etna::Buffer instancesBuf;
   etna::Buffer materialParamsBuf;
-
-  bool loaded = false;
 };
