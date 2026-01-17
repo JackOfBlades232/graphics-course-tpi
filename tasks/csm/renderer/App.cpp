@@ -38,14 +38,17 @@ App::App(const char* scene_name, std::span<const char* const> argv)
   // @TODO: how is this validated?
   std::filesystem::path scenePath{
     (GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/") + std::string{scene_name} + "/baked/"};
-  for (const auto& entry : std::filesystem::directory_iterator(scenePath))
+  if (std::filesystem::exists(scenePath))
   {
-    // @TODO: do I have to support binary file separately? Don't remember
-    if (entry.is_regular_file() && entry.path().extension() == ".gltf")
+    for (const auto& entry : std::filesystem::directory_iterator(scenePath))
     {
-      spdlog::info("Loading scene from {}", to_char_str(entry.path().string()));
-      render->loadScene(entry.path().c_str());
-      return;
+      // @TODO: do I have to support binary file separately? Don't remember
+      if (entry.is_regular_file() && entry.path().extension() == ".gltf")
+      {
+        spdlog::info("Loading scene from {}", to_char_str(entry.path().string()));
+        render->loadScene(entry.path().c_str());
+        return;
+      }
     }
   }
 
