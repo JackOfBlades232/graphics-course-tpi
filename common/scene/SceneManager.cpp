@@ -29,7 +29,7 @@ SceneManager::SceneManager(const etna::GpuWorkCount& wc)
   : oneShotCommands{etna::get_context().createOneShotCmdMgr()}
   , blockingTransferHelper{etna::BlockingTransferHelper::CreateInfo{.stagingSize = 4096 * 4096 * 4}}
   , streamingTransferHelper{etna::PerFrameTransferHelper::CreateInfo{
-      .stagingSize = 4096 * 4096 * 4, .wc = &wc}}
+      .totalStagingSize = 4096 * 4096 * 4, .wc = &wc}}
   , streamingThread{[this] { streamingLoop(); }}
 {
 }
@@ -1136,13 +1136,15 @@ std::vector<TexId> SceneManager::tickTextureTransfer(vk::CommandBuffer cmd_buf)
     {
       for (auto& st : sceneTextures)
       {
+        etna::Image &img = textures[size_t(st.tid)];
+
         auto curStage = st.uploadStage->load(std::memory_order_acquire);
         if (curStage == SceneTextureUploadStage::DONE_LOADING_FROM_DISK)
         {
           uint32_t w = st.isCube ? st.as.cube.side : st.as.planar.w;
           uint32_t h = st.isCube ? st.as.cube.side : st.as.planar.h;
 
-          textures[size_t(st.tid)] = create_image(
+          img = create_image(
             etna::Image::CreateInfo{
               .extent = {w, h, 1},
               .name = st.uri,
@@ -1158,8 +1160,8 @@ std::vector<TexId> SceneManager::tickTextureTransfer(vk::CommandBuffer cmd_buf)
           {
             for (int j = 0; j < 6; ++j)
             {
-              st.as.cube.gpuUploadState[j] = streamingTransferHelper.startUploadImageAsync(
-                textures[size_t(st.tid)],
+              st.as.cube.gpuUploadState[j] = streamingTransferHelper.initUploadImageAsync(
+                img,
                 0,
                 j,
                 {(const std::byte*)st.as.cube.content[j].data(), st.as.cube.content[j].size()});
@@ -1167,8 +1169,8 @@ std::vector<TexId> SceneManager::tickTextureTransfer(vk::CommandBuffer cmd_buf)
           }
           else
           {
-            st.as.planar.gpuUploadState = streamingTransferHelper.startUploadImageAsync(
-              textures[size_t(st.tid)],
+            st.as.planar.gpuUploadState = streamingTransferHelper.initUploadImageAsync(
+              img,
               0,
               0,
               {(const std::byte*)st.as.planar.content.data(), st.as.planar.content.size()});
@@ -1199,18 +1201,21 @@ std::vector<TexId> SceneManager::tickTextureTransfer(vk::CommandBuffer cmd_buf)
             {
               if (upload.progressImageUploadAsync(cmd_buf, us))
               {
-                gen_mips(cmd_buf, *us.dst);
                 ++doneFaces;
               }
             }
           }
-          finished = doneFaces == 6;
+          if (doneFaces == 6)
+          {
+            gen_mips(cmd_buf, img);
+            finished = true;
+          }
         }
         else
         {
           if (upload.progressImageUploadAsync(cmd_buf, st.as.planar.gpuUploadState))
           {
-            gen_mips(cmd_buf, *st.as.planar.gpuUploadState.dst);
+            gen_mips(cmd_buf, img);
             finished = true;
           }
         }
