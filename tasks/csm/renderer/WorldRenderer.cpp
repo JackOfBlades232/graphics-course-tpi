@@ -862,10 +862,7 @@ void WorldRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
-  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
-  memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
-
-  auto readyTids = sceneMgr->tickTextureTransfer(cmd_buf);
+  auto readyTids = sceneMgr->tickTransfer(cmd_buf);
   if (readyTids.size())
   {
     std::vector<etna::Binding> newBindings;
@@ -897,6 +894,20 @@ void WorldRenderer::renderWorld(
       queueClipmapInvalidation();
     }
   }
+
+  // @NOTE: can be more adaptive
+  if (!sceneMgr->canRender())
+  {
+    etna::RenderTargetState renderTargets(
+      cmd_buf,
+      {{0, 0}, {resolution.x, resolution.y}},
+      {{.image = target_image, .view = target_image_view, .loadOp = vk::AttachmentLoadOp::eClear}},
+      {});
+    return;
+  }
+
+  memcpy(constants->get().data(), &constantsData, sizeof(constantsData));
+  memcpy(lights->get().data(), &sceneMgr->getLights(), sizeof(sceneMgr->getLights()));
 
   // @TODO: unhack
   if (initialTransition)

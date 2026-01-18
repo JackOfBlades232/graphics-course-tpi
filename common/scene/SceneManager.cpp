@@ -25,10 +25,12 @@
 #include <stack>
 #include <unordered_map>
 
+static constexpr const std::byte STUB_COLOR[4] = {
+  std::byte{0xFF}, std::byte{0xFF}, std::byte{0xFF}, std::byte{0xFF}};
+
 SceneManager::SceneManager(const etna::GpuWorkCount& wc)
   : oneShotCommands{etna::get_context().createOneShotCmdMgr()}
-  , blockingTransferHelper{etna::BlockingTransferHelper::CreateInfo{.stagingSize = 4096 * 4096 * 4}}
-  , streamingTransferHelper{etna::PerFrameTransferHelper::CreateInfo{
+  , streamer{etna::PerFrameTransferHelper::CreateInfo{
       .totalStagingSize = 4096 * 4096 * 4, .wc = &wc}}
   , streamingThread{[this] { streamingLoop(); }}
 {
@@ -675,7 +677,7 @@ SceneManager::ProcessedLights SceneManager::processLights(
     std::move(lights), pointLightShadowmaps, spotLightShadowmaps, directionalLightCsmCascadeMaps};
 }
 
-void SceneManager::uploadData(
+void SceneManager::startDataUpload(
   std::span<const Vertex> vertices,
   std::span<const uint32_t> indices,
   std::span<const glm::mat4> instance_matrices,
@@ -746,17 +748,19 @@ void SceneManager::uploadData(
       .name = "materialParamsBuf",
     });
 
-  blockingTransferHelper.uploadBuffer<Vertex>(*oneShotCommands, unifiedVbuf, 0, vertices);
-  blockingTransferHelper.uploadBuffer<uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
-  blockingTransferHelper.uploadBuffer<glm::mat4>(
-    *oneShotCommands, matricesBuf, 0, instance_matrices);
-  blockingTransferHelper.uploadBuffer<IndirectCommand>(
-    *oneShotCommands, indirectDrawBuf, 0, draw_commands);
-  blockingTransferHelper.uploadBuffer<BBox>(*oneShotCommands, bboxesBuf, 0, boxes);
-  blockingTransferHelper.uploadBuffer<CullableInstance>(
-    *oneShotCommands, instancesBuf, 0, instances);
-  blockingTransferHelper.uploadBuffer<Material>(
-    *oneShotCommands, materialParamsBuf, 0, material_params);
+  sceneDataUpload.unifiedVbufGpuUpload =
+    streamer.initUploadBufferAsync<Vertex>(unifiedVbuf, 0, vertices);
+  sceneDataUpload.unifiedIbufGpuUpload =
+    streamer.initUploadBufferAsync<uint32_t>(unifiedIbuf, 0, indices);
+  sceneDataUpload.matricesBufGpuUpload =
+    streamer.initUploadBufferAsync<glm::mat4>(matricesBuf, 0, instance_matrices);
+  sceneDataUpload.indirectDrawBufGpuUpload =
+    streamer.initUploadBufferAsync<IndirectCommand>(indirectDrawBuf, 0, draw_commands);
+  sceneDataUpload.bboxesBufGpuUpload = streamer.initUploadBufferAsync<BBox>(bboxesBuf, 0, boxes);
+  sceneDataUpload.instancesBufGpuUpload =
+    streamer.initUploadBufferAsync<CullableInstance>(instancesBuf, 0, instances);
+  sceneDataUpload.materialParamsBufGpuUpload =
+    streamer.initUploadBufferAsync<Material>(materialParamsBuf, 0, material_params);
 }
 
 void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexing& multiplex)
@@ -767,7 +771,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
   if (!maybeModel.has_value())
     return;
 
-  auto model = std::move(*maybeModel);
+  model = std::move(*maybeModel);
   scenePath = path;
 
   // @TODO: prune unreferenced in baker
@@ -1025,15 +1029,11 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
         .minLod = 0.f,
         .maxLod = 0.f}};
 
-      unsigned char stubColor[4] = {0xAA, 0x11, 0xAA, 0xFF};
-
-      blockingTransferHelper.uploadImage(
-        *oneShotCommands, planarTexStub, 0, 0, {(const std::byte*)stubColor, sizeof(stubColor)});
+      sceneDataUpload.planarStubGpuUpload =
+        streamer.initUploadImageAsync(planarTexStub, 0, 0, STUB_COLOR);
       for (int j = 0; j < 6; ++j)
-      {
-        blockingTransferHelper.uploadImage(
-          *oneShotCommands, cubeTexStub, 0, j, {(const std::byte*)stubColor, sizeof(stubColor)});
-      }
+        sceneDataUpload.cubeStubGpuUpload[j] =
+          streamer.initUploadImageAsync(cubeTexStub, 0, j, STUB_COLOR);
     }
   }
 
@@ -1095,7 +1095,7 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
   sceneObjectsDrawCommands = std::span{sceneDrawCommands}.first(firstTerrainCommand);
   terrainChunksDrawCommands = std::span{sceneDrawCommands}.subspan(firstTerrainCommand);
 
-  uploadData(
+  startDataUpload(
     verts, inds, instanceMatrices, sceneDrawCommands, bboxes, allInstances, materialParams);
 
   for (auto& st : sceneTextures)
@@ -1123,20 +1123,95 @@ etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription
       }}};
 }
 
-std::vector<TexId> SceneManager::tickTextureTransfer(vk::CommandBuffer cmd_buf)
+std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
 {
-  if (texturesUploaded >= sceneTextures.size())
+  if (sceneFullyReady())
     return {};
 
   std::vector<TexId> readyTids{};
 
-  if (auto strm = streamingTransferHelper.beginFrame())
+  if (auto frame = streamer.beginFrame())
   {
-    if (auto upload = strm.beginUpload())
+    if (auto upload = frame.beginUpload())
     {
+      if (!sceneDataUpload.done)
+      {
+        sceneDataUpload.done = upload.progressImageUploadAsync(
+                                 cmd_buf, sceneDataUpload.planarStubGpuUpload) &&
+          std::all_of(sceneDataUpload.cubeStubGpuUpload.begin(),
+                      sceneDataUpload.cubeStubGpuUpload.end(),
+                      [&](auto& side) { return upload.progressImageUploadAsync(cmd_buf, side); }) &&
+          upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.unifiedVbufGpuUpload) &&
+          upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.unifiedIbufGpuUpload) &&
+          upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.matricesBufGpuUpload) &&
+          upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.indirectDrawBufGpuUpload) &&
+          upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.bboxesBufGpuUpload) &&
+          upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.instancesBufGpuUpload) &&
+          upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.materialParamsBufGpuUpload);
+        if (sceneDataUpload.done)
+        {
+          emit_barriers(
+            cmd_buf,
+            {vk::BufferMemoryBarrier2{
+               .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+               .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+               .dstStageMask = vk::PipelineStageFlagBits2::eVertexInput,
+               .dstAccessMask = vk::AccessFlagBits2::eVertexAttributeRead,
+               .buffer = unifiedVbuf.get(),
+               .size = model.bufferViews[0].byteLength},
+             vk::BufferMemoryBarrier2{
+               .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+               .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+               .dstStageMask = vk::PipelineStageFlagBits2::eVertexInput,
+               .dstAccessMask = vk::AccessFlagBits2::eIndexRead,
+               .buffer = unifiedIbuf.get(),
+               .size = model.bufferViews[1].byteLength},
+             vk::BufferMemoryBarrier2{
+               .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+               .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+               .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+               .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+               .buffer = matricesBuf.get(),
+               .size = getInstanceMatrices().size_bytes()},
+             vk::BufferMemoryBarrier2{
+               .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+               .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+               .dstStageMask = vk::PipelineStageFlagBits2::eTransfer,
+               .dstAccessMask = vk::AccessFlagBits2::eTransferRead,
+               .buffer = indirectDrawBuf.get(),
+               .size = getIndirectCommands().size_bytes()},
+             vk::BufferMemoryBarrier2{
+               .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+               .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+               .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+               .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+               .buffer = bboxesBuf.get(),
+               .size = getBboxes().size_bytes()},
+             vk::BufferMemoryBarrier2{
+               .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+               .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+               .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+               .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+               .buffer = instancesBuf.get(),
+               .size = getInstances().size_bytes()},
+             vk::BufferMemoryBarrier2{
+               .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+               .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+               .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader |
+                 vk::PipelineStageFlagBits2::eFragmentShader,
+               .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+               .buffer = materialParamsBuf.get(),
+               .size = std::span{materialParams}.size_bytes()}});
+          model = {};
+        }
+      }
+
+      if (!upload.hasSpaceThisFrame())
+        return readyTids;
+
       for (auto& st : sceneTextures)
       {
-        etna::Image &img = textures[size_t(st.tid)];
+        etna::Image& img = textures[size_t(st.tid)];
 
         auto curStage = st.uploadStage->load(std::memory_order_acquire);
         if (curStage == SceneTextureUploadStage::DONE_LOADING_FROM_DISK)
@@ -1160,7 +1235,7 @@ std::vector<TexId> SceneManager::tickTextureTransfer(vk::CommandBuffer cmd_buf)
           {
             for (int j = 0; j < 6; ++j)
             {
-              st.as.cube.gpuUploadState[j] = streamingTransferHelper.initUploadImageAsync(
+              st.as.cube.gpuUploadState[j] = streamer.initUploadImageAsync(
                 img,
                 0,
                 j,
@@ -1169,7 +1244,7 @@ std::vector<TexId> SceneManager::tickTextureTransfer(vk::CommandBuffer cmd_buf)
           }
           else
           {
-            st.as.planar.gpuUploadState = streamingTransferHelper.initUploadImageAsync(
+            st.as.planar.gpuUploadState = streamer.initUploadImageAsync(
               img,
               0,
               0,

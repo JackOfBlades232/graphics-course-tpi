@@ -115,6 +115,9 @@ public:
 
   void selectScene(std::filesystem::path path, const SceneMultiplexing& multiplex = {});
 
+  bool canRender() const { return sceneDataUpload.done; }
+  bool sceneFullyReady() const { return canRender() && texturesUploaded >= sceneTextures.size(); }
+
   // @TODO: restore data getters if needed
   std::span<const IndirectCommand> getIndirectCommands() const { return sceneDrawCommands; }
   std::span<const CullableInstance> getInstances() const { return allInstances; }
@@ -250,7 +253,7 @@ public:
     "JB_terrain",
     "JB_skybox"};
 
-  std::vector<TexId> tickTextureTransfer(vk::CommandBuffer cmd_buf);
+  std::vector<TexId> tickTransfer(vk::CommandBuffer cmd_buf);
 
 private:
   std::optional<tinygltf::Model> loadModel(std::filesystem::path path);
@@ -304,7 +307,7 @@ private:
     std::span<glm::mat4> instances,
     std::span<uint32_t> instance_mapping);
 
-  void uploadData(
+  void startDataUpload(
     std::span<const Vertex> vertices,
     std::span<const uint32_t> indices,
     std::span<const glm::mat4> instance_matrices,
@@ -317,11 +320,11 @@ private:
 
 private:
   tinygltf::TinyGLTF loader;
+  tinygltf::Model model;
   std::filesystem::path scenePath;
 
   std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
-  etna::BlockingTransferHelper blockingTransferHelper;
-  etna::PerFrameTransferHelper streamingTransferHelper;
+  etna::PerFrameTransferHelper streamer;
 
   // @NOTE: keeping meshes and relems around can help add live scene editing
   std::vector<RenderElement> renderElements;
@@ -368,4 +371,18 @@ private:
   etna::Buffer indirectDrawBuf;
   etna::Buffer instancesBuf;
   etna::Buffer materialParamsBuf;
+
+  struct SceneDataUpload
+  {
+    etna::AsyncImageUploadState planarStubGpuUpload;
+    std::array<etna::AsyncImageUploadState, 6> cubeStubGpuUpload;
+    etna::AsyncBufferUploadState unifiedVbufGpuUpload;
+    etna::AsyncBufferUploadState unifiedIbufGpuUpload;
+    etna::AsyncBufferUploadState matricesBufGpuUpload;
+    etna::AsyncBufferUploadState indirectDrawBufGpuUpload;
+    etna::AsyncBufferUploadState bboxesBufGpuUpload;
+    etna::AsyncBufferUploadState instancesBufGpuUpload;
+    etna::AsyncBufferUploadState materialParamsBufGpuUpload;
+    bool done = false;
+  } sceneDataUpload{};
 };
