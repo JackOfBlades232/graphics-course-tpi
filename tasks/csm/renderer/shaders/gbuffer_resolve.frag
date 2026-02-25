@@ -268,7 +268,7 @@ void main(void)
   const vec4 matData = texture(gbufMaterial, surf.texCoord);
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
 
-  const uint mat = uint(matData.x); 
+  const uint mat = uint(matData.x + 0.001f);
   
   // Calculate lighting
   
