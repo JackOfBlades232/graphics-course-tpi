@@ -372,6 +372,9 @@ private:
   etna::Buffer instancesBuf;
   etna::Buffer materialParamsBuf;
 
+  etna::Buffer vegetationTemplateBuffer;
+  std::vector<glm::vec2> vegetationTemplateBufferData{};
+
   struct SceneDataUpload
   {
     etna::AsyncImageUploadState planarStubGpuUpload;
@@ -383,6 +386,7 @@ private:
     etna::AsyncBufferUploadState bboxesBufGpuUpload;
     etna::AsyncBufferUploadState instancesBufGpuUpload;
     etna::AsyncBufferUploadState materialParamsBufGpuUpload;
+    etna::AsyncBufferUploadState vegetationTemplateBufferGpuUpload;
     bool done = false;
   } sceneDataUpload{};
 };

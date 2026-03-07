@@ -153,7 +153,70 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
 #undef REL_H_RNG_FORMAT_ERR
       }
 
+      if (elem.Has("vegetation"))
+      {
+        const auto& veg = elem.Get("vegetation");
+        VERIFY(
+          veg.IsNumber() && veg.GetNumberAsInt() >= 0,
+          "invalid format: detail \"vegetation\" field must be a non-negative integer "
+          "index");
+        dst.vegetation = veg.GetNumberAsInt();
+      }
+
       // @TODO: syntax for splatting mask components mapping
+    }
+  }
+
+  if (desc.Has("vegetation"))
+  {
+    const auto& vegs = desc.Get("vegetation");
+    VERIFY(vegs.IsArray(), "invalid format: \"vegetation\" must be an array");
+    for (size_t i = 0; i < vegs.ArrayLen(); ++i)
+    {
+      const auto& elem = vegs.Get(i);
+      VERIFY(elem.IsObject(), "invalid format: \"vegetation\" element is not an object");
+
+      auto& dst = data.vegetations.emplace_back();
+
+      {
+        VERIFY(elem.Has("material"), "invalid format: vegetation must have a \"material\" field");
+        const auto& mat = elem.Get("material");
+        VERIFY(
+          mat.IsNumber() && mat.GetNumberAsInt() >= 0,
+          "invalid format: vegetation \"material\" field must be a non-negative integer "
+          "index");
+        dst.material = mat.GetNumberAsInt();
+      }
+
+      {
+        VERIFY(elem.Has("radius"), "invalid format: vegetation must have a \"radius\" field");
+        VERIFY(
+          elem.Has("sparsenessRadius"),
+          "invalid format: vegetation must have a \"sparsenessRadius\" field");
+        VERIFY(elem.Has("height"), "invalid format: vegetation must have a \"height\" field");
+        const auto& r = elem.Get("radius");
+        const auto& sr = elem.Get("sparsenessRadius");
+        const auto& h = elem.Get("height");
+        VERIFY(
+          r.IsNumber() && r.GetNumberAsDouble() > 0,
+          "invalid format: vegetation \"radius\" field must be a positive float");
+        VERIFY(
+          sr.IsNumber() && sr.GetNumberAsDouble() > 0,
+          "invalid format: vegetation \"sparsenessRadius\" field must be a positive float");
+        VERIFY(
+          h.IsNumber() && h.GetNumberAsDouble() > 0,
+          "invalid format: vegetation \"height\" field must be a positive float");
+        dst.radius = float(r.GetNumberAsDouble());
+        dst.sparsenessRadius = float(sr.GetNumberAsDouble());
+        dst.height = float(h.GetNumberAsDouble());
+      }
+
+      if (elem.Has("name"))
+      {
+        const auto& name = elem.Get("name");
+        VERIFY(name.IsString(), "invalid format: vegetation \"name\" must be a string");
+        dst.name = name.Get<std::string>();
+      }
     }
   }
 

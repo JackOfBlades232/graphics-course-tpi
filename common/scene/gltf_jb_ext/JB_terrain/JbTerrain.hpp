@@ -19,8 +19,18 @@ struct JbTerrainExtDetailData
   int splattingCompId{-1};
   glm::uint splattingCompMask{0};
   int material{-1};
+  int vegetation{-1};
   bool useSplattingMask{false};
   bool useRelHeightRange{false};
+};
+
+struct JbTerrainExtVegetationData
+{
+  std::string name;
+  float radius;
+  float sparsenessRadius;
+  float height;
+  int material{-1};
 };
 
 struct JbTerrainExtData
@@ -32,6 +42,7 @@ struct JbTerrainExtData
   int noiseSeed{0};
 
   std::vector<JbTerrainExtDetailData> details{};
+  std::vector<JbTerrainExtVegetationData> vegetations{};
 
   // @TODO: more
 };

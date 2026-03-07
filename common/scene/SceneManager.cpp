@@ -7,6 +7,7 @@
 #include <JB_skybox/JbSkybox.hpp>
 
 #include <render_utils/Common.hpp>
+#include <render_utils/GrassUtils.hpp>
 
 #include <quantization.h>
 #include <materials.h>
@@ -761,6 +762,20 @@ void SceneManager::startDataUpload(
     streamer.initUploadBufferAsync<CullableInstance>(instancesBuf, 0, instances);
   sceneDataUpload.materialParamsBufGpuUpload =
     streamer.initUploadBufferAsync<Material>(materialParamsBuf, 0, material_params);
+
+  if (!vegetationTemplateBufferData.empty())
+  {
+    vegetationTemplateBuffer = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = std::span{vegetationTemplateBufferData}.size_bytes(),
+        .bufferUsage =
+          vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "vegetationTemplateBuffer",
+      });
+    sceneDataUpload.vegetationTemplateBufferGpuUpload = streamer.initUploadBufferAsync<glm::vec2>(
+      vegetationTemplateBuffer, 0, vegetationTemplateBufferData);
+  }
 }
 
 void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexing& multiplex)
@@ -1048,7 +1063,28 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
     data.rangeMax = terrainExt->rangeMax;
 
     ETNA_ASSERT(terrainExt->details.size() <= TERRAIN_MAX_DETAILS);
+    ETNA_ASSERT(terrainExt->vegetations.size() <= TERRAIN_MAX_VEGETATION_TYPES);
     data.detailCount = uint32_t(terrainExt->details.size());
+    data.vegetationTypeCount = uint32_t(terrainExt->vegetations.size());
+
+    // @TODO: do I need to make sure it's one material here as well?
+    int vid = 0;
+    for (const auto& veg : terrainExt->vegetations)
+    {
+      auto& dst = data.vegetationTypes[vid++];
+      dst.height = veg.height;
+      dst.radius = veg.radius;
+      dst.sparsenessRadius = veg.sparsenessRadius;
+      dst.matId = veg.material == -1 ? MaterialId::INVALID : materialRemapping[veg.material];
+      auto chunkTemplate =
+        generate_grass_chunk_template(dst.sparsenessRadius, VEGETATION_CHUNK_SIZE, 100);
+      dst.templateBufferOffset = shader_uint(vegetationTemplateBufferData.size());
+      dst.templateBufferSize = shader_uint(chunkTemplate.planarPositions.size());
+      std::copy_n(
+        chunkTemplate.planarPositions.begin(),
+        chunkTemplate.planarPositions.size(),
+        std::back_inserter(vegetationTemplateBufferData));
+    }
 
     int did = 0;
     std::optional<MaterialType> detailMat{};
@@ -1148,6 +1184,11 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
           upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.bboxesBufGpuUpload) &&
           upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.instancesBufGpuUpload) &&
           upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.materialParamsBufGpuUpload);
+        if (!vegetationTemplateBufferData.empty())
+        {
+          sceneDataUpload.done |= upload.progressBufferUploadAsync(
+            cmd_buf, sceneDataUpload.vegetationTemplateBufferGpuUpload);
+        }
         if (sceneDataUpload.done)
         {
           emit_barriers(

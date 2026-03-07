@@ -5,6 +5,7 @@
 #include "cpp_glsl_compat.h"
 
 #define TERRAIN_MAX_DETAILS 8
+#define TERRAIN_MAX_VEGETATION_TYPES 8
 
 #define TERRAIN_DETAIL_USE_MASK_FLAG (1)
 #define TERRAIN_DETAIL_USE_RH_RANGE_FLAG (1 << 1)
@@ -16,7 +17,23 @@ struct TerrainDetailRule
   shader_uint splattingCompId;
   shader_uint splattingCompMask;
   MaterialId matId;
+  shader_uint vegetationId;
   shader_uint flags;
+  shader_uint pad1_;
+  shader_uint pad2_;
+  shader_uint pad3_;
+};
+
+struct TerrainVegetationRule
+{
+  float height;
+  float radius;
+  float sparsenessRadius;
+  shader_uint templateBufferOffset;
+  shader_uint templateBufferSize;
+  MaterialId matId;
+  shader_uint pad1_;
+  shader_uint pad2_;
 };
 
 struct TerrainSourceData
@@ -25,15 +42,17 @@ struct TerrainSourceData
   TexSmpIdPair splattingMaskTexSmp;
 
   shader_uint noiseSeed;
-  shader_uint detailCount;
 
-  shader_vec3 rangeMin;
   shader_uint pad1_;
 
+  shader_vec3 rangeMin;
+  shader_uint detailCount;
+
   shader_vec3 rangeMax;
-  shader_uint pad2_;
+  shader_uint vegetationTypeCount;
 
   TerrainDetailRule details[TERRAIN_MAX_DETAILS];
+  TerrainVegetationRule vegetationTypes[TERRAIN_MAX_VEGETATION_TYPES];
 };
 
 #define CLIPMAP_WORK_GROUP_SIZE (BASE_WORK_GROUP_SIZE * 2)
@@ -62,6 +81,8 @@ struct TerrainSourceData
 #define CLIMPAP_UPDATE_GRID_SIZE                                                                   \
   (CLIPMAP_LEVEL_WSIZE(CLIPMAP_LEVEL_COUNT - 1) /                                                  \
    float(TERRAIN_CHUNK_TESSELLATION_FACTOR * TERRAIN_CHUNKS_LEVEL_DIM))
+
+#define VEGETATION_CHUNK_SIZE 5.f
 
 struct HeightBounds
 {

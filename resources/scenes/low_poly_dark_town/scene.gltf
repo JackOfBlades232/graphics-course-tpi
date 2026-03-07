@@ -4009,7 +4009,7 @@
         {
           "name": "field_grass",
           "radius": 0.1,
-          "sparseRadius": 0.15,
+          "sparsenessRadius": 0.15,
           "height": 0.075,
           "material": 21
         }
