@@ -22,6 +22,22 @@ QuadRenderer::QuadRenderer(CreateInfo info)
   pipeline = pipelineManager.createGraphicsPipeline(
     "quad_renderer",
     {
+      .blendingConfig =
+        {.attachments =
+           {
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::True,
+               .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+               .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+               .colorBlendOp = vk::BlendOp::eAdd,
+               .srcAlphaBlendFactor = vk::BlendFactor::eSrcAlpha,
+               .dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+               .alphaBlendOp = vk::BlendOp::eAdd,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+           },
+         .logicOp = vk::LogicOp::eClear},
       .fragmentShaderOutput =
         {
           .colorAttachmentFormats = {info.format},

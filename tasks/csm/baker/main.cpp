@@ -7,6 +7,7 @@
 #include <glm/gtx/vector_angle.hpp>
 #include <spdlog/spdlog.h>
 #include <render_utils/shaders/quantization.h>
+#include <utils/Common.hpp>
 
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +18,6 @@
 #include <string>
 #include <filesystem>
 #include <execution>
-#include <concepts>
 
 #define LOG(fmt_, ...) spdlog::info(fmt_ __VA_OPT__(, ) __VA_ARGS__)
 
@@ -34,17 +34,6 @@
     if (!(e_))                                                                                     \
       FAIL(fmt_ __VA_OPT__(, ) __VA_ARGS__);                                                       \
   } while (0)
-
-// @TODO: pull out
-template <class TS>
-  requires(std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
-std::string to_char_str(const TS& s)
-{
-  if constexpr (std::same_as<TS, std::string>)
-    return s;
-  else
-    return std::to_string(s);
-}
 
 uint32_t best_fit_quantize_normal(glm::vec3 normal)
 {
@@ -409,6 +398,13 @@ int main(int argc, char** argv)
 
   model.extensionsRequired.emplace_back("KHR_mesh_quantization");
   model.extensionsUsed.emplace_back("KHR_mesh_quantization");
+
+  // Patch up pathes so that baked scene refers to the same textures
+  for (auto &img : model.images)
+  {
+    if (!img.uri.empty())
+      img.uri = "../" + img.uri;
+  }
 
   path.replace_extension("");
   path.replace_filename("baked/" + path.filename().string());

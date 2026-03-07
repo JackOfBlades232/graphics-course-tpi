@@ -3435,6 +3435,12 @@
     },
     {
       "uri": "textures/skybox.png"
+    },
+    {
+      "uri": "textures/terrain/grass/field_grass_diffus.png"
+    },
+    {
+      "uri": "textures/terrain/grass/field_grass_normal.png"
     }
   ],
   "materials": [
@@ -3901,6 +3907,20 @@
           }
         }
       }
+    },
+    {
+      "doubleSided": true,
+      "name": "vegetation_field_grass",
+      "normalTexture": {
+        "index": 18
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "diffuseTexture": {
+            "index": 17
+          }
+        }
+      }
     }
   ],
   "extensions": {
@@ -3973,15 +3993,25 @@
       "details" : [
         {
           "name": "grass",
-          "relHeightRange": [0.2995, 1.0],
+          "relHeightRange": [0.2975, 1.0],
           "material": 19,
-          "scale": [25.0, 25.0]
+          "scale": [25.0, 25.0],
+          "vegetation": 0
         },
         {
           "name": "sand",
-          "relHeightRange": [0.0, 0.3005],
+          "relHeightRange": [0.0, 0.3025],
           "material": 20,
           "scale": [25.0, 25.0]
+        }
+      ],
+      "vegetation" : [
+        {
+          "name": "field_grass",
+          "radius": 0.1,
+          "sparseRadius": 0.15,
+          "height": 0.075,
+          "material": 21
         }
       ]
     },
@@ -6504,6 +6534,14 @@
     {
       "sampler": 2,
       "source": 16
+    },
+    {
+      "sampler": 2,
+      "source": 17
+    },
+    {
+      "sampler": 2,
+      "source": 18
     }
   ]
 }

@@ -1322,9 +1322,8 @@ void SceneManager::streamingLoop()
     st.uploadStage->store(SceneTextureUploadStage::LOADING_FROM_DISK, std::memory_order_release);
 
     auto texPath = std::filesystem::path{st.uri};
-    auto texFname = texPath.filename();
     auto realPath = sceneRoot;
-    realPath.append(texFname.string());
+    realPath.append(texPath.string());
 
     if (realPath.extension() != ".png")
       ETNA_PANIC("Invalid texture \"{}\", only allowed .png files", texPath);

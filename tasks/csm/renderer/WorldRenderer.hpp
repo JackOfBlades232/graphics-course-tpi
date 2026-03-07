@@ -15,6 +15,8 @@
 #include <scene/ViewContext.hpp>
 #include <scene/SceneManager.hpp>
 
+#include <utils/MovingAverage.hpp>
+
 #include <wsi/Keyboard.hpp>
 #include <wsi/Mouse.hpp>
 
@@ -287,6 +289,8 @@ private:
   float csmShadowDist = 400.f;
   float csmBlendingBeltSize = 0.03f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
+
+  MovingAverageAccumulator<float, 64> smoothedDt{};
 
 private:
   void renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&& srpi);

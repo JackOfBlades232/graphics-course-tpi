@@ -577,6 +577,8 @@ void WorldRenderer::update(const FramePacket& packet)
     dt = prevTime >= 0.f ? (packet.currentTime - prevTime) : 0.f;
     prevTime = packet.currentTime;
 
+    smoothedDt.addSample(dt);
+
     ++frame;
   }
 
@@ -801,7 +803,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     {
       ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
 
-      const auto& pipe = staticMeshPipeline->get(srpi.pass, srpi.vparams.needReverseZ);
+      const auto& pipe = staticMeshPipeline->get(srpi.pass, bool(srpi.vparams.needReverseZ));
       std::vector vkSets{sceneDset->getVkSet()};
 
       if (passHasFragmentStage(srpi.pass))
@@ -829,7 +831,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     {
       ETNA_PROFILE_GPU(cmd_buf, terrain);
 
-      const auto& pipe = terrainMeshPipeline->get(srpi.pass, srpi.vparams.needReverseZ);
+      const auto& pipe = terrainMeshPipeline->get(srpi.pass, bool(srpi.vparams.needReverseZ));
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
@@ -863,7 +865,7 @@ void WorldRenderer::renderWorld(
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
   auto readyTids = sceneMgr->tickTransfer(cmd_buf);
-  if (readyTids.size())
+  if (!readyTids.empty())
   {
     std::vector<etna::Binding> newBindings;
     for (TexId tid : readyTids)
@@ -1528,7 +1530,7 @@ void WorldRenderer::drawGui()
 {
   {
     ImGui::Begin("App");
-    ImGui::Text("%.2fms (%dfps)", dt * 1e3f, int(1.f / dt));
+    ImGui::Text("%.2fms (%dfps)", smoothedDt.getAvg() * 1e3f, int(1.f / smoothedDt.getAvg()));
     ImGui::Text(
       "Player pos: [%.3f, %.3f, %.3f]",
       constantsData.playerWorldPos.x,
