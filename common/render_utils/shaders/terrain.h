@@ -83,6 +83,7 @@ struct TerrainSourceData
    float(TERRAIN_CHUNK_TESSELLATION_FACTOR * TERRAIN_CHUNKS_LEVEL_DIM))
 
 #define VEGETATION_CHUNK_SIZE 5.f
+#define VEGETATION_GRID_EXTENT 40
 
 struct HeightBounds
 {

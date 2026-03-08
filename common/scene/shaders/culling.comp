@@ -314,7 +314,6 @@ void main(void)
   {
     const CullableInstance inst = allInstances[idx];
 
-    // @TODO: make all the 'player' stuff view stuff instead
     const mat4 instMat = get_inst_matrix(inst);
     const BBox bbox = get_inst_bbox(inst);
     InstanceViewRelatedData payload;

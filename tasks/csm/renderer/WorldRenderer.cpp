@@ -1121,6 +1121,12 @@ void WorldRenderer::renderWorld(
           .size = sceneMgr->getBboxes().size_bytes()}});
     }
 
+    {
+      // @TODO:
+      //
+      // 
+    }
+
     emit_barriers(
       cmd_buf,
       {vk::BufferMemoryBarrier2{

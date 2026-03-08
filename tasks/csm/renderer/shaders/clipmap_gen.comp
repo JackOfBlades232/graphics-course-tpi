@@ -176,6 +176,8 @@ void main(void)
     float disp = 0.f;
     float totw = 0.f;
 
+    uint detailMask = 0;
+
     for (uint i = 0; i < source.detailCount; ++i)
     {
       const vec2 scale = source.details[i].uvScale; 
@@ -224,6 +226,8 @@ void main(void)
         matData += detMatdata * w;
         n += detNorm * w;
         totw += w;
+
+        detailMask |= (1 << i);
       }
     }
 
@@ -246,5 +250,5 @@ void main(void)
   imageStore(geom[params.level], destImageCoord, vec4(h));
   imageStore(normal[params.level], destImageCoord, vec4(n, 1.f));
   imageStore(albedo[params.level], destImageCoord, vec4(color, 1.f));
-  imageStore(matdata[params.level], destImageCoord, vec4(matData, 1.f));
+  imageStore(matdata[params.level], destImageCoord, vec4(matData, uintBitsToFloat(detailMask)));
 }
