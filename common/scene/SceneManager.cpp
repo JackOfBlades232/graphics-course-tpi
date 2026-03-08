@@ -1186,7 +1186,7 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
           upload.progressBufferUploadAsync(cmd_buf, sceneDataUpload.materialParamsBufGpuUpload);
         if (!vegetationTemplateBufferData.empty())
         {
-          sceneDataUpload.done |= upload.progressBufferUploadAsync(
+          sceneDataUpload.done &= upload.progressBufferUploadAsync(
             cmd_buf, sceneDataUpload.vegetationTemplateBufferGpuUpload);
         }
         if (sceneDataUpload.done)

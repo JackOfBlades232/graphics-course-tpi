@@ -157,6 +157,8 @@ public:
 
   const UniformLights& getLights() const { return *lightsData; }
 
+  std::span<const glm::vec2> getVegetationTemplateData() const { return vegetationTemplateBufferData; }
+
   std::span<const etna::Image> getTextures() const { return textures; }
   std::span<const etna::Sampler> getSamplers() const { return samplers; }
 

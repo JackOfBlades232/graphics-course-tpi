@@ -1887,6 +1887,53 @@ void WorldRenderer::drawGui()
       ImGui::End();
     }
   }
+
+  // @TODO: extend the debug view
+  if (terrain && terrain->sourceData.vegetationTypeCount > 0)
+  {
+    ImGui::SetNextWindowSize(ImVec2{400, 400}, ImGuiCond_Always);
+    ImGui::Begin("Grass debug");
+
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+
+    auto data = sceneMgr->getVegetationTemplateData();
+    const auto& veg = terrain->sourceData.vegetationTypes[0];
+    auto positions = data.subspan(veg.templateBufferOffset, veg.templateBufferSize);
+
+    ImVec2 size = ImGui::GetContentRegionAvail();
+
+    glm::vec2 sizeRatio = {size.x / VEGETATION_CHUNK_SIZE, size.y / VEGETATION_CHUNK_SIZE};
+
+    for (const auto& pos : positions)
+    {
+      if (veg.radius <= veg.sparsenessRadius)
+      {
+        draw->AddCircleFilled(
+          ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
+          veg.sparsenessRadius * sizeRatio.x,
+          IM_COL32(150, 150, 150, 175));
+        draw->AddCircleFilled(
+          ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
+          veg.radius * sizeRatio.x,
+          IM_COL32(100, 255, 100, 255));
+      }
+      else
+      {
+        draw->AddCircleFilled(
+          ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
+          veg.radius * sizeRatio.x,
+          IM_COL32(100, 255, 100, 255));
+        draw->AddCircleFilled(
+          ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
+          veg.sparsenessRadius * sizeRatio.x,
+          IM_COL32(25, 64, 25, 255));
+      }
+    }
+
+    ImGui::End();
+  }
+
 }
 
 void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci)
