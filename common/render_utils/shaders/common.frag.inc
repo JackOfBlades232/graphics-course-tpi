@@ -54,4 +54,17 @@ float simplex_noise(vec2 v)
   return 130.0 * dot(m, g);
 }
 
+float basic_noise(vec2 p)
+{
+  p = fract(p * vec2(234.34, 435.345));
+  p += dot(p, p + 34.23);
+  return fract(p.x * p.y);
+}
+
+int basic_noise_int(vec2 p, int l, int h)
+{
+  float smpl = basic_noise(p);
+  return int(round(float(l) - 0.499f + smpl * (float(h - l) + 0.9998f)));
+}
+
 #endif // SHADER_COMMON_FRAG_INC_INCLUDED

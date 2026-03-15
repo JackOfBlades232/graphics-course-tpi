@@ -6,6 +6,7 @@
 #include "defs.h"
 
 #define TERRAIN_CHUNK_INSTANCE_FLAG 0x1
+#define VEGETATION_INSTANCE_FLAG 0x2
 
 struct IndirectCommand
 {

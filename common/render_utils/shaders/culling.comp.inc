@@ -1,0 +1,291 @@
+#ifndef CULLING_H_INCLUDED
+#define CULLING_H_INCLUDED
+
+struct InstanceViewRelatedData
+{
+  float minZ;
+  float maxZ;
+};
+
+bool point_is_in_frustum(vec3 p)
+{
+  return p.x >= -1.f && p.x <= 1.f && p.y >= -1.f && p.y <= 1.f && p.z >= 0.f && p.z <= 1.f;
+}
+
+vec3 world_to_clip(vec4 v)
+{
+  const vec4 hom = viewParams.mProjView * v;
+  return (hom / hom.w).xyz;
+}
+
+vec3 world_to_view(vec4 v)
+{
+  return (viewParams.mView * v).xyz;
+}
+
+vec2 project_obb_onto_ax(
+    vec3 c, vec3 x_ax, vec3 y_ax, vec3 z_ax, vec3 exts, vec3 m)
+{
+  const float mc = dot(m, c);
+  const float rad = 
+    abs(dot(m, x_ax)) * exts.x +
+    abs(dot(m, y_ax)) * exts.y +
+    abs(dot(m, z_ax)) * exts.z;
+  const float obbMin = mc - rad;
+  const float obbMax = mc + rad;
+  return vec2(obbMin, obbMax);
+}
+
+vec2 project_frustum_onto_ax(
+    float x_near, float y_near, float z_near, float z_far, vec3 m)
+{
+  if (viewParams.type == VIEW_TYPE_PERSPECTIVE)
+  {
+    const float p = x_near * abs(m.x) + y_near * abs(m.y);
+    const float nmd = z_near * m.z;
+    float frustumMin = nmd - p;
+    float frustumMax = nmd + p;
+    if (frustumMin < 0.f)
+      frustumMin *= z_far / z_near;
+    if (frustumMax > 0.f)
+      frustumMax *= z_far / z_near;
+    return vec2(frustumMin, frustumMax);
+  }
+  else // VIEW_TYPE_ORTHO
+  {
+    return project_obb_onto_ax(
+      vec3(
+        0.f,
+        0.f,
+        (viewParams.viewFrustum.nearZ + viewParams.viewFrustum.farZ) * 0.5f),
+      vec3(1.f, 0.f, 0.f),
+      vec3(0.f, 1.f, 0.f),
+      vec3(0.f, 0.f, 1.f),
+      vec3(
+        viewParams.viewFrustum.nearX,
+        viewParams.viewFrustum.nearY,
+        (viewParams.viewFrustum.farZ - viewParams.viewFrustum.nearZ) * 0.5f),
+      m);
+  }
+}
+
+bool instance_is_in_view(BBox bbox, mat4 inst_mat, CullingMode mode, out InstanceViewRelatedData payload)
+{
+  if (viewParams.needDepthBounds != 0)
+  {
+    const vec3 vps[8] = {
+     world_to_view(inst_mat * bbox.min),
+     world_to_view(inst_mat * vec4(bbox.min.x, bbox.min.y, bbox.max.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.min.x, bbox.max.y, bbox.min.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.max.x, bbox.min.y, bbox.min.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.max.x, bbox.min.y, bbox.max.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.min.x, bbox.max.y, bbox.max.z, 1.f)),
+     world_to_view(inst_mat * vec4(bbox.max.x, bbox.max.y, bbox.min.z, 1.f)),
+     world_to_view(inst_mat * bbox.max)};
+    payload.minZ = payload.maxZ = vps[0].z;
+    for (int i = 1; i < 8; ++i)
+    {
+      payload.minZ = min(payload.minZ, vps[i].z);
+      payload.maxZ = max(payload.maxZ, vps[i].z);
+    }
+  }
+
+  if (mode == CULLING_MODE_PER_VERTEX)
+  {
+    const vec3 p1 = world_to_clip(inst_mat * bbox.min);
+    const vec3 p2 = world_to_clip(inst_mat * vec4(bbox.min.x, bbox.min.y, bbox.max.z, 1.f));
+    const vec3 p3 = world_to_clip(inst_mat * vec4(bbox.min.x, bbox.max.y, bbox.min.z, 1.f));
+    const vec3 p4 = world_to_clip(inst_mat * vec4(bbox.max.x, bbox.min.y, bbox.min.z, 1.f));
+    const vec3 p5 = world_to_clip(inst_mat * vec4(bbox.max.x, bbox.min.y, bbox.max.z, 1.f));
+    const vec3 p6 = world_to_clip(inst_mat * vec4(bbox.min.x, bbox.max.y, bbox.max.z, 1.f));
+    const vec3 p7 = world_to_clip(inst_mat * vec4(bbox.max.x, bbox.max.y, bbox.min.z, 1.f));
+    const vec3 p8 = world_to_clip(inst_mat * bbox.max);
+    return point_is_in_frustum(p1)
+      || point_is_in_frustum(p2)
+      || point_is_in_frustum(p3)
+      || point_is_in_frustum(p4)
+      || point_is_in_frustum(p5)
+      || point_is_in_frustum(p6)
+      || point_is_in_frustum(p7)
+      || point_is_in_frustum(p8);
+  }
+  else if (mode == CULLING_MODE_SAT)
+  {
+    // https://bruop.github.io/improved_frustum_culling/
+
+    vec3 newMin = vec3(
+      min(bbox.min.x, bbox.max.x - BIG_EPSILON),
+      min(bbox.min.y, bbox.max.y - BIG_EPSILON),
+      min(bbox.min.z, bbox.max.z - BIG_EPSILON));
+    vec3 newMax = vec3(
+      max(bbox.max.x, bbox.min.x + BIG_EPSILON),
+      max(bbox.max.y, bbox.min.y + BIG_EPSILON),
+      max(bbox.max.z, bbox.min.z + BIG_EPSILON));
+
+    bbox.min = vec4(newMin, 1.f);
+    bbox.max = vec4(newMax, 1.f);
+
+    const vec3 bbase = world_to_view(inst_mat * bbox.min);
+    const vec3 bx = world_to_view(inst_mat * vec4(bbox.max.x, bbox.min.y, bbox.min.z, 1.f)) - bbase;
+    const vec3 by = world_to_view(inst_mat * vec4(bbox.min.x, bbox.max.y, bbox.min.z, 1.f)) - bbase;
+    const vec3 bz = world_to_view(inst_mat * vec4(bbox.min.x, bbox.min.y, bbox.max.z, 1.f)) - bbase;
+    const vec3 e = vec3(length(bx), length(by), length(bz));
+    const OBBox obb = {
+      bbase + (bx + by + bz) * 0.5f, e * 0.5f,
+      bx / e.x, by / e.y, bz / e.z};
+
+    const float xNear = viewParams.viewFrustum.nearX;
+    const float yNear = viewParams.viewFrustum.nearY;
+    const float zNear = viewParams.viewFrustum.nearZ;
+    const float zFar = viewParams.viewFrustum.farZ;
+   
+    // Frustum Z normal
+    {
+      const vec3 m = vec3(0.f, 0.f, 1.f);
+      const float mc = obb.center.z;
+      const float rad = 
+        abs(obb.xAxis.z) * obb.extents.x +
+        abs(obb.yAxis.z) * obb.extents.y +
+        abs(obb.zAxis.z) * obb.extents.z;
+      const float obbMin = mc - rad;
+      const float obbMax = mc + rad;
+      const float frustumMin = zNear;
+      const float frustumMax = zFar;
+      if (obbMin > frustumMax || obbMax < frustumMin)
+        return false;
+    }
+
+    // Frustum side normals
+    if (viewParams.type == VIEW_TYPE_PERSPECTIVE)
+    {
+      const vec3 ms[4] = {
+        vec3(zNear, 0.f, xNear),
+        vec3(-zNear, 0.f, xNear),
+        vec3(0.f, zNear, yNear),
+        vec3(0.f, -zNear, yNear)};
+
+      for (uint i = 0; i < 4; ++i)
+      {
+        const vec2 obbInterval = project_obb_onto_ax(
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, ms[i]);
+        const vec2 frustumInterval = project_frustum_onto_ax(
+          xNear, yNear, zNear, zFar, ms[i]);
+
+        if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
+          return false;
+      }
+    }
+    else // VIEW_TYPE_ORTHO
+    {
+      const vec3 ms[2] = {vec3(1.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f)};
+
+      for (uint i = 0; i < 2; ++i)
+      {
+        const vec2 obbInterval = project_obb_onto_ax(
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, ms[i]);
+        const vec2 frustumInterval = project_frustum_onto_ax(
+          xNear, yNear, zNear, zFar, ms[i]);
+
+        if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
+          return false;
+      }
+    }
+
+    const vec3 axes[3] = {obb.xAxis, obb.yAxis, obb.zAxis};
+    const float extents[3] = {obb.extents.x, obb.extents.y, obb.extents.z};
+
+    // OBB axes (i. e. OBB normals)
+    {
+      for (uint i = 0; i < 3; ++i)
+      {
+        const vec3 m = axes[i];
+        const float mc = dot(m, obb.center);
+        const float rad = extents[i];
+        const float obbMin = mc - rad;
+        const float obbMax = mc + rad;
+
+        const vec2 frustumInterval =
+          project_frustum_onto_ax(xNear, yNear, zNear, zFar, m);
+
+        if (obbMin > frustumInterval.y || obbMax < frustumInterval.x)
+          return false;
+      }
+    }
+
+    // Frustum X x OBB axes
+    {
+      for (uint i = 0; i < 3; ++i)
+      {
+        const vec3 m = vec3(0.f, -axes[i].z, axes[i].y);
+
+        const vec2 obbInterval = project_obb_onto_ax(
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, m);
+        const vec2 frustumInterval = project_frustum_onto_ax(
+          xNear, yNear, zNear, zFar, m);
+
+        if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
+          return false;
+      }
+    }
+
+    // Frustum Y x OBB axes
+    {
+      for (uint i = 0; i < 3; ++i)
+      {
+        const vec3 m = vec3(axes[i].z, 0.f, -axes[i].x);
+
+        const vec2 obbInterval = project_obb_onto_ax(
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, m);
+        const vec2 frustumInterval = project_frustum_onto_ax(
+          xNear, yNear, zNear, zFar, m);
+
+        if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
+          return false;
+      }
+    }
+
+    // Frustum Edges x OBB axes
+    if (viewParams.type == VIEW_TYPE_PERSPECTIVE)
+    {
+      for (uint i = 0; i < 3; ++i)
+      {
+        const vec3 ms[4] = {
+          cross(vec3(xNear, 0.f, zNear), axes[i]),
+          cross(vec3(-xNear, 0.f, zNear), axes[i]),
+          cross(vec3(0.f, yNear, zNear), axes[i]),
+          cross(vec3(0.f, -yNear, zNear), axes[i])};
+
+        for (uint j = 0; j < 4; ++j)
+        {
+          const vec2 obbInterval = project_obb_onto_ax(
+              obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, ms[j]);
+          const vec2 frustumInterval = project_frustum_onto_ax(
+              xNear, yNear, zNear, zFar, ms[j]);
+
+          if (obbInterval.x > frustumInterval.y || obbInterval.y < frustumInterval.x)
+            return false;
+        }
+      }
+    }
+    else // VIEW_TYPE_ORTHO
+    {
+      for (uint i = 0; i < 3; ++i)
+      {
+        const vec3 m = cross(vec3(0.f, 0.f, 1.f), axes[i]);
+
+        const vec2 obbInterval = project_obb_onto_ax(
+          obb.center, obb.xAxis, obb.yAxis, obb.zAxis, obb.extents, m);
+        const vec2 frustumInterval = project_frustum_onto_ax(
+          xNear, yNear, zNear, zFar, m);
+      }
+    }
+
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
+#endif

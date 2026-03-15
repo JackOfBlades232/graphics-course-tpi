@@ -159,6 +159,8 @@ void main(void)
   vec3 color = vec3(0.f);
   vec3 matData = vec3(0.f); // Ok to interpolate, cuz mat type is verified to be the same
 
+  uint detailMask = 0;
+
   {
     float rh = sample_rel_height(worldCoord);
 
@@ -175,8 +177,6 @@ void main(void)
 
     float disp = 0.f;
     float totw = 0.f;
-
-    uint detailMask = 0;
 
     for (uint i = 0; i < source.detailCount; ++i)
     {

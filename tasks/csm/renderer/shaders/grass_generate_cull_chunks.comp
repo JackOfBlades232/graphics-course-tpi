@@ -4,6 +4,7 @@
 
 #include "defs.h"
 #include "terrain.h"
+#include "constants.h"
 
 #include "grass.comp.inc"
 
@@ -21,31 +22,26 @@ layout(binding = 9, set = 0) uniform view_params_t
 
 layout(binding = 10, set = 0) buffer gen_t
 {
-  GrassGenData genData;
+  GRASS_GEN_DATA_MEMBERS
 };
+
+#include "culling.comp.inc"
 
 void main(void)
 {
   if (gl_GlobalInvocationID.x >= VEGETATION_GRID_EXTENT || gl_GlobalInvocationID.y >= VEGETATION_GRID_EXTENT)
     return;
 
-  ivec2 chunkId = ivec2(gl_GlobalInvocationID.xy) - VEGETATION_GRID_EXTENT / 2;
-  vec2 chunkPos = constants.toroidalUpdatePlayerWorldPos + vec2(chunkId) * VEGETATION_CHUNK_SIZE;
+  const ivec2 chunkId = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y) - VEGETATION_GRID_EXTENT / 2;
+  const vec2 chunkPos = constants.toroidalUpdatePlayerWorldPos + vec2(chunkId) * VEGETATION_CHUNK_SIZE;
 
-  const vec2 chunkCorners =
-  {
-    chunkPos,
-    chunkPos + vec2(VEGETATION_CHUNK_SIZE, 0.f),
-    chunkPos + vec2(0.f, VEGETATION_CHUNK_SIZE),
-    chunkPos + vec2(VEGETATION_CHUNK_SIZE, VEGETATION_CHUNK_SIZE)
-  };
+  const mat4 instMat = translation(vec3(chunkPos.x, 0.f, chunkPos.y));
+  const BBox bbox = {vec4(0.f, -10000.f, 0.f, 1.f), vec4(VEGETATION_CHUNK_SIZE, 10000.f, VEGETATION_CHUNK_SIZE, 1.f)};
+  InstanceViewRelatedData payload;
 
-  if (viewParams.type == VIEW_TYPE_PERSPECTIVE)
+  if (instance_is_in_view(bbox, instMat, constants.cullingMode, payload))
   {
-    // @TODO
-  }
-  else // VIEW_TYPE_ORTHO
-  {
-    // @TODO
+    const uint destId = atomicAdd(chunkCount, 1);
+    chunkOrigins[destId] = chunkPos;
   }
 }

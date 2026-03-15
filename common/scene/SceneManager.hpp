@@ -61,9 +61,9 @@ struct SceneTextureDesc
   TexId tid{TexId::INVALID};
   std::string uri{};
   vk::Format format{vk::Format::eUndefined};
-  std::atomic<SceneTextureUploadStage>* uploadStage{nullptr};
   alignas(SceneTextureUploadStage) uint8_t uploadStageStorage[sizeof(SceneTextureUploadStage)]{};
   bool isCube = false;
+  bool inited = false;
   struct As
   {
     struct Planar
@@ -86,15 +86,15 @@ struct SceneTextureDesc
   SceneTextureDesc& operator=(const SceneTextureDesc&) = default;
   SceneTextureDesc& operator=(SceneTextureDesc&&) = default;
 
-  ~SceneTextureDesc()
+  auto& uploadStage() { return *(std::atomic<SceneTextureUploadStage>*)uploadStageStorage; }
+  const auto& uploadStage() const
   {
-    if (uploadStage)
-      std::destroy_at(uploadStage);
+    return *(const std::atomic<SceneTextureUploadStage>*)uploadStageStorage;
   }
 
   bool acqReady() const
   {
-    return uploadStage->load(std::memory_order_acquire) == SceneTextureUploadStage::DONE;
+    return uploadStage().load(std::memory_order_acquire) == SceneTextureUploadStage::DONE;
   }
 
   void cleanup()
@@ -103,6 +103,12 @@ struct SceneTextureDesc
       as.cube.content = {};
     else
       as.planar.content = {};
+  }
+
+  ~SceneTextureDesc()
+  {
+    if (inited)
+      std::destroy_at(&uploadStage());
   }
 };
 
@@ -157,7 +163,10 @@ public:
 
   const UniformLights& getLights() const { return *lightsData; }
 
-  std::span<const glm::vec2> getVegetationTemplateData() const { return vegetationTemplateBufferData; }
+  std::span<const glm::vec2> getVegetationTemplateData() const
+  {
+    return vegetationTemplateBufferData;
+  }
 
   std::span<const etna::Image> getTextures() const { return textures; }
   std::span<const etna::Sampler> getSamplers() const { return samplers; }
@@ -342,6 +351,7 @@ private:
 
   std::span<IndirectCommand> sceneObjectsDrawCommands;
   std::span<IndirectCommand> terrainChunksDrawCommands;
+  std::span<IndirectCommand> vegetationDrawCommands;
 
   std::unique_ptr<UniformLights> lightsData{};
 

@@ -1,0 +1,70 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "defs.h"
+#include "terrain.h"
+#include "constants.h"
+
+#include "grass.comp.inc"
+#include "common.frag.inc"
+
+layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
+
+#include "terrain_mesh.glsl.inc"
+
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
+layout(binding = 9, set = 0) uniform view_params_t
+{
+  ViewParams viewParams;
+};
+
+layout(binding = 10, set = 0) readonly buffer gen_t
+{
+  GRASS_GEN_DATA_MEMBERS
+};
+
+layout(binding = 11, set = 0) readonly buffer template_t
+{
+  vec2 templateGrassPositions[];
+};
+
+layout(push_constant) uniform params_t
+{
+  uint detailId;
+} params;
+
+void main(void)
+{
+  const TerrainVegetationRule rule = terrainSource.vegetationTypes[terrainSource.details[params.detailId].vegetationId];
+
+  uint chunkId = gl_GlobalInvocationID.x / rule.templateBufferSize;
+  if (chunkId >= chunkCount)
+    return;
+
+  vec2 chunkPosPlanar = chunkOrigins[chunkId];
+  uint templateId = rule.templateBufferOffset + (gl_GlobalInvocationID.x - chunkId * rule.templateBufferSize);
+  vec2 templatePos = templateGrassPositions[templateId];
+
+  int oriId = basic_noise_int(chunkPosPlanar, 0, 3);
+  if (oriId & 1)
+    templatePos.x = VEGETATION_CHUNK_SIZE - templatePos.x;
+  if (oriId & 2)
+    templatePos.y = VEGETATION_CHUNK_SIZE - templatePos.y;
+
+  vec2 grassPosPlanar = chunkPosPlanar + templatePos;
+  vec2 grassPosPlanarRelToClipmap = grassPosPlanar - constants.toroidalUpdatePlayerWorldPos;
+
+  uint detailMask = floatBitsToUint(sample_matdata_clipmap_nointerp(grassPosPlanarRelToClipmap).w);
+  if ((detailMask & (1 << params.detailId)) == 0)
+    return;
+
+  float height = sample_geom_clipmap(grassPosPlanarRelToClipmap);
+  vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.z);
+
+  
+}

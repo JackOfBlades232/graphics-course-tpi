@@ -149,4 +149,14 @@ vec3 sample_matdata_clipmap(vec2 w_rel_point)
   return val;
 }
 
+// @HACK, @TODO implement properly if required
+vec3 sample_matdata_clipmap_nointerp(vec2 w_rel_point)
+{
+  uint baseLevel;
+  uint nextLevel;
+  float coeff;
+  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+  return sample_matdata_clipmap_level(w_rel_point, baseLevel);
+}
+
 #endif // TERRAIN_MESH_H_INCLUDED

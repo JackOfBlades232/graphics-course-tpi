@@ -465,6 +465,31 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       result.bboxes.push_back(
         BBox{shader_vec4{chunkCoord, 1.f}, shader_vec4{chunkCoord + chunkExtent, 1.f}});
     }
+
+    if (terrainData->vegetationTypeCount > 0)
+    {
+      auto& cmd = result.sceneDrawCommands.emplace_back();
+      cmd.indexCount = 12;
+      cmd.firstIndex = 0;
+      cmd.vertexOffset = 0;
+      cmd.instanceCount = 0;
+      cmd.firstInstance = shader_uint(result.allInstances.size());
+
+      const size_t commandId = result.sceneDrawCommands.size() - 1;
+      const size_t maxVegetationAmount = // @SPEED: memory -- this is idiotic.
+        vegetationTemplateBufferData.size() * VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT;
+
+      result.allInstances.reserve(result.allInstances.size() + maxVegetationAmount);
+      for (size_t i = 0; i < maxVegetationAmount; ++i)
+      {
+        result.allInstances.push_back(
+          CullableInstance{
+            0u,
+            shader_uint(MaterialId::INVALID), // @TODO set in scene
+            shader_uint(commandId),
+            VEGETATION_INSTANCE_FLAG});
+      }
+    }
   }
 
   return result;
@@ -1129,15 +1154,20 @@ void SceneManager::selectScene(std::filesystem::path path, const SceneMultiplexi
   allInstances = std::move(insts);
 
   sceneObjectsDrawCommands = std::span{sceneDrawCommands}.first(firstTerrainCommand);
-  terrainChunksDrawCommands = std::span{sceneDrawCommands}.subspan(firstTerrainCommand);
+  if (terrainData)
+  {
+    terrainChunksDrawCommands = std::span{sceneDrawCommands}.subspan(firstTerrainCommand, 1);
+    if (terrainData->vegetationTypeCount > 0)
+      vegetationDrawCommands = std::span{sceneDrawCommands}.subspan(firstTerrainCommand + 1, 1);
+  }
 
   startDataUpload(
     verts, inds, instanceMatrices, sceneDrawCommands, bboxes, allInstances, materialParams);
 
   for (auto& st : sceneTextures)
   {
-    st.uploadStage = (std::atomic<SceneTextureUploadStage>*)st.uploadStageStorage;
-    std::construct_at(st.uploadStage, SceneTextureUploadStage::INIT);
+    std::construct_at(&st.uploadStage(), SceneTextureUploadStage::INIT);
+    st.inited = true;
   }
 
   sceneInited.test_and_set(std::memory_order_release);
@@ -1254,7 +1284,7 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
       {
         etna::Image& img = textures[size_t(st.tid)];
 
-        auto curStage = st.uploadStage->load(std::memory_order_acquire);
+        auto curStage = st.uploadStage().load(std::memory_order_acquire);
         if (curStage == SceneTextureUploadStage::DONE_LOADING_FROM_DISK)
         {
           uint32_t w = st.isCube ? st.as.cube.side : st.as.planar.w;
@@ -1292,7 +1322,7 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
               {(const std::byte*)st.as.planar.content.data(), st.as.planar.content.size()});
           }
 
-          st.uploadStage->store(
+          st.uploadStage().store(
             SceneTextureUploadStage::UPLOADING_TO_GPU, std::memory_order_release);
         }
         else if (curStage != SceneTextureUploadStage::UPLOADING_TO_GPU)
@@ -1339,7 +1369,7 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
         if (finished)
         {
           ++texturesUploaded;
-          st.uploadStage->store(SceneTextureUploadStage::DONE, std::memory_order_release);
+          st.uploadStage().store(SceneTextureUploadStage::DONE, std::memory_order_release);
           st.cleanup();
           readyTids.push_back(st.tid);
         }
@@ -1360,7 +1390,7 @@ void SceneManager::streamingLoop()
 
   for (auto& st : sceneTextures)
   {
-    st.uploadStage->store(SceneTextureUploadStage::LOADING_FROM_DISK, std::memory_order_release);
+    st.uploadStage().store(SceneTextureUploadStage::LOADING_FROM_DISK, std::memory_order_release);
 
     auto texPath = std::filesystem::path{st.uri};
     auto realPath = sceneRoot;
@@ -1422,7 +1452,7 @@ void SceneManager::streamingLoop()
       st.as.planar.content = std::move(imageData);
     }
 
-    st.uploadStage->store(
+    st.uploadStage().store(
       SceneTextureUploadStage::DONE_LOADING_FROM_DISK, std::memory_order_release);
 
     // @SPEED: can be avoided for planar, and for cube with offline repack
