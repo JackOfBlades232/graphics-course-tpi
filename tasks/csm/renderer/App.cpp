@@ -231,6 +231,18 @@ bool App::parseArgs(std::span<const char* const> argv)
       const std::string_view valarg{*it};
       cfg.debugConfigFile = valarg;
     }
+    else if (arg == "-noPointLightsShadows")
+    {
+      cfg.disablePointLightsShadowsFeature = true;
+    }
+    else if (arg == "-noSpotLightsShadows")
+    {
+      cfg.disableSpotLightsShadowsFeature = true;
+    }
+    else if (arg == "-noDirectionalLightsShadows")
+    {
+      cfg.disableDirectionalLightsShadowsFeature = true;
+    }
     else
     {
       spdlog::error("Unknown argument {}", arg);

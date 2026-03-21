@@ -11,8 +11,6 @@
 
 layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
 
-#include "terrain_mesh.glsl.inc"
-
 layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
@@ -33,6 +31,8 @@ layout(binding = 11, set = 0) readonly buffer template_t
   vec2 templateGrassPositions[];
 };
 
+#include "terrain_mesh.glsl.inc"
+
 layout(push_constant) uniform params_t
 {
   uint detailId;
@@ -51,9 +51,9 @@ void main(void)
   vec2 templatePos = templateGrassPositions[templateId];
 
   int oriId = basic_noise_int(chunkPosPlanar, 0, 3);
-  if (oriId & 1)
+  if ((oriId & 1) != 0)
     templatePos.x = VEGETATION_CHUNK_SIZE - templatePos.x;
-  if (oriId & 2)
+  if ((oriId & 2) != 0)
     templatePos.y = VEGETATION_CHUNK_SIZE - templatePos.y;
 
   vec2 grassPosPlanar = chunkPosPlanar + templatePos;
@@ -64,7 +64,7 @@ void main(void)
     return;
 
   float height = sample_geom_clipmap(grassPosPlanarRelToClipmap);
-  vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.z);
+  vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.y);
 
   
 }

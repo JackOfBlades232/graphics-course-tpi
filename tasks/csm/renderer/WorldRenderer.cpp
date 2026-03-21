@@ -201,29 +201,42 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 {
   // @TODO: make recallable, i.e. implement cleanup
 
-  sceneMgr->selectScene(path, cfg.testMultiplexScene ? cfg.testMultiplexing : SceneMultiplexing{});
+  sceneMgr->selectScene(
+    path,
+    {!cfg.disablePointLightsShadowsFeature,
+     !cfg.disableSpotLightsShadowsFeature,
+     !cfg.disableDirectionalLightsShadowsFeature},
+    cfg.testMultiplexScene ? cfg.testMultiplexing : SceneMultiplexing{});
 
   mainViewContext.emplace(viewCtxMgr->alloc("main"));
 
-  pointLightViews.reserve(sceneMgr->getLights().pointLightsCount);
-  spotLightViews.reserve(sceneMgr->getLights().spotLightsCount);
-  directionalLightCascadeViews.reserve(sceneMgr->getLights().directionalLightsCount);
-
-  for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
+  if (!cfg.disablePointLightsShadowsFeature)
   {
-    pointLightViews.emplace_back(array_make<ViewContext, 6>([this, i] {
-      return viewCtxMgr->alloc(fmt::format("point{}", i).c_str());
-    }));
+    pointLightViews.reserve(sceneMgr->getLights().pointLightsCount);
+    for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
+    {
+      pointLightViews.emplace_back(array_make<ViewContext, 6>([this, i] {
+        return viewCtxMgr->alloc(fmt::format("point{}", i).c_str());
+      }));
+    }
   }
-  for (size_t i = 0; i < sceneMgr->getLights().spotLightsCount; ++i)
+  if (!cfg.disableSpotLightsShadowsFeature)
   {
-    spotLightViews.emplace_back(viewCtxMgr->alloc(fmt::format("spot{}", i).c_str()));
+    spotLightViews.reserve(sceneMgr->getLights().spotLightsCount);
+    for (size_t i = 0; i < sceneMgr->getLights().spotLightsCount; ++i)
+    {
+      spotLightViews.emplace_back(viewCtxMgr->alloc(fmt::format("spot{}", i).c_str()));
+    }
   }
-  for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
+  if (!cfg.disableDirectionalLightsShadowsFeature)
   {
-    directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>([this, i] {
-      return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str());
-    }));
+    directionalLightCascadeViews.reserve(sceneMgr->getLights().directionalLightsCount);
+    for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
+    {
+      directionalLightCascadeViews.emplace_back(
+        array_make<ViewContext, CSM_CASCADE_COUNT>(
+          [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
+    }
   }
 
   if (sceneMgr->hasTerrain())
@@ -616,6 +629,13 @@ void WorldRenderer::update(const FramePacket& packet)
     }
   }
 
+  if (cfg.disablePointLightsShadowsFeature)
+    pointLightShadowsSettings.enable = false;
+  if (cfg.disableSpotLightsShadowsFeature)
+    spotLightShadowsSettings.enable = false;
+  if (cfg.disableDirectionalLightsShadowsFeature)
+    directionalLightShadowsSettings.enable = false;
+
   {
     constantsData.cullingMode = doSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
 
@@ -646,6 +666,7 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.csmBlendingBeltSize = csmBlendingBeltSize;
   }
 
+  if (!cfg.disableDirectionalLightsShadowsFeature)
   {
     auto& lights = sceneMgr->lightsRW();
     const auto mainViewParams =
@@ -1124,7 +1145,7 @@ void WorldRenderer::renderWorld(
     {
       // @TODO:
       //
-      // 
+      //
     }
 
     emit_barriers(
@@ -1257,7 +1278,6 @@ void WorldRenderer::renderWorld(
 
         pointLightsSettingsDirty = false;
       }
-
 
       if (spotLightShadowsSettings.enable)
       {
@@ -1939,7 +1959,6 @@ void WorldRenderer::drawGui()
 
     ImGui::End();
   }
-
 }
 
 void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci)

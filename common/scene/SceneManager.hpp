@@ -46,6 +46,13 @@ struct SceneMultiplexing
   glm::vec3 offsets = {};
 };
 
+struct SceneShadowsSetup
+{
+  bool allocatePointShadowTextures = true;
+  bool allocateSpotShadowTextures = true;
+  bool allocateDirectionalShadowTextures = true;
+};
+
 enum class SceneTextureUploadStage
 {
   INIT,
@@ -119,7 +126,10 @@ class SceneManager
 public:
   explicit SceneManager(const etna::GpuWorkCount& wc);
 
-  void selectScene(std::filesystem::path path, const SceneMultiplexing& multiplex = {});
+  void selectScene(
+    std::filesystem::path path,
+    const SceneShadowsSetup& shadows_setup = {},
+    const SceneMultiplexing& multiplex = {});
 
   bool canRender() const { return sceneDataUpload.done; }
   bool sceneFullyReady() const { return canRender() && texturesUploaded >= sceneTextures.size(); }
@@ -316,7 +326,8 @@ private:
   ProcessedLights processLights(
     const tinygltf::Model& model,
     std::span<glm::mat4> instances,
-    std::span<uint32_t> instance_mapping);
+    std::span<uint32_t> instance_mapping,
+    const SceneShadowsSetup& shadows_setup);
 
   void startDataUpload(
     std::span<const Vertex> vertices,

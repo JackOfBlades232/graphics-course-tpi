@@ -14,4 +14,8 @@ struct Config
   std::string debugConfigFile{"./debug_config.bin"};
   uint32_t debugConfigFileFormatVer = 15;
   bool useDebugConfig = true;
+
+  bool disablePointLightsShadowsFeature = false;
+  bool disableSpotLightsShadowsFeature = false;
+  bool disableDirectionalLightsShadowsFeature = false;
 };

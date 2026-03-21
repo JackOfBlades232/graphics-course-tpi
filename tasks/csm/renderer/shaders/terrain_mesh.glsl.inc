@@ -66,9 +66,9 @@ vec4 sample_albedo_clipmap_level(vec2 w_rel_point, uint level)
   return textureLod(albedoClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyzw;
 }
 
-vec3 sample_matdata_clipmap_level(vec2 w_rel_point, uint level)
+vec4 sample_matdata_clipmap_level(vec2 w_rel_point, uint level)
 {
-  return textureLod(matdataClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyz;
+  return textureLod(matdataClipmap[level], get_toroidal_uv(w_rel_point, level), 0);
 }
 
 float sample_geom_clipmap(vec2 w_rel_point)
@@ -131,17 +131,17 @@ vec4 sample_albedo_clipmap(vec2 w_rel_point)
   return val;
 }
 
-vec3 sample_matdata_clipmap(vec2 w_rel_point)
+vec4 sample_matdata_clipmap(vec2 w_rel_point)
 {
   uint baseLevel;
   uint nextLevel;
   float coeff;
   get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
 
-  vec3 val = sample_matdata_clipmap_level(w_rel_point, baseLevel);
+  vec4 val = sample_matdata_clipmap_level(w_rel_point, baseLevel);
   if (nextLevel < CLIPMAP_LEVEL_COUNT)
   {
-    vec3 nextSample = sample_matdata_clipmap_level(w_rel_point, nextLevel);
+    vec4 nextSample = sample_matdata_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
     val += coeff * nextSample;
   }
@@ -150,7 +150,7 @@ vec3 sample_matdata_clipmap(vec2 w_rel_point)
 }
 
 // @HACK, @TODO implement properly if required
-vec3 sample_matdata_clipmap_nointerp(vec2 w_rel_point)
+vec4 sample_matdata_clipmap_nointerp(vec2 w_rel_point)
 {
   uint baseLevel;
   uint nextLevel;
