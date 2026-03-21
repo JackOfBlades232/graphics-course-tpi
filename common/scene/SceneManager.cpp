@@ -474,21 +474,6 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       cmd.vertexOffset = 0;
       cmd.instanceCount = 0;
       cmd.firstInstance = shader_uint(result.allInstances.size());
-
-      const size_t commandId = result.sceneDrawCommands.size() - 1;
-      const size_t maxVegetationAmount = // @SPEED: memory -- this is idiotic.
-        vegetationTemplateBufferData.size() * VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT;
-
-      result.allInstances.reserve(result.allInstances.size() + maxVegetationAmount);
-      for (size_t i = 0; i < maxVegetationAmount; ++i)
-      {
-        result.allInstances.push_back(
-          CullableInstance{
-            0u,
-            shader_uint(MaterialId::INVALID), // @TODO set in scene
-            shader_uint(commandId),
-            VEGETATION_INSTANCE_FLAG});
-      }
     }
   }
 

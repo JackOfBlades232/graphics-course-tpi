@@ -3,17 +3,16 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "dispatch.h"
+#include "defs.h"
 
 #include "grass.comp.inc"
 
-layout(local_size_x = 1) in;
-
-layout(binding = 0, set = 0) writeonly buffer gen_t
+layout(binding = 0, set = 0) readonly buffer gen_t
 {
   GRASS_GEN_DATA_MEMBERS
 };
 
-layout(binding = 1, set = 0) writeonly buffer cmd_t
+layout(binding = 1, set = 0) buffer cmd_t
 {
   IndirectDispatchCommand command;
 };
@@ -22,9 +21,6 @@ void main(void)
 {
   if (gl_GlobalInvocationID.x == 0)
   {
-    chunkCount = 0;
-    command.wgX = 0;
-    command.wgY = 0;
-    command.wgZ = 0;
+    command.wgX = get_linear_wg_count_disp(chunkCount, BASE_WORK_GROUP_SIZE);
   }
 }

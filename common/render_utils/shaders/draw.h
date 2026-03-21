@@ -36,13 +36,9 @@ struct DrawableInstance
   shader_uint pad1_, pad2_;
 };
 
-#ifdef __cplusplus
-
-inline uint32_t get_linear_wg_count(uint32_t work_count, uint32_t wg_size)
+shader_inline shader_uint get_linear_wg_count(shader_uint work_count, shader_uint wg_size)
 {
   return (work_count - 1) / wg_size + 1;
 }
-
-#endif
 
 #endif // DRAW_H_INCLUDED

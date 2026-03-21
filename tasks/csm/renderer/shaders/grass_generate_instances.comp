@@ -5,6 +5,7 @@
 #include "defs.h"
 #include "terrain.h"
 #include "constants.h"
+#include "draw.h"
 
 #include "grass.comp.inc"
 #include "common.frag.inc"
@@ -31,16 +32,29 @@ layout(binding = 11, set = 0) readonly buffer template_t
   vec2 templateGrassPositions[];
 };
 
+layout(binding = 12, set = 0) buffer commands_t
+{
+  IndirectCommand commands[];
+};
+
+layout(binding = 13, set = 0) writeonly buffer instances_t
+{
+  GrassInstance culledInstances[];
+};
+
+#include "culling.comp.inc"
 #include "terrain_mesh.glsl.inc"
 
 layout(push_constant) uniform params_t
 {
   uint detailId;
+  uint commandId;
 } params;
 
 void main(void)
 {
-  const TerrainVegetationRule rule = terrainSource.vegetationTypes[terrainSource.details[params.detailId].vegetationId];
+  const uint vegTypeId = terrainSource.details[params.detailId].vegetationId;
+  const TerrainVegetationRule rule = terrainSource.vegetationTypes[vegTypeId];
 
   uint chunkId = gl_GlobalInvocationID.x / rule.templateBufferSize;
   if (chunkId >= chunkCount)
@@ -66,5 +80,17 @@ void main(void)
   float height = sample_geom_clipmap(grassPosPlanarRelToClipmap);
   vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.y);
 
-  
+  const mat4 instMat = translation(grassPos);
+  const BBox bbox = {
+    vec4(-rule.radius, -rule.height * GRASS_SANK_PORTION        , -rule.radius, 1.f),
+    vec4( rule.radius,  rule.height * (1.f - GRASS_SANK_PORTION),  rule.radius, 1.f)};
+  InstanceViewRelatedData payload;
+
+  if (instance_is_in_view(bbox, instMat, constants.cullingMode, payload))
+  {
+    const uint rotAngle = basic_noise_int(chunkPosPlanar + vec2(0.5f, 123.f), 0, 359);
+    const uint instId = atomicAdd(commands[params.commandId].instanceCount, 1);
+    culledInstances[instId].pos = grassPos;
+    culledInstances[instId].idAndAnglePacked = (rotAngle << GRASS_ID_BITS) | (vegTypeId & GRASS_ID_MASK);
+  }
 }

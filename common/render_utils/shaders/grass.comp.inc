@@ -1,11 +1,6 @@
-#ifndef GRASS_H_INCLUDED
-#define GRASS_H_INCLUDED
+#ifndef GRASS_COMP_INC_INCLUDED
+#define GRASS_COMP_INC_INCLUDED
 
-#include "terrain.h"
-
-#define GRASS_GEN_DATA_MEMBERS \
-  int chunkCount;              \
-  int pad_;                    \
-  shader_vec2 chunkOrigins[];
+#include "grass.h"
 
 #endif

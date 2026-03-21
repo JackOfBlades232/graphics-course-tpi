@@ -400,7 +400,7 @@ int main(int argc, char** argv)
   model.extensionsUsed.emplace_back("KHR_mesh_quantization");
 
   // Patch up pathes so that baked scene refers to the same textures
-  for (auto &img : model.images)
+  for (auto& img : model.images)
   {
     if (!img.uri.empty())
       img.uri = "../" + img.uri;

@@ -26,5 +26,8 @@ target_add_shaders(renderer
   shaders/terrain_mesh_shadow.tese
   shaders/grass_generate_clear_chunks.comp
   shaders/grass_generate_cull_chunks.comp
+  shaders/grass_generate_prepare_inst_command.comp
   shaders/grass_generate_instances.comp
+  shaders/grass_mesh.vert
+  shaders/grass_mesh.frag
 )

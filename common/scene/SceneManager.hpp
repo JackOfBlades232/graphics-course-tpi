@@ -147,6 +147,10 @@ public:
   {
     return terrainChunksDrawCommands;
   }
+  std::span<const IndirectCommand> getVegetationIndirectCommands() const
+  {
+    return vegetationDrawCommands;
+  }
 
   std::pair<uint32_t, uint32_t> getSceneObjectsIndirectCommandsSubrange() const
   {
@@ -159,6 +163,12 @@ public:
     return {
       uint32_t(terrainChunksDrawCommands.data() - sceneDrawCommands.data()),
       uint32_t(terrainChunksDrawCommands.size())};
+  }
+  std::pair<uint32_t, uint32_t> getVegetationIndirectCommandsSubrange() const
+  {
+    return {
+      uint32_t(vegetationDrawCommands.data() - sceneDrawCommands.data()),
+      uint32_t(vegetationDrawCommands.size())};
   }
 
   std::span<const glm::mat4> getInstanceMatrices() { return instanceMatrices; }
