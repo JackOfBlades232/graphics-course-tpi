@@ -84,6 +84,7 @@ struct TerrainSourceData
 
 #define VEGETATION_CHUNK_SIZE 5.f
 #define VEGETATION_GRID_EXTENT 40
+#define VEGETATION_CHUNK_CULL_GROUP_DIM 8
 
 struct HeightBounds
 {

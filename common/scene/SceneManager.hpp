@@ -147,10 +147,6 @@ public:
   {
     return terrainChunksDrawCommands;
   }
-  std::span<const IndirectCommand> getVegetationIndirectCommands() const
-  {
-    return vegetationDrawCommands;
-  }
 
   std::pair<uint32_t, uint32_t> getSceneObjectsIndirectCommandsSubrange() const
   {
@@ -163,12 +159,6 @@ public:
     return {
       uint32_t(terrainChunksDrawCommands.data() - sceneDrawCommands.data()),
       uint32_t(terrainChunksDrawCommands.size())};
-  }
-  std::pair<uint32_t, uint32_t> getVegetationIndirectCommandsSubrange() const
-  {
-    return {
-      uint32_t(vegetationDrawCommands.data() - sceneDrawCommands.data()),
-      uint32_t(vegetationDrawCommands.size())};
   }
 
   std::span<const glm::mat4> getInstanceMatrices() { return instanceMatrices; }
@@ -186,6 +176,16 @@ public:
   std::span<const glm::vec2> getVegetationTemplateData() const
   {
     return vegetationTemplateBufferData;
+  }
+  const etna::Buffer& getVegetationTemplateBuf() const
+  {
+    ETNA_ASSERT(hasVegetation());
+    return vegetationTemplateBuffer;
+  }
+  const etna::Buffer& getVegetationIndirectDrawBuf() const
+  {
+    ETNA_ASSERT(hasVegetation());
+    return vegetationIndirectDrawBuffer;
   }
 
   std::span<const etna::Image> getTextures() const { return textures; }
@@ -267,6 +267,8 @@ public:
     return false;
   }
 
+  bool hasVegetation() const { return hasTerrain() && terrainData->vegetationTypeCount > 0; }
+
   bool hasSkybox() const { return skyboxData.has_value(); }
   const SkyboxSourceData& getSkyboxData() const
   {
@@ -319,6 +321,7 @@ private:
     std::vector<BBox> bboxes;
     std::vector<CullableInstance> allInstances;
     size_t firstTerrainCommand;
+    IndirectCommand vegetationDrawCommand;
   };
 
   struct ProcessedLights
@@ -346,7 +349,8 @@ private:
     std::span<const IndirectCommand> draw_commands,
     std::span<const BBox> boxes,
     std::span<const CullableInstance> instances,
-    std::span<const Material> material_params);
+    std::span<const Material> material_params,
+    std::span<const IndirectCommand> vegetation_draw_commands);
 
   void streamingLoop();
 
@@ -372,7 +376,6 @@ private:
 
   std::span<IndirectCommand> sceneObjectsDrawCommands;
   std::span<IndirectCommand> terrainChunksDrawCommands;
-  std::span<IndirectCommand> vegetationDrawCommands;
 
   std::unique_ptr<UniformLights> lightsData{};
 
@@ -406,7 +409,9 @@ private:
   etna::Buffer materialParamsBuf;
 
   etna::Buffer vegetationTemplateBuffer;
+  etna::Buffer vegetationIndirectDrawBuffer;
   std::vector<glm::vec2> vegetationTemplateBufferData{};
+  IndirectCommand vegetationDrawCommand;
 
   struct SceneDataUpload
   {
@@ -420,6 +425,7 @@ private:
     etna::AsyncBufferUploadState instancesBufGpuUpload;
     etna::AsyncBufferUploadState materialParamsBufGpuUpload;
     etna::AsyncBufferUploadState vegetationTemplateBufferGpuUpload;
+    etna::AsyncBufferUploadState vegetationIndirectDrawBufferGpuUpload;
     bool done = false;
   } sceneDataUpload{};
 };

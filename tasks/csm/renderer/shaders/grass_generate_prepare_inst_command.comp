@@ -7,20 +7,39 @@
 
 #include "grass.comp.inc"
 
+layout(local_size_x = BASE_WORK_GROUP_SIZE) in;
+
 layout(binding = 0, set = 0) readonly buffer gen_t
 {
   GRASS_GEN_DATA_MEMBERS
 };
 
-layout(binding = 1, set = 0) buffer cmd_t
+layout(binding = 1, set = 0) writeonly buffer cmds_t
 {
-  IndirectDispatchCommand command;
+  IndirectDispatchCommand commands[];
 };
+
+layout(binding = 7, set = 0) uniform terrain_source_t
+{
+  TerrainSourceData terrainSource;
+};
+
+layout(push_constant) uniform params_t
+{
+  uint detailId;
+} params;
 
 void main(void)
 {
-  if (gl_GlobalInvocationID.x == 0)
+  const uint iidx = gl_GlobalInvocationID.x;
+  if (iidx <= commands.length())
   {
-    command.wgX = get_linear_wg_count_disp(chunkCount, BASE_WORK_GROUP_SIZE);
+    const uint vegTypeId = terrainSource.details[iidx].vegetationId;
+    if (vegTypeId == uint(-1))
+      return;
+    const TerrainVegetationRule rule = terrainSource.vegetationTypes[vegTypeId];
+    commands[iidx].wgX = get_linear_wg_count_disp(chunkCount * rule.templateBufferSize, BASE_WORK_GROUP_SIZE);
+    commands[iidx].wgY = 1;
+    commands[iidx].wgZ = 1;
   }
 }

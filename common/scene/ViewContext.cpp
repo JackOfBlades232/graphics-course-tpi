@@ -10,6 +10,7 @@ void ViewContextManager::loadShaders()
 {
   etna::create_program("culling", {SCENE_SHADERS_ROOT "culling.comp.spv"});
   etna::create_program("reset_view_context", {SCENE_SHADERS_ROOT "reset_view_context.comp.spv"});
+  etna::create_program("reset_indirect_buf", {SCENE_SHADERS_ROOT "reset_indirect_buf.comp.spv"});
   etna::create_program(
     "calculate_depth_bounds", {SCENE_SHADERS_ROOT "calculate_depth_bounds.comp.spv"});
 }
@@ -19,6 +20,7 @@ void ViewContextManager::setupPipelines(vk::Format, DebugDrawersRegistry&)
   auto& pipelineManager = etna::get_context().getPipelineManager();
   cullingPipeline = pipelineManager.createComputePipeline("culling", {});
   resetViewContextPipeline = pipelineManager.createComputePipeline("reset_view_context", {});
+  resetIndirectBufPipeline = pipelineManager.createComputePipeline("reset_indirect_buf", {});
   calculateDepthBoundsPipeline =
     pipelineManager.createComputePipeline("calculate_depth_bounds", {});
 }
@@ -299,4 +301,21 @@ void ViewContextManager::cullForView(
          .buffer = ctx.viewDataBuf.get(),
          .size = sizeof(ViewData)}});
   }
+}
+
+void ViewContextManager::resetIndirectBufNoBarriers(
+  vk::CommandBuffer cmd_buf, const etna::Buffer& buf, uint32_t cmd_count) const
+{
+  auto programInfo = etna::get_shader_program("reset_indirect_buf");
+  auto set = etna::create_descriptor_set(
+    programInfo.getDescriptorLayoutId(0), cmd_buf, {etna::Binding{0, buf.genBinding()}});
+  cmd_buf.bindDescriptorSets(
+    vk::PipelineBindPoint::eCompute,
+    resetIndirectBufPipeline.getVkPipelineLayout(),
+    0,
+    {set.getVkSet()},
+    {});
+  cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, resetIndirectBufPipeline.getVkPipeline());
+  cmd_buf.dispatch(
+    get_linear_wg_count(std::max(cmd_count, uint32_t(1)), BASE_WORK_GROUP_SIZE), 1, 1);
 }

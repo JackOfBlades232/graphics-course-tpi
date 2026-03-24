@@ -468,12 +468,11 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 
     if (terrainData->vegetationTypeCount > 0)
     {
-      auto& cmd = result.sceneDrawCommands.emplace_back();
-      cmd.indexCount = 12;
-      cmd.firstIndex = 0;
-      cmd.vertexOffset = 0;
-      cmd.instanceCount = 0;
-      cmd.firstInstance = shader_uint(result.allInstances.size());
+      result.vegetationDrawCommand.indexCount = 18;
+      result.vegetationDrawCommand.firstIndex = 0;
+      result.vegetationDrawCommand.vertexOffset = 0;
+      result.vegetationDrawCommand.instanceCount = 0;
+      result.vegetationDrawCommand.firstInstance = 0;
     }
   }
 
@@ -706,7 +705,8 @@ void SceneManager::startDataUpload(
   std::span<const IndirectCommand> draw_commands,
   std::span<const BBox> boxes,
   std::span<const CullableInstance> instances,
-  std::span<const Material> material_params)
+  std::span<const Material> material_params,
+  std::span<const IndirectCommand> vegetation_draw_commands)
 {
   unifiedVbuf = create_buffer(
     etna::Buffer::CreateInfo{
@@ -794,8 +794,19 @@ void SceneManager::startDataUpload(
         .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
         .name = "vegetationTemplateBuffer",
       });
+    vegetationIndirectDrawBuffer = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = vegetation_draw_commands.size_bytes(),
+        .bufferUsage = vk::BufferUsageFlagBits::eTransferDst |
+          vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "vegetationIndirectDrawBuffer",
+      });
     sceneDataUpload.vegetationTemplateBufferGpuUpload = streamer.initUploadBufferAsync<glm::vec2>(
       vegetationTemplateBuffer, 0, vegetationTemplateBufferData);
+    sceneDataUpload.vegetationIndirectDrawBufferGpuUpload =
+      streamer.initUploadBufferAsync<IndirectCommand>(
+        vegetationIndirectDrawBuffer, 0, vegetation_draw_commands);
   }
 }
 
@@ -1121,6 +1132,7 @@ void SceneManager::selectScene(
       dst.splattingCompId = shader_uint(det.splattingCompId);
       dst.splattingCompMask = shader_uint(det.splattingCompMask);
       dst.matId = det.material == -1 ? MaterialId::INVALID : materialRemapping[det.material];
+      dst.vegetationId = det.vegetation == -1 ? uint32_t(-1) : det.vegetation;
       dst.flags = (det.useSplattingMask ? TERRAIN_DETAIL_USE_MASK_FLAG : 0) |
         (det.useRelHeightRange ? TERRAIN_DETAIL_USE_RH_RANGE_FLAG : 0);
 
@@ -1144,8 +1156,9 @@ void SceneManager::selectScene(
   spotLightMaps = slm;
   directionalLightCsmCascades = dlcsm;
 
-  auto [verts, inds, relems, meshs, commands, bboxs, insts, firstTerrainCommand] =
-    processMeshes(model, materialRemapping);
+  auto
+    [verts, inds, relems, meshs, commands, bboxs, insts, firstTerrainCommand, vegetationCommand] =
+      processMeshes(model, materialRemapping);
   renderElements = std::move(relems);
   meshes = std::move(meshs);
   sceneDrawCommands = std::move(commands);
@@ -1157,11 +1170,18 @@ void SceneManager::selectScene(
   {
     terrainChunksDrawCommands = std::span{sceneDrawCommands}.subspan(firstTerrainCommand, 1);
     if (terrainData->vegetationTypeCount > 0)
-      vegetationDrawCommands = std::span{sceneDrawCommands}.subspan(firstTerrainCommand + 1, 1);
+      vegetationDrawCommand = vegetationCommand;
   }
 
   startDataUpload(
-    verts, inds, instanceMatrices, sceneDrawCommands, bboxes, allInstances, materialParams);
+    verts,
+    inds,
+    instanceMatrices,
+    sceneDrawCommands,
+    bboxes,
+    allInstances,
+    materialParams,
+    std::span{&vegetationDrawCommand, 1});
 
   for (auto& st : sceneTextures)
   {
@@ -1217,6 +1237,8 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
         {
           sceneDataUpload.done &= upload.progressBufferUploadAsync(
             cmd_buf, sceneDataUpload.vegetationTemplateBufferGpuUpload);
+          sceneDataUpload.done &= upload.progressBufferUploadAsync(
+            cmd_buf, sceneDataUpload.vegetationIndirectDrawBufferGpuUpload);
         }
         if (sceneDataUpload.done)
         {
@@ -1272,6 +1294,28 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
                .buffer = materialParamsBuf.get(),
                .size = std::span{materialParams}.size_bytes()}});
+          if (!vegetationTemplateBufferData.empty())
+          {
+            emit_barriers(
+              cmd_buf,
+              {vk::BufferMemoryBarrier2{
+                .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+                .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+                .buffer = vegetationTemplateBuffer.get(),
+                .size = std::span{vegetationTemplateBufferData}.size_bytes()}});
+            emit_barriers(
+              cmd_buf,
+              {vk::BufferMemoryBarrier2{
+                .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+                .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .buffer = vegetationIndirectDrawBuffer.get(),
+                .size = sizeof(IndirectCommand)}});
+          }
           model = {};
         }
       }

@@ -8,7 +8,7 @@
 
 #include "grass.comp.inc"
 
-layout(local_size_x = VEGETATION_GRID_EXTENT, local_size_y = VEGETATION_GRID_EXTENT) in;
+layout(local_size_x = VEGETATION_CHUNK_CULL_GROUP_DIM, local_size_y = VEGETATION_CHUNK_CULL_GROUP_DIM) in;
 
 layout(binding = 8, set = 0) uniform constants_t
 {

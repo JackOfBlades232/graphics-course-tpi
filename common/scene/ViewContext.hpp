@@ -51,10 +51,14 @@ public:
     const ViewParams& params,
     const etna::Buffer& constants);
 
+  void resetIndirectBufNoBarriers(
+    vk::CommandBuffer cmd_buf, const etna::Buffer& buf, uint32_t cmd_count) const;
+
 private:
   etna::ComputePipeline cullingPipeline{};
   etna::ComputePipeline calculateDepthBoundsPipeline{};
   etna::ComputePipeline resetViewContextPipeline{};
+  etna::ComputePipeline resetIndirectBufPipeline{};
   const etna::GpuWorkCount& workCount;
   const SceneManager& sceneMgr;
 

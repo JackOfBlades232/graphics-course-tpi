@@ -360,6 +360,38 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     spdlog::info("JB_terrain: terrain not present");
   }
 
+  if (sceneMgr->hasVegetation())
+  {
+    const auto& td = sceneMgr->getTerrainData();
+    spdlog::info("JB_terrain: loaded {} vegetation types!", td.vegetationTypeCount);
+
+    vegetation.emplace(VegetationRenderingData{});
+
+    vegetation->culledChunkBuffer = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = vegChunkBufferSizeBytes(),
+        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "vegetation_chunk_buffer"});
+    vegetation->indirectDispatchBuffer = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = terrain->sourceData.detailCount * sizeof(IndirectDispatchCommand),
+        .bufferUsage =
+          vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "vegetation_indirect_dispatch_buffer"});
+    vegetation->grassInstancesBuffer = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = vegInstBufferSizeBytes(),
+        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "vegetation_instances_buffer"});
+  }
+  else
+  {
+    spdlog::info("JB_terrain: vegetation not present");
+  }
+
   if (sceneMgr->hasSkybox())
   {
     spdlog::info("JB_skybox: skybox loaded!");
@@ -453,6 +485,18 @@ void WorldRenderer::loadShaders()
     {RENDERER_SHADERS_ROOT "transfer_terrain_chunk_height_bounds.comp.spv"});
   etna::create_program(
     "transfer_light_mats", {RENDERER_SHADERS_ROOT "transfer_light_mats.comp.spv"});
+  etna::create_program(
+    "grass_mesh",
+    {RENDERER_SHADERS_ROOT "grass_mesh.frag.spv", RENDERER_SHADERS_ROOT "grass_mesh.vert.spv"});
+  etna::create_program(
+    "grass_generate_clear_chunks", {RENDERER_SHADERS_ROOT "grass_generate_clear_chunks.comp.spv"});
+  etna::create_program(
+    "grass_generate_cull_chunks", {RENDERER_SHADERS_ROOT "grass_generate_cull_chunks.comp.spv"});
+  etna::create_program(
+    "grass_generate_prepare_inst_command",
+    {RENDERER_SHADERS_ROOT "grass_generate_prepare_inst_command.comp.spv"});
+  etna::create_program(
+    "grass_generate_instances", {RENDERER_SHADERS_ROOT "grass_generate_instances.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -547,13 +591,52 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
            vk::Format::eR32G32B32A32Sfloat},
           .depthAttachmentFormat = vk::Format::eD32Sfloat,
         },
-
+    };
+  auto vegetationPipelineCreateInfo =
+    etna::GraphicsPipeline::CreateInfo{
+      .rasterizationConfig =
+        vk::PipelineRasterizationStateCreateInfo{
+          .polygonMode = vk::PolygonMode::eFill,
+          .cullMode = vk::CullModeFlagBits::eNone,
+          .frontFace = vk::FrontFace::eCounterClockwise,
+          .lineWidth = 1.f,
+        },
+      .blendingConfig =
+        {.attachments =
+           {
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::False,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+           },
+         .logicOp = vk::LogicOp::eSet},
+      .fragmentShaderOutput =
+        {
+          .colorAttachmentFormats = // @TODO: save these into vars
+          {vk::Format::eR32G32B32A32Sfloat,
+           vk::Format::eR32G32B32A32Sfloat,
+           vk::Format::eR32G32B32A32Sfloat},
+          .depthAttachmentFormat = vk::Format::eD32Sfloat,
+        },
     };
 
   staticMeshPipeline.emplace(
     pipelineManager, "static_mesh", "static_mesh_shadow", meshPipelineCreateInfo);
   terrainMeshPipeline.emplace(
     pipelineManager, "terrain_mesh", "terrain_mesh_shadow", terrainPipelineCreateInfo);
+  vegetationMeshPipeline.emplace(
+    pipelineManager, "grass_mesh", "grass_mesh", vegetationPipelineCreateInfo);
 
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
   resetTerrainChunkHeightBoundsPipeline =
@@ -563,6 +646,14 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   transferTerrainChunkHeightBoundsPipeline =
     pipelineManager.createComputePipeline("transfer_terrain_chunk_height_bounds", {});
   transferLightMatsPipeline = pipelineManager.createComputePipeline("transfer_light_mats", {});
+  vegetationGenerateClearChunks =
+    pipelineManager.createComputePipeline("grass_generate_clear_chunks", {});
+  vegetationGenerateCullChunks =
+    pipelineManager.createComputePipeline("grass_generate_cull_chunks", {});
+  vegetationGeneratePrepareInstCommand =
+    pipelineManager.createComputePipeline("grass_generate_prepare_inst_command", {});
+  vegetationGenerateInstances =
+    pipelineManager.createComputePipeline("grass_generate_instances", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -753,6 +844,10 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     return p == SceneRenderingPass::COLOR || p == SceneRenderingPass::WIRE_COLOR;
   };
 
+  const bool needToDrawScene = drawScene && (srpi.flags & SRPO_STATIC);
+  const bool needToDrawTerrain = terrain && drawTerrain && (srpi.flags & SRPO_TERRAIN);
+  const bool needToDrawVegetation = vegetation && drawVegetation && (srpi.flags & SRPO_VEGETATION);
+
   srpi.vctx->update(srpi.vparams);
   viewCtxMgr->cullForView(cmd_buf, *srpi.vctx, srpi.vparams, constants->get());
 
@@ -763,7 +858,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     ETNA_PROFILE_GPU(cmd_buf, renderScene);
 
     auto sceneDset = [&, this]() -> std::optional<etna::DescriptorSet> {
-      if (drawScene)
+      if (needToDrawScene)
       {
         return etna::create_descriptor_set(
           staticMeshPipeline->getProg(srpi.pass).getDescriptorLayoutId(0),
@@ -779,7 +874,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
       }
     }();
     auto terrainDset = [&, this]() -> std::optional<etna::DescriptorSet> {
-      if (terrain && drawTerrain)
+      if (needToDrawTerrain)
       {
         std::vector<etna::Binding> terrainBinds{};
         terrainBinds.reserve(
@@ -810,6 +905,23 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         return std::nullopt;
       }
     }();
+    auto vegetationDset = [&, this]() -> std::optional<etna::DescriptorSet> {
+      if (needToDrawVegetation)
+      {
+        return etna::create_descriptor_set(
+          vegetationMeshPipeline->getProg(srpi.pass).getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, vegetation->grassInstancesBuffer.genBinding()},
+           etna::Binding{7, terrain->source.genBinding()},
+           etna::Binding{8, constants->get().genBinding()},
+           etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()},
+           etna::Binding{10, srpi.vctx->viewDataBuf.genBinding()}});
+      }
+      else
+      {
+        return std::nullopt;
+      }
+    }();
 
     etna::RenderTargetState renderTargets{cmd_buf, srpi.rtargetInfo};
 
@@ -820,7 +932,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         srpi.depthBiasConstantFactor, srpi.depthBiasClamp, srpi.depthBiasSlopeFactor);
     }
 
-    if (drawScene)
+    if (needToDrawScene)
     {
       ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
 
@@ -848,7 +960,24 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         srpi.vctx->indirectDrawBuf.get(), offset, count, sizeof(IndirectCommand));
     }
 
-    if (terrain && drawTerrain)
+    if (needToDrawVegetation)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, sceneVegetation);
+
+      const auto& pipe = vegetationMeshPipeline->get(srpi.pass, bool(srpi.vparams.needReverseZ));
+      std::vector vkSets{vegetationDset->getVkSet()};
+
+      // @TODO: bindless once we impl a proper frag shader
+
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, vkSets, {});
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
+
+      cmd_buf.drawIndexedIndirect(
+        sceneMgr->getVegetationIndirectDrawBuf().get(), 0, 1, sizeof(IndirectCommand));
+    }
+
+    if (needToDrawTerrain)
     {
       ETNA_PROFILE_GPU(cmd_buf, terrain);
 
@@ -1142,10 +1271,250 @@ void WorldRenderer::renderWorld(
           .size = sceneMgr->getBboxes().size_bytes()}});
     }
 
+    if (drawVegetation)
     {
-      // @TODO:
-      //
-      //
+      ETNA_PROFILE_GPU(cmd_buf, grassGen);
+
+      // @TODO: unify
+      mainViewContext->update(
+        view_params_for_cam(mainCam, aspect(), false, true, csmSplitLambda, csmShadowDist));
+
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = vegetation->culledChunkBuffer.get(),
+          .size = vegChunkBufferSizeBytes()}});
+
+      {
+        auto programInfo = etna::get_shader_program("grass_generate_clear_chunks");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, vegetation->culledChunkBuffer.genBinding()}});
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          vegetationGenerateClearChunks.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, vegetationGenerateClearChunks.getVkPipeline());
+        cmd_buf.dispatch(1, 1, 1);
+      }
+
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = vegetation->culledChunkBuffer.get(),
+          .size = vegChunkBufferSizeBytes()}});
+
+      {
+        auto programInfo = etna::get_shader_program("grass_generate_cull_chunks");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {
+            etna::Binding{8, constants->get().genBinding()},
+            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
+            etna::Binding{10, vegetation->culledChunkBuffer.genBinding()},
+          });
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          vegetationGenerateCullChunks.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, vegetationGenerateCullChunks.getVkPipeline());
+        cmd_buf.dispatch(
+          get_linear_wg_count(VEGETATION_CHUNK_SIZE, VEGETATION_CHUNK_CULL_GROUP_DIM),
+          get_linear_wg_count(VEGETATION_CHUNK_SIZE, VEGETATION_CHUNK_CULL_GROUP_DIM),
+          1);
+      }
+
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+          .buffer = vegetation->culledChunkBuffer.get(),
+          .size = vegChunkBufferSizeBytes()}});
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+          .srcAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = vegetation->indirectDispatchBuffer.get(),
+          .size = terrain->sourceData.detailCount * sizeof(IndirectDispatchCommand)}});
+
+      {
+        auto programInfo = etna::get_shader_program("grass_generate_prepare_inst_command");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, vegetation->culledChunkBuffer.genBinding()},
+           etna::Binding{1, vegetation->indirectDispatchBuffer.genBinding()},
+           etna::Binding{7, terrain->source.genBinding()}});
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          vegetationGeneratePrepareInstCommand.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, vegetationGeneratePrepareInstCommand.getVkPipeline());
+        cmd_buf.dispatch(
+          get_linear_wg_count(terrain->sourceData.detailCount, BASE_WORK_GROUP_SIZE), 1, 1);
+      }
+
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+          .srcAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = sceneMgr->getVegetationIndirectDrawBuf().get(),
+          .size = sizeof(IndirectCommand)}});
+
+      viewCtxMgr->resetIndirectBufNoBarriers(cmd_buf, sceneMgr->getVegetationIndirectDrawBuf(), 1);
+
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+          .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+          .buffer = vegetation->indirectDispatchBuffer.get(),
+          .size = terrain->sourceData.detailCount * sizeof(IndirectDispatchCommand)}});
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = sceneMgr->getVegetationIndirectDrawBuf().get(),
+          .size = sizeof(IndirectCommand)}});
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eVertexShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .buffer = vegetation->grassInstancesBuffer.get(),
+          .size = vegInstBufferSizeBytes()}});
+
+      {
+        auto programInfo = etna::get_shader_program("grass_generate_instances");
+        std::vector<etna::Binding> binds{};
+        binds.reserve(
+          terrain->geometryLevelsSamplerBindings.size() +
+          terrain->normalLevelsSamplerBindings.size() +
+          terrain->albedoLevelsSamplerBindings.size() +
+          terrain->matdataLevelsSamplerBindings.size() + 7);
+        for (const auto& b : terrain->geometryLevelsSamplerBindings)
+          binds.push_back(b);
+        for (const auto& b : terrain->normalLevelsSamplerBindings)
+          binds.push_back(b);
+        for (const auto& b : terrain->albedoLevelsSamplerBindings)
+          binds.push_back(b);
+        for (const auto& b : terrain->matdataLevelsSamplerBindings)
+          binds.push_back(b);
+        binds.emplace_back(7, terrain->source.genBinding());
+        binds.emplace_back(8, constants->get().genBinding());
+        binds.emplace_back(9, mainViewContext->viewParamsBuf.get().genBinding());
+        binds.emplace_back(10, vegetation->culledChunkBuffer.genBinding());
+        binds.emplace_back(11, sceneMgr->getVegetationTemplateBuf().genBinding());
+        binds.emplace_back(12, sceneMgr->getVegetationIndirectDrawBuf().genBinding());
+        binds.emplace_back(13, vegetation->grassInstancesBuffer.genBinding());
+        auto set =
+          etna::create_descriptor_set(programInfo.getDescriptorLayoutId(0), cmd_buf, binds);
+        etna::flush_barriers(cmd_buf);
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          vegetationGenerateInstances.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, vegetationGenerateInstances.getVkPipeline());
+
+        for (size_t detId = 0; detId < terrain->sourceData.detailCount; ++detId)
+        {
+          if (terrain->sourceData.details[detId].vegetationId <= 0)
+            continue;
+          if (detId > 0)
+          {
+            emit_barriers(
+              cmd_buf,
+              {vk::BufferMemoryBarrier2{
+                .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .buffer = sceneMgr->getVegetationIndirectDrawBuf().get(),
+                .size = sizeof(IndirectCommand)}});
+            emit_barriers(
+              cmd_buf,
+              {vk::BufferMemoryBarrier2{
+                .srcStageMask = vk::PipelineStageFlagBits2::eVertexShader,
+                .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+                .buffer = vegetation->grassInstancesBuffer.get(),
+                .size = vegInstBufferSizeBytes()}});
+          }
+          cmd_buf.pushConstants<shader_uint>(
+            vegetationGenerateInstances.getVkPipelineLayout(),
+            vk::ShaderStageFlagBits::eCompute,
+            0,
+            shader_uint(detId));
+          cmd_buf.dispatchIndirect(
+            vegetation->indirectDispatchBuffer.get(), detId * sizeof(IndirectDispatchCommand));
+        }
+      }
+
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask =
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eDrawIndirect,
+          .dstAccessMask = vk::AccessFlagBits2::eIndirectCommandRead,
+          .buffer = sceneMgr->getVegetationIndirectDrawBuf().get(),
+          .size = sizeof(IndirectCommand)}});
+      emit_barriers(
+        cmd_buf,
+        {vk::BufferMemoryBarrier2{
+          .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+          .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
+          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+          .buffer = vegetation->grassInstancesBuffer.get(),
+          .size = vegInstBufferSizeBytes()}});
+
+      // @TODO: sorting, prepass
     }
 
     emit_barriers(
@@ -1251,6 +1620,7 @@ void WorldRenderer::renderWorld(
               {.pass = pointLightShadowsSettings.frontFaceCull
                  ? SceneRenderingPass::SHADOW_FRONT_CULLED
                  : SceneRenderingPass::SHADOW,
+               .flags = SRPO_STATIC | SRPO_TERRAIN,
                .vctx = &pointLightViews[i][j],
                .vparams = view_params_for_cam(
                  cam, 1.f, true, false), // @TODO: reverse depth is broken on point lights
@@ -1326,6 +1696,7 @@ void WorldRenderer::renderWorld(
             {.pass = spotLightShadowsSettings.frontFaceCull
                ? SceneRenderingPass::SHADOW_FRONT_CULLED
                : SceneRenderingPass::SHADOW,
+             .flags = SRPO_STATIC | SRPO_TERRAIN,
              .vctx = &spotLightViews[i],
              .vparams = view_params_for_cam(
                cam, 1.f, true, false), // @TODO: reverse depth is broken on spot lights
@@ -1405,6 +1776,7 @@ void WorldRenderer::renderWorld(
               {.pass = directionalLightShadowsSettings.frontFaceCull
                  ? SceneRenderingPass::SHADOW_FRONT_CULLED
                  : SceneRenderingPass::SHADOW,
+               .flags = SRPO_STATIC | SRPO_TERRAIN,
                .vctx = &directionalLightCascadeViews[i][j],
                .vparams = view_params_for_cam(cam, xExt, yExt, true),
                .rtargetInfo =
@@ -1450,6 +1822,7 @@ void WorldRenderer::renderWorld(
       renderScene(
         cmd_buf,
         {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
+         .flags = SRPO_ALL,
          .vctx = &mainViewContext.value(),
          .vparams =
            view_params_for_cam(mainCam, aspect(), false, true, csmSplitLambda, csmShadowDist),
@@ -1745,6 +2118,7 @@ void WorldRenderer::drawGui()
           queueClipmapInvalidation();
         }
       }
+      ImGui::Checkbox("Draw vegetation", &drawVegetation);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
@@ -1870,6 +2244,8 @@ void WorldRenderer::drawGui()
 
       if (!terrain)
         drawTerrain = false;
+      if (!vegetation)
+        drawVegetation = false;
 
       // @TODO: text
       if (ImGui::BeginCombo(
@@ -2081,6 +2457,7 @@ void WorldRenderer::loadDebugConfig()
   drawScene = unwrap(reader.read<bool>());
   drawTerrain = unwrap(reader.read<bool>());
   drawTerrainSplattedDetail = unwrap(reader.read<bool>());
+  drawVegetation = unwrap(reader.read<bool>());
   doSatCulling = unwrap(reader.read<bool>());
   enableSkybox = unwrap(reader.read<bool>());
   doTonemapping = unwrap(reader.read<bool>());
@@ -2147,6 +2524,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(drawScene));
   ETNA_VERIFY(writer.write(drawTerrain));
   ETNA_VERIFY(writer.write(drawTerrainSplattedDetail));
+  ETNA_VERIFY(writer.write(drawVegetation));
   ETNA_VERIFY(writer.write(doSatCulling));
   ETNA_VERIFY(writer.write(enableSkybox));
   ETNA_VERIFY(writer.write(doTonemapping));

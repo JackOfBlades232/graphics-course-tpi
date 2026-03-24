@@ -22,7 +22,9 @@
 
 #include <constants.h>
 #include <terrain.h>
+#include <grass.h>
 #include <skybox.h>
+#include <dispatch.h>
 
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
@@ -78,9 +80,19 @@ private:
     return reverse_z ? DepthFlavour::REVERSE : DepthFlavour::NORMAL;
   }
 
+  enum SceneRenderingPassObjectsFlags : uint32_t
+  {
+    SRPO_STATIC = 1,
+    SRPO_TERRAIN = 1 << 1,
+    SRPO_VEGETATION = 1 << 2,
+
+    SRPO_ALL = ~0u
+  };
+
   struct SceneRenderPassInfo
   {
     SceneRenderingPass pass;
+    uint32_t flags;
     ViewContext* vctx;
     ViewParams vparams;
     etna::RenderTargetState::RenderPassInfo rtargetInfo;
@@ -139,6 +151,13 @@ private:
     bool invalidateClipmapRequested = false;
   };
 
+  struct VegetationRenderingData
+  {
+    etna::Buffer culledChunkBuffer;
+    etna::Buffer indirectDispatchBuffer;
+    etna::Buffer grassInstancesBuffer;
+  };
+
   struct SkyboxRenderingData
   {
     etna::Buffer source{};
@@ -194,11 +213,16 @@ private:
   std::unique_ptr<PostfxRenderer> gbufferResolver{};
   std::optional<MeshPipeline> staticMeshPipeline{};
   std::optional<MeshPipeline> terrainMeshPipeline{};
+  std::optional<MeshPipeline> vegetationMeshPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
   etna::ComputePipeline resetTerrainChunkHeightBoundsPipeline{};
   etna::ComputePipeline generateTerrainChunkHeightBoundsPipeline{};
   etna::ComputePipeline transferTerrainChunkHeightBoundsPipeline{};
   etna::ComputePipeline transferLightMatsPipeline{};
+  etna::ComputePipeline vegetationGenerateClearChunks{};
+  etna::ComputePipeline vegetationGenerateCullChunks{};
+  etna::ComputePipeline vegetationGeneratePrepareInstCommand{};
+  etna::ComputePipeline vegetationGenerateInstances{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
 
@@ -224,6 +248,7 @@ private:
   UniformLights prevLights{};
 
   std::optional<TerrainRenderingData> terrain{};
+  std::optional<VegetationRenderingData> vegetation{};
   std::optional<SkyboxRenderingData> skybox{};
 
   // @TODO: unify with one in scene manager
@@ -270,6 +295,7 @@ private:
   bool drawScene = true;
   bool drawTerrain = true;
   bool drawTerrainSplattedDetail = true;
+  bool drawVegetation = true;
   bool doSatCulling = true;
   bool enableSkybox = true;
   bool doTonemapping = true;
@@ -332,5 +358,16 @@ private:
   {
     if (terrain)
       terrain->invalidateClipmapRequested = true;
+  }
+
+  uint32_t vegChunkBufferSizeBytes() const
+  {
+    return 2 * sizeof(int32_t) +
+      VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT * sizeof(shader_vec2);
+  }
+  uint32_t vegInstBufferSizeBytes() const
+  {
+    return VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT *
+      sceneMgr->getVegetationTemplateData().size() * sizeof(GrassInstance);
   }
 };
