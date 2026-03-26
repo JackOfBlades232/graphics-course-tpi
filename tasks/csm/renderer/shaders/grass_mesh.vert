@@ -49,30 +49,34 @@ void main(void)
   const TerrainVegetationRule rule = terrainSource.vegetationTypes[vegTypeId];
 
   float rotationAngle = GRASS_INSTANCE_ANGLE(inst);
-  if (gl_VertexIndex >= 4)
+  uint quadVId = gl_VertexIndex;
+  if (gl_VertexIndex >= 6)
+  {
     rotationAngle += SHADER_PI / 3.f;
-  if (gl_VertexIndex >= 8)
+    quadVId -= 6;
+  }
+  if (gl_VertexIndex >= 12)
+  {
     rotationAngle += SHADER_PI / 3.f;
+    quadVId -= 6;
+  }
 
   // ugh
   vec2 dir = vec2(cos(rotationAngle), sin(rotationAngle));
 
   // quad winding order does not matter cuz we don't face cull
-  uint quadVId = gl_VertexIndex & 3;
-  vec3 pos = inst.pos + vec3(dir.x, 0.f, dir.y) * rule.radius * (quadVId >= 2 ? -1.f : 1.f);
-  if (quadVId == 0 || quadVId == 3)
-  {
+  bool isBottomVertex = quadVId == 0 || quadVId == 2 || quadVId == 3;
+  bool isFarVertex = quadVId == 2 || quadVId == 3 || quadVId == 5;
+  vec3 pos = inst.pos + vec3(dir.x, 0.f, dir.y) * rule.radius * (isFarVertex ? 1.f : -1.f);
+  if (isBottomVertex)
     pos.y -= GRASS_SANK_PORTION * rule.height; 
-  }
   else
-  {
     pos.y += (1.f - GRASS_SANK_PORTION) * rule.height; 
-  }
 
   // @TODO: sort this space out (has to match both sides)
   vec3 norm = vec3(dir.y, 0.f, dir.x);
   vec4 tang = vec4(dir.x, 0.f, dir.y, 1.f);
-  vec2 tc = vec2(quadVId >= 2 ? 1.f : 0.f, quadVId == 1 || quadVId == 2 ? 1.f : 0.f);
+  vec2 tc = vec2(isFarVertex ? 1.f : 0.f, isBottomVertex ? 0.f : 1.f);
 
   vOut.wPos     = pos;
   vOut.wNorm    = norm;

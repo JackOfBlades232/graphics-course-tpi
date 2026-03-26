@@ -72,7 +72,8 @@ void main(void)
   vec2 grassPosPlanar = chunkPosPlanar + templatePos;
   vec2 grassPosPlanarRelToClipmap = grassPosPlanar - constants.toroidalUpdatePlayerWorldPos;
 
-  uint detailMask = floatBitsToUint(sample_matdata_clipmap_nointerp(grassPosPlanarRelToClipmap).w);
+  vec4 matdata = load_matdata_clipmap(grassPosPlanarRelToClipmap);
+  uint detailMask = floatBitsToUint(matdata.w);
   if ((detailMask & (1 << params.detailId)) == 0)
     return;
 

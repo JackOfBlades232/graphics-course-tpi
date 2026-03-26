@@ -28,7 +28,6 @@ void main(void)
 
   // @TEST
   out_fragAlbedo = vec4(0.4f, 1.f, 0.f, 1.f);
-  out_fragMaterial = vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
-  out_fragNormal =
-    sign(dot(viewParams.mView[3].xyz - surf.wPos, surf.wNorm)) * surf.wNorm;
+  out_fragMaterial = vec3(0.0f); //vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
+  out_fragNormal = sign(dot(viewParams.mView[3].xyz - surf.wPos, surf.wNorm)) * surf.wNorm;
 }

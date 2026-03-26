@@ -53,22 +53,50 @@ vec2 get_toroidal_uv(vec2 w_rel_point, uint level)
 
 float sample_geom_clipmap_level(vec2 w_rel_point, uint level)
 {
-  return textureLod(geomClipmap[level], get_toroidal_uv(w_rel_point, level), 0).x;
+  vec2 uv = get_toroidal_uv(w_rel_point, level);
+  return textureLod(geomClipmap[level], uv, 0).x;
 }
 
 vec3 sample_normal_clipmap_level(vec2 w_rel_point, uint level)
 {
-  return textureLod(normalClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyz;
+  vec2 uv = get_toroidal_uv(w_rel_point, level);
+  return textureLod(normalClipmap[level], uv, 0).xyz;
 }
 
 vec4 sample_albedo_clipmap_level(vec2 w_rel_point, uint level)
 {
-  return textureLod(albedoClipmap[level], get_toroidal_uv(w_rel_point, level), 0).xyzw;
+  vec2 uv = get_toroidal_uv(w_rel_point, level);
+  return textureLod(albedoClipmap[level], uv, 0).xyzw;
 }
 
 vec4 sample_matdata_clipmap_level(vec2 w_rel_point, uint level)
 {
-  return textureLod(matdataClipmap[level], get_toroidal_uv(w_rel_point, level), 0);
+  vec2 uv = get_toroidal_uv(w_rel_point, level);
+  return textureLod(matdataClipmap[level], uv, 0);
+}
+
+float load_geom_clipmap_level(vec2 w_rel_point, uint level)
+{
+  ivec2 uv = ivec2(get_toroidal_uv(w_rel_point, level) * textureSize(geomClipmap[level], 0));
+  return texelFetch(geomClipmap[level], uv, 0).x;
+}
+
+vec3 load_normal_clipmap_level(vec2 w_rel_point, uint level)
+{
+  ivec2 uv = ivec2(get_toroidal_uv(w_rel_point, level) * textureSize(normalClipmap[level], 0));
+  return texelFetch(normalClipmap[level], uv, 0).xyz;
+}
+
+vec4 load_albedo_clipmap_level(vec2 w_rel_point, uint level)
+{
+  ivec2 uv = ivec2(get_toroidal_uv(w_rel_point, level) * textureSize(albedoClipmap[level], 0));
+  return texelFetch(albedoClipmap[level], uv, 0);
+}
+
+vec4 load_matdata_clipmap_level(vec2 w_rel_point, uint level)
+{
+  ivec2 uv = ivec2(get_toroidal_uv(w_rel_point, level) * textureSize(matdataClipmap[level], 0));
+  return texelFetch(matdataClipmap[level], uv, 0);
 }
 
 float sample_geom_clipmap(vec2 w_rel_point)
@@ -150,13 +178,13 @@ vec4 sample_matdata_clipmap(vec2 w_rel_point)
 }
 
 // @HACK, @TODO implement properly if required
-vec4 sample_matdata_clipmap_nointerp(vec2 w_rel_point)
+vec4 load_matdata_clipmap(vec2 w_rel_point)
 {
   uint baseLevel;
   uint nextLevel;
   float coeff;
   get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
-  return sample_matdata_clipmap_level(w_rel_point, baseLevel);
+  return load_matdata_clipmap_level(w_rel_point, baseLevel);
 }
 
 #endif // TERRAIN_MESH_H_INCLUDED

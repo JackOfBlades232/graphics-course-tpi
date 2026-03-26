@@ -1336,8 +1336,8 @@ void WorldRenderer::renderWorld(
         cmd_buf.bindPipeline(
           vk::PipelineBindPoint::eCompute, vegetationGenerateCullChunks.getVkPipeline());
         cmd_buf.dispatch(
-          get_linear_wg_count(VEGETATION_CHUNK_SIZE, VEGETATION_CHUNK_CULL_GROUP_DIM),
-          get_linear_wg_count(VEGETATION_CHUNK_SIZE, VEGETATION_CHUNK_CULL_GROUP_DIM),
+          get_linear_wg_count(VEGETATION_GRID_EXTENT, VEGETATION_CHUNK_CULL_GROUP_DIM),
+          get_linear_wg_count(VEGETATION_GRID_EXTENT, VEGETATION_CHUNK_CULL_GROUP_DIM),
           1);
       }
 
@@ -1459,7 +1459,7 @@ void WorldRenderer::renderWorld(
 
         for (size_t detId = 0; detId < terrain->sourceData.detailCount; ++detId)
         {
-          if (terrain->sourceData.details[detId].vegetationId <= 0)
+          if (terrain->sourceData.details[detId].vegetationId == shader_uint(-1))
             continue;
           if (detId > 0)
           {

@@ -35,11 +35,18 @@ void main(void)
   if (iidx <= commands.length())
   {
     const uint vegTypeId = terrainSource.details[iidx].vegetationId;
-    if (vegTypeId == uint(-1))
-      return;
-    const TerrainVegetationRule rule = terrainSource.vegetationTypes[vegTypeId];
-    commands[iidx].wgX = get_linear_wg_count_disp(chunkCount * rule.templateBufferSize, BASE_WORK_GROUP_SIZE);
-    commands[iidx].wgY = 1;
-    commands[iidx].wgZ = 1;
+    if (vegTypeId == uint(-1) || chunkCount == 0)
+    {
+      commands[iidx].wgX = 0;
+      commands[iidx].wgY = 0;
+      commands[iidx].wgZ = 0;
+    }
+    else
+    {
+      const TerrainVegetationRule rule = terrainSource.vegetationTypes[vegTypeId];
+      commands[iidx].wgX = get_linear_wg_count_disp(chunkCount * rule.templateBufferSize, BASE_WORK_GROUP_SIZE);
+      commands[iidx].wgY = 1;
+      commands[iidx].wgZ = 1;
+    }
   }
 }

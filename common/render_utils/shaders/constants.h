@@ -17,6 +17,7 @@ struct Constants
 
   float terrainNoiseRelHeightAmp;
   float terrainNoisePeriod;
+  float pad0_, pad1_;
 
   shader_uint terrainFirstInstance;
 
@@ -47,6 +48,8 @@ struct Constants
 
   float csmSplitLambda;
   float csmBlendingBeltSize;
+
+  float pad2_;
 };
 
 #endif // CONSTANTS_H_INCLUDED
