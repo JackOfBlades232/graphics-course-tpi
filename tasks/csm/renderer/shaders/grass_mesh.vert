@@ -62,11 +62,11 @@ void main(void)
   }
 
   // ugh
-  vec2 dir = vec2(cos(rotationAngle), sin(rotationAngle));
+  vec2 dir = normalize(vec2(cos(rotationAngle), sin(rotationAngle)));
 
   // quad winding order does not matter cuz we don't face cull
-  bool isBottomVertex = quadVId == 0 || quadVId == 2 || quadVId == 3;
-  bool isFarVertex = quadVId == 2 || quadVId == 3 || quadVId == 5;
+  bool isBottomVertex = quadVId == 0 || quadVId == 1 || quadVId == 4;
+  bool isFarVertex = quadVId == 1 || quadVId == 4 || quadVId == 5;
   vec3 pos = inst.pos + vec3(dir.x, 0.f, dir.y) * rule.radius * (isFarVertex ? 1.f : -1.f);
   if (isBottomVertex)
     pos.y -= GRASS_SANK_PORTION * rule.height; 

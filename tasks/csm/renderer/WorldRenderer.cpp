@@ -745,6 +745,8 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.terrainNoiseRelHeightAmp = terrainNoiseRelHeightAmp;
     constantsData.terrainNoisePeriod = terrainNoisePeriod;
 
+    constantsData.vegetationRenderingDistance = vegetationRenderingDistance;
+
     constantsData.useTonemapping = doTonemapping;
     constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
     constantsData.histEqTonemappingRegW = histEqTonemappingRegW;
@@ -973,7 +975,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, vkSets, {});
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
 
-      cmd_buf.drawIndexedIndirect(
+      cmd_buf.drawIndirect(
         sceneMgr->getVegetationIndirectDrawBuf().get(), 0, 1, sizeof(IndirectCommand));
     }
 
@@ -2119,6 +2121,14 @@ void WorldRenderer::drawGui()
         }
       }
       ImGui::Checkbox("Draw vegetation", &drawVegetation);
+      if (drawVegetation)
+      {
+        ImGui::SliderFloat(
+          "Vegetation draw disance",
+          &vegetationRenderingDistance,
+          0.01f,
+          VEGETATION_GRID_EXTENT * VEGETATION_CHUNK_SIZE / 2.f - CLIMPAP_UPDATE_GRID_SIZE);
+      }
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
@@ -2290,6 +2300,7 @@ void WorldRenderer::drawGui()
     }
   }
 
+#if 0
   // @TODO: extend the debug view
   if (terrain && terrain->sourceData.vegetationTypeCount > 0)
   {
@@ -2335,6 +2346,7 @@ void WorldRenderer::drawGui()
 
     ImGui::End();
   }
+#endif
 }
 
 void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci)
@@ -2468,6 +2480,7 @@ void WorldRenderer::loadDebugConfig()
   drawCascadesInSolidColor = unwrap(reader.read<bool>());
   terrainNoiseRelHeightAmp = unwrap(reader.read<float>());
   terrainNoisePeriod = unwrap(reader.read<float>());
+  vegetationRenderingDistance = unwrap(reader.read<float>());
   histEqTonemappingRegW = unwrap(reader.read<float>());
   histEqTonemappingRefinedW = unwrap(reader.read<float>());
   histEqTonemappingMinAdmissibleLum = unwrap(reader.read<float>());
@@ -2535,6 +2548,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(drawCascadesInSolidColor));
   ETNA_VERIFY(writer.write(terrainNoiseRelHeightAmp));
   ETNA_VERIFY(writer.write(terrainNoisePeriod));
+  ETNA_VERIFY(writer.write(vegetationRenderingDistance));
   ETNA_VERIFY(writer.write(histEqTonemappingRegW));
   ETNA_VERIFY(writer.write(histEqTonemappingRefinedW));
   ETNA_VERIFY(writer.write(histEqTonemappingMinAdmissibleLum));

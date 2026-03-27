@@ -80,6 +80,12 @@ void main(void)
   float height = sample_geom_clipmap(grassPosPlanarRelToClipmap);
   vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.y);
 
+  // ugh
+  const mat4 invView = inverse(viewParams.mView);
+  const vec3 camPos = invView[3].xyz / invView[3].w;
+  if (length(camPos - grassPos) > constants.vegetationRenderingDistance)
+    return;
+
   const mat4 instMat = translation(grassPos);
   const BBox bbox = {
     vec4(-rule.radius, -rule.height * GRASS_SANK_PORTION        , -rule.radius, 1.f),
@@ -88,7 +94,7 @@ void main(void)
 
   if (instance_is_in_view(bbox, instMat, constants.cullingMode, payload))
   {
-    const uint rotAngle = basic_noise_int(chunkPosPlanar + vec2(0.5f, 123.f), 0, 359);
+    const uint rotAngle = basic_noise_int(grassPos.xz, 0, 359);
     const uint instId = atomicAdd(command.instanceCount, 1);
     culledInstances[instId].pos = grassPos;
     culledInstances[instId].idAndAnglePacked = (rotAngle << GRASS_ID_BITS) | (vegTypeId & GRASS_ID_MASK);

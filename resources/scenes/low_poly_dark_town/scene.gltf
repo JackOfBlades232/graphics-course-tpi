@@ -4008,9 +4008,9 @@
       "vegetation" : [
         {
           "name": "field_grass",
-          "radius": 0.03,
+          "radius": 0.09,
           "sparsenessRadius": 0.06,
-          "height": 0.075,
+          "height": 0.175,
           "material": 21
         }
       ]
