@@ -3916,6 +3916,12 @@
       },
       "extensions": {
         "KHR_materials_pbrSpecularGlossiness": {
+          "diffuseFactor": [
+            0.13,
+            0.15,
+            0.03,
+            1.0
+          ],
           "diffuseTexture": {
             "index": 17
           }
@@ -4008,9 +4014,9 @@
       "vegetation" : [
         {
           "name": "field_grass",
-          "radius": 0.09,
+          "radius": 0.15,
           "sparsenessRadius": 0.06,
-          "height": 0.175,
+          "height": 0.3,
           "material": 21
         }
       ]

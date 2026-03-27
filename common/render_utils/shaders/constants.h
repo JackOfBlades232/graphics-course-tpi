@@ -52,7 +52,10 @@ struct Constants
   float csmSplitLambda;
   float csmBlendingBeltSize;
 
-  float pad1_;
+  float windStrength;
+
+  shader_vec2 windOrigin;
+  float pad1_, pad2_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

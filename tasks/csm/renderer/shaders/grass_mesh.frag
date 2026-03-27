@@ -22,12 +22,21 @@ layout(location = 0) in VS_OUT
   flat uint matId;
 } surf;
 
+#include "material_mesh.glsl.inc"
+
 void main(void)
 {
-  // @TODO: proper impl
+  const uint matId = uint(surf.matId);
+  vec3 norm = normalize(surf.wNorm) * (gl_FrontFacing ? 1.f : -1.f);
+  vec4 tang = surf.wTangent;
+  vec2 tc = surf.texCoord;
 
-  // @TEST
-  out_fragAlbedo = vec4(0.4f, 1.f, 0.f, 1.f);
-  out_fragMaterial = vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
-  out_fragNormal = normalize(surf.wNorm) * (gl_FrontFacing ? 1.f : -1.f);
+  // @TODO: rid of redundant sampling
+  float alpha = get_pixel_albedo(matId, tc).w;
+  if (alpha < 0.1)
+    discard;
+
+  get_pixel_gbuf_info(
+    matId, norm, tang, tc,
+    out_fragAlbedo, out_fragMaterial, out_fragNormal);
 }

@@ -23,6 +23,6 @@ struct GrassInstance
   (float((inst_).idAndAnglePacked >> GRASS_ID_BITS) * SHADER_PI / 180.f)
 #define GRASS_INSTANCE_ID(inst_) ((inst_).idAndAnglePacked & GRASS_ID_MASK)
 
-#define GRASS_SANK_PORTION 0.2f
+#define GRASS_SANK_PORTION 0.15f
 
 #endif

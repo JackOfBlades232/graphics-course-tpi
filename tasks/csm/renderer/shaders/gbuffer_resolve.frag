@@ -273,7 +273,7 @@ void main(void)
   // Calculate lighting
   
   // @TODO: parametrize
-  const float ambient = 0.001f;
+  const float ambient = 0.05f;
 
   vec4 debugMultiplier = vec4(1.f);
 

@@ -11,35 +11,35 @@
 
 vec4 get_pixel_albedo(uint mat_id, vec2 texcoord)
 {
-  vec3 surfaceColor;
+  vec4 surfaceColor;
 
   if (mat_id == NO_MATERIAL)
   {
-    surfaceColor = vec3(1.f, 0.f, 1.f);
+    surfaceColor = vec4(1.f, 0.f, 1.f, 1.f);
   }
   else
   {
     if (materialParams[mat_id].mat == MATERIAL_PBR)
     {
-      surfaceColor = dequantize4fcol(materialParams[mat_id].baseColorFactor).xyz;
+      surfaceColor = dequantize4fcol(materialParams[mat_id].baseColorFactor);
       if (materialParams[mat_id].baseColorTexSmp != NO_TEXTURE_ID)
       {
         surfaceColor *= sample_bindless_tex(
-          materialParams[mat_id].baseColorTexSmp, texcoord).xyz;
+          materialParams[mat_id].baseColorTexSmp, texcoord);
       }
     }
     else if (materialParams[mat_id].mat == MATERIAL_DIFFUSE)
     {
-      surfaceColor = dequantize4fcol(materialParams[mat_id].diffuseColorFactor).xyz;
+      surfaceColor = dequantize4fcol(materialParams[mat_id].diffuseColorFactor);
       if (materialParams[mat_id].diffuseTexSmp != NO_TEXTURE_ID)
       {
         surfaceColor *= sample_bindless_tex(
-          materialParams[mat_id].diffuseTexSmp, texcoord).xyz;
+          materialParams[mat_id].diffuseTexSmp, texcoord);
       }
     }
   }
 
-  return vec4(surfaceColor, 1.f);
+  return surfaceColor;
 }
 
 vec4 get_pixel_albedo_lod(uint mat_id, vec2 texcoord, float lod)
