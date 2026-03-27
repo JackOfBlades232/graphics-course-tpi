@@ -74,7 +74,7 @@ void main(void)
     pos.y += (1.f - GRASS_SANK_PORTION) * rule.height; 
 
   // @TODO: sort this space out (has to match both sides)
-  vec3 norm = vec3(dir.y, 0.f, dir.x);
+  vec3 norm = vec3(-dir.y, 0.f, dir.x);
   vec4 tang = vec4(dir.x, 0.f, dir.y, 1.f);
   vec2 tc = vec2(isFarVertex ? 1.f : 0.f, isBottomVertex ? 0.f : 1.f);
 
