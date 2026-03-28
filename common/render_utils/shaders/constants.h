@@ -19,8 +19,7 @@ struct Constants
   float terrainNoisePeriod;
 
   float vegetationRenderingDistance;
-
-  float pad0_;
+  float vegetationRenderingDropoffDistance;
 
   shader_uint terrainFirstInstance;
 
@@ -55,7 +54,9 @@ struct Constants
   float windStrength;
 
   shader_vec2 windOrigin;
-  float pad1_, pad2_;
+
+  float time;
+  float dt;
 };
 
 #endif // CONSTANTS_H_INCLUDED

@@ -76,6 +76,13 @@ void main(void)
   uint detailMask = floatBitsToUint(matdata.w);
   if ((detailMask & (1 << params.detailId)) == 0)
     return;
+  uint otherDetailsMask = (detailMask & ~(1 << params.detailId));
+  if (otherDetailsMask != 0)
+  {
+    uint conflictingCount = bitCount(otherDetailsMask);
+    if (basic_noise_int(grassPosPlanar, 0, int(terrainSource.detailCount)) < conflictingCount)
+      return;
+  }
 
   float height = sample_geom_clipmap(grassPosPlanarRelToClipmap);
   vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.y);

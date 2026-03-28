@@ -308,6 +308,9 @@ private:
   float terrainNoiseRelHeightAmp = 0.001f;
   float terrainNoisePeriod = 0.25f;
   float vegetationRenderingDistance = 100.f;
+  float vegetationRenderingDropoffDistance = 80.f;
+  glm::vec2 windOrigin = {0.f, 0.f};
+  float windStrength = 0.35f;
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
