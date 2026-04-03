@@ -976,7 +976,12 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
       const auto& pipe = vegetationMeshPipeline->get(srpi.pass, bool(srpi.vparams.needReverseZ));
       std::vector vkSets{vegetationDset->getVkSet()};
 
-      // @TODO: bindless once we impl a proper frag shader
+      if (passHasFragmentStage(srpi.pass))
+      {
+        vkSets.push_back(materialParamsDsetFrag.getVkSet());
+        vkSets.push_back(bindlessTexturesDsetFrag.getVkSet());
+        vkSets.push_back(bindlessSamplersDsetFrag.getVkSet());
+      }
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, vkSets, {});

@@ -102,7 +102,21 @@ vec3 get_pixel_matdata(uint mat_id, vec2 texcoord)
     }
     else if (materialParams[mat_id].mat == MATERIAL_DIFFUSE)
     {
-      materialData = vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
+      vec3 specularColor = dequantize4fcol(materialParams[mat_id].specularFactor).xyz;
+      float glossiness = materialParams[mat_id].glossinessFactor;
+
+      if (materialParams[mat_id].specularGlossinessTexSmp != NO_TEXTURE_ID)
+      {
+        vec4 specGlossPacked = sample_bindless_tex(
+          materialParams[mat_id].specularGlossinessTexSmp, texcoord);
+        specularColor *= specGlossPacked.xyz;
+        glossiness *= specGlossPacked.w;
+      }
+
+      materialData = vec3(
+        float(MATERIAL_DIFFUSE),
+        uintBitsToFloat(quantize4fcol(vec4(specularColor, 0.f))),
+        glossiness);
     }
   }
 
@@ -136,7 +150,21 @@ vec3 get_pixel_matdata_lod(uint mat_id, vec2 texcoord, float lod)
     }
     else if (materialParams[mat_id].mat == MATERIAL_DIFFUSE)
     {
-      materialData = vec3(float(MATERIAL_DIFFUSE), 0.0f, 0.0f);
+      vec3 specularColor = dequantize4fcol(materialParams[mat_id].specularFactor).xyz;
+      float glossiness = materialParams[mat_id].glossinessFactor;
+
+      if (materialParams[mat_id].specularGlossinessTexSmp != NO_TEXTURE_ID)
+      {
+        vec4 specGlossPacked = sample_bindless_tex_lod(
+          materialParams[mat_id].specularGlossinessTexSmp, texcoord, lod);
+        specularColor *= specGlossPacked.xyz;
+        glossiness *= specGlossPacked.w;
+      }
+
+      materialData = vec3(
+        float(MATERIAL_DIFFUSE),
+        uintBitsToFloat(quantize4fcol(vec4(specularColor, 0.f))),
+        glossiness);
     }
   }
 

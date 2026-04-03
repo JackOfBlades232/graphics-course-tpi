@@ -259,8 +259,8 @@ public:
         return true;
       if (unpack_tex_smp_id_pair(mat.diffuseTexSmp).tid == tid)
         return true;
-      // if (unpack_tex_smp_id_pair(mat.specularGlossinessTexSmp).tid == tid)
-      //   return true;
+      if (unpack_tex_smp_id_pair(mat.specularGlossinessTexSmp).tid == tid)
+        return true;
       if (unpack_tex_smp_id_pair(mat.heightDisplacementTexSmp).tid == tid)
         return true;
     }

@@ -16,7 +16,7 @@ inline GrassChunkTemplate generate_grass_chunk_template(
   float sparseness_radius,
   float chunk_size,
   int stop_iterations = 1000,
-  int total_action_budget = 1'000'000)
+  int total_action_budget = 10'000'000)
 {
   auto start = std::chrono::high_resolution_clock::now();
 

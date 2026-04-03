@@ -948,7 +948,45 @@ void SceneManager::selectScene(
           }
         }
         else
+        {
           mat.diffuseColorFactor = 0xFFFFFFFF;
+        }
+
+        if (params.Has("specularFactor"))
+        {
+          const auto& factor = params.Get("specularFactor");
+          ETNA_ASSERT(factor.IsNumber() || (factor.IsArray() && factor.ArrayLen() == 3));
+          if (factor.IsNumber())
+          {
+            mat.specularFactor = quantizefcol(float(factor.GetNumberAsDouble()));
+          }
+          else
+          {
+            ETNA_ASSERT(
+              factor.Get(0).IsNumber() && factor.Get(1).IsNumber() && factor.Get(2).IsNumber());
+
+            mat.specularFactor = quantize4fcol(
+              {float(factor.Get(0).GetNumberAsDouble()),
+               float(factor.Get(1).GetNumberAsDouble()),
+               float(factor.Get(2).GetNumberAsDouble()),
+               float(0.f)});
+          }
+        }
+        else
+        {
+          mat.specularFactor = 0xFFFFFFFF;
+        }
+
+        if (params.Has("glossinessFactor"))
+        {
+          const auto& factor = params.Get("glossinessFactor");
+          ETNA_ASSERT(factor.IsNumber());
+          mat.glossinessFactor = float(factor.GetNumberAsDouble());
+        }
+        else
+        {
+          mat.glossinessFactor = 1.f;
+        }
 
         if (params.Has("diffuseTexture"))
         {
@@ -962,9 +1000,24 @@ void SceneManager::selectScene(
           setTexFmt(id, vk::Format::eR8G8B8A8Srgb);
         }
         else
+        {
           mat.diffuseTexSmp = TexSmpIdPair::INVALID;
+        }
 
-        // @TODO: spec/gloss
+        if (params.Has("specularGlossinessTexture"))
+        {
+          const auto& tex = params.Get("specularGlossinessTexture");
+          ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
+          const auto& ind = tex.Get("index");
+          ETNA_ASSERT(ind.IsInt());
+          const int id = ind.GetNumberAsInt();
+          mat.specularGlossinessTexSmp = idPairForTexture(id);
+          setTexFmt(id, vk::Format::eR8G8B8A8Srgb);
+        }
+        else
+        {
+          mat.specularGlossinessTexSmp = TexSmpIdPair::INVALID;
+        }
       }
       else
       {

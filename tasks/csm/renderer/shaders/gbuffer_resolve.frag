@@ -6,6 +6,7 @@
 #include "materials.h"
 #include "constants.h"
 #include "skybox.h"
+#include "quantization.h"
 
 
 layout(location = 0) out vec4 out_fragColor;
@@ -133,9 +134,41 @@ vec4 shade_cook_torrance(
   return vec4((spec + diff) * lc, 1.f);
 }
 
-vec3 calculate_diffuse(vec3 normal, vec3 lightDir, vec3 albedo, vec3 lightIntensity)
+vec4 shade_cook_torrance_diffuse_spec_gloss(
+  vec3 n, vec3 l, vec3 v, vec3 diffuse, vec3 specular, float glossiness, vec3 lightCol)
 {
-  return max(dot(normal, lightDir), 0.0f) * lightIntensity * albedo;
+  vec3 lc = lightCol;
+
+  vec3 nn = normalize(n);
+  vec3 ll = normalize(l);
+  vec3 vv = normalize(v);
+  vec3 hh = normalize(ll + vv);
+  float nl = max(dot(nn, ll), 0.f);
+  float nv = max(dot(nn, vv), 0.f);
+  float hl = max(dot(hh, ll), 0.f);
+  float hv = max(dot(hh, vv), 0.f);
+  float nh = max(dot(nn, hh), 0.f);
+
+  if (nv < SHADER_EPSILON || nl < SHADER_EPSILON)
+    return vec4(0.f, 0.f, 0.f, 1.f);
+
+  float roughness = 1.f - glossiness;
+  float a = roughness * roughness;
+  float a2 = a * a;
+
+  vec3 f0 = specular;
+
+  vec3 c_diff = diffuse * (1.f - max(specular.r, max(specular.g, specular.b)));
+
+  vec3 f = conductor_frensel_shlick(f0, hv);
+
+  float diff_bsdf = diffuse_brdf();
+  float spec_bsdf = specular_brdf(nl, nv, hl, hv, nh, a2);
+
+  vec3 diff = nl * (1.f - f) * diff_bsdf * c_diff;
+  vec3 spec = nl * f * spec_bsdf;
+
+  return vec4((spec + diff) * lc, 1.f);
 }
 
 vec3 calculate_pbr(
@@ -144,6 +177,14 @@ vec3 calculate_pbr(
 {
   return shade_cook_torrance(
     normal, lightDir, viewVec, metalness, roughness, albedo, lightIntensity).xyz;
+}
+
+vec3 calculate_pbr_diff_spec_gloss(
+  vec3 normal, vec3 lightDir, vec3 viewVec,
+  vec3 diffuse, vec3 specular, float glossiness, vec3 lightIntensity)
+{
+  return shade_cook_torrance_diffuse_spec_gloss(
+    normal, lightDir, viewVec, diffuse, specular, glossiness, lightIntensity).xyz;
 }
 
 float calculate_attenuation(vec3 pos, vec3 lightPos, float range)
@@ -344,7 +385,7 @@ void main(void)
     if (mat == MATERIAL_PBR)
       color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightIntensity);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_diffuse(normal, lightDir, albedo, lightIntensity);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, lightIntensity);
   }
 
   for (int i = 0; i < lights.pointLightsCount; ++i)
@@ -417,7 +458,7 @@ void main(void)
     if (mat == MATERIAL_PBR)
       color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightColor);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_diffuse(normal, lightDir, albedo, lightColor);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, lightColor);
   }
 
   for (int i = 0; i < lights.spotLightsCount; ++i)
@@ -484,7 +525,7 @@ void main(void)
     if (mat == MATERIAL_PBR)
       color += shadow * calculate_pbr(normal, fromPosDir, viewVec, matData.y, matData.z, albedo, lightColor);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_diffuse(normal, fromPosDir, albedo, lightColor);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, fromPosDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, lightColor);
   }
 
   out_fragColor = debugMultiplier * vec4(color, 1.0f);

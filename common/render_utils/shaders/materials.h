@@ -94,10 +94,10 @@ struct Material
 
   // Diffuse @NOTE: can be aliased w/ PBR
   shader_uint diffuseColorFactor;
-  // shader_uint specularFactor;
-  // float glossinessFactor;
+  shader_uint specularFactor;
+  float glossinessFactor;
   TexSmpIdPair diffuseTexSmp;
-  // TexSmpIdPair specularGlossinessTexSmp;
+  TexSmpIdPair specularGlossinessTexSmp;
 
   TexSmpIdPair heightDisplacementTexSmp;
   float displacementCoeff;

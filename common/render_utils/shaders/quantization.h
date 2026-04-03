@@ -136,6 +136,15 @@ vec4 dequantize4fcol(uint c)
     float(aEncR) / 255.0f, float(aEncG) / 255.0f, float(aEncB) / 255.0f, float(aEncA) / 255.0f);
 }
 
+uint quantize4fcol(vec4 c)
+{
+  uint ur = uint(c.r * 255.f) & 0xFF;
+  uint ug = uint(c.g * 255.f) & 0xFF;
+  uint ub = uint(c.b * 255.f) & 0xFF;
+  uint ua = uint(c.a * 255.f) & 0xFF;
+  return (ua << 24) | (ub << 16) | (ug << 8) | ur;
+}
+
 #endif
 
 #endif // QUANTIZATION_H_INCLUDED
