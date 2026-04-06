@@ -22,6 +22,10 @@ layout(binding = 1, set = 0) readonly buffer instances_t
   DrawableInstance markedInstances[];
 };
 
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
 layout(binding = 9, set = 0) uniform view_params_t
 {
   ViewParams viewParams;

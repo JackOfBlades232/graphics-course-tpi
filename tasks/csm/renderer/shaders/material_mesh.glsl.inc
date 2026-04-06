@@ -233,13 +233,78 @@ vec3 get_pixel_normal_lod(
   return normal;
 }
 
+vec4 get_pixel_transmission(uint mat_id, vec2 texcoord, vec4 pixel_albedo)
+{
+  vec4 transmissionParams;
+
+  if (mat_id != NO_MATERIAL && materialParams[mat_id].diffuseTransmissionFactor > SHADER_EPSILON)
+  {
+    float transFactor = materialParams[mat_id].diffuseTransmissionFactor;
+    vec3 transColor = dequantize4fcol(materialParams[mat_id].diffuseTransmissionColorFactor).xyz;
+    if (materialParams[mat_id].diffuseTransmissionTexSmp != NO_TEXTURE_ID)
+    {
+      transFactor *= sample_bindless_tex(
+        materialParams[mat_id].diffuseTransmissionTexSmp, texcoord).a;
+    }
+    if (constants.useAlbedoAsDiffuseTransmissionColor != 0)
+    {
+      transColor *= pixel_albedo.xyz;
+    }
+    if (materialParams[mat_id].diffuseTransmissionColorTexSmp != NO_TEXTURE_ID)
+    {
+      transColor *= sample_bindless_tex(
+        materialParams[mat_id].diffuseTransmissionColorTexSmp, texcoord).xyz;
+    }
+    transmissionParams = vec4(transColor, transFactor);
+  }
+  else
+  {
+    transmissionParams = vec4(1.f, 1.f, 1.f, 0.f);
+  }
+
+  return transmissionParams;
+}
+
+vec4 get_pixel_transmission_lod(uint mat_id, vec2 texcoord, vec4 pixel_albedo, float lod)
+{
+  vec4 transmissionParams;
+
+  if (mat_id != NO_MATERIAL && materialParams[mat_id].diffuseTransmissionFactor > SHADER_EPSILON)
+  {
+    float transFactor = materialParams[mat_id].diffuseTransmissionFactor;
+    vec3 transColor = dequantize4fcol(materialParams[mat_id].diffuseTransmissionColorFactor).xyz;
+    if (materialParams[mat_id].diffuseTransmissionTexSmp != NO_TEXTURE_ID)
+    {
+      transFactor *= sample_bindless_tex_lod(
+        materialParams[mat_id].diffuseTransmissionTexSmp, texcoord, lod).a;
+    }
+    if (constants.useAlbedoAsDiffuseTransmissionColor != 0)
+    {
+      transColor *= pixel_albedo.xyz;
+    }
+    if (materialParams[mat_id].diffuseTransmissionColorTexSmp != NO_TEXTURE_ID)
+    {
+      transColor *= sample_bindless_tex_lod(
+        materialParams[mat_id].diffuseTransmissionColorTexSmp, texcoord, lod).xyz;
+    }
+    transmissionParams = vec4(transColor, transFactor);
+  }
+  else
+  {
+    transmissionParams = vec4(1.f, 1.f, 1.f, 0.f);
+  }
+
+  return transmissionParams;
+}
+
 void get_pixel_gbuf_info(
   uint mat_id, vec3 base_normal, vec4 base_tangent, vec2 texcoord,
-  out vec4 out_albedo, out vec3 out_matdata, out vec3 out_normal)
+  out vec4 out_albedo, out vec3 out_matdata, out vec3 out_normal, out vec4 out_transmission)
 {
   out_albedo = get_pixel_albedo(mat_id, texcoord);
   out_matdata = get_pixel_matdata(mat_id, texcoord);
   out_normal = get_pixel_normal(mat_id, base_normal, base_tangent, texcoord);
+  out_transmission = get_pixel_transmission(mat_id, texcoord, out_albedo);
 }
 
 #endif // MATERIAL_MESH_H_INCLUDED

@@ -148,6 +148,13 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .name = "gbuffer_normal",
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    gbufTransmission,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "gbuffer_transmission",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
   defaultSampler = etna::Sampler(
     etna::Sampler::CreateInfo{
@@ -513,123 +520,144 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   auto& pipelineManager = etna::get_context().getPipelineManager();
 
   // @TODO: compactify
-  auto meshPipelineCreateInfo =
-    etna::GraphicsPipeline::CreateInfo{
-      .vertexShaderInput = sceneVertexInputDesc,
-      .rasterizationConfig =
-        vk::PipelineRasterizationStateCreateInfo{
-          .polygonMode = vk::PolygonMode::eFill,
-          .cullMode = vk::CullModeFlagBits::eBack,
-          .frontFace = vk::FrontFace::eCounterClockwise,
-          .lineWidth = 1.f,
-        },
-      .blendingConfig =
-        {.attachments =
-           {
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+  auto
+    meshPipelineCreateInfo =
+      etna::GraphicsPipeline::CreateInfo{
+        .vertexShaderInput = sceneVertexInputDesc,
+        .rasterizationConfig =
+          vk::PipelineRasterizationStateCreateInfo{
+            .polygonMode = vk::PolygonMode::eFill,
+            .cullMode = vk::CullModeFlagBits::eBack,
+            .frontFace = vk::FrontFace::eCounterClockwise,
+            .lineWidth = 1.f,
+          },
+        .blendingConfig =
+          {.attachments =
+             {
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
              },
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+           .logicOp = vk::LogicOp::eSet},
+        .fragmentShaderOutput =
+          {
+            .colorAttachmentFormats = // @TODO: save these into vars
+            {vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat},
+            .depthAttachmentFormat = vk::Format::eD32Sfloat,
+          },
+      };
+  auto
+    terrainPipelineCreateInfo =
+      etna::GraphicsPipeline::CreateInfo{
+        .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::ePatchList},
+        .tessellationConfig = {.patchControlPoints = 4},
+        .rasterizationConfig =
+          vk::PipelineRasterizationStateCreateInfo{
+            .polygonMode = vk::PolygonMode::eFill,
+            .cullMode = vk::CullModeFlagBits::eBack,
+            .frontFace = vk::FrontFace::eCounterClockwise,
+            .lineWidth = 1.f,
+          },
+        .blendingConfig =
+          {.attachments =
+             {
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
              },
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+           .logicOp = vk::LogicOp::eSet},
+        .fragmentShaderOutput =
+          {
+            .colorAttachmentFormats = // @TODO: save these into vars
+            {vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat},
+            .depthAttachmentFormat = vk::Format::eD32Sfloat,
+          },
+      };
+  auto
+    vegetationPipelineCreateInfo =
+      etna::GraphicsPipeline::CreateInfo{
+        .rasterizationConfig =
+          vk::PipelineRasterizationStateCreateInfo{
+            .polygonMode = vk::PolygonMode::eFill,
+            .cullMode = vk::CullModeFlagBits::eNone,
+            .frontFace = vk::FrontFace::eCounterClockwise,
+            .lineWidth = 1.f,
+          },
+        .blendingConfig =
+          {.attachments =
+             {
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
              },
-           },
-         .logicOp = vk::LogicOp::eSet},
-      .fragmentShaderOutput =
-        {
-          .colorAttachmentFormats = // @TODO: save these into vars
-          {vk::Format::eR32G32B32A32Sfloat,
-           vk::Format::eR32G32B32A32Sfloat,
-           vk::Format::eR32G32B32A32Sfloat},
-          .depthAttachmentFormat = vk::Format::eD32Sfloat,
-        },
-    };
-  auto terrainPipelineCreateInfo =
-    etna::GraphicsPipeline::CreateInfo{
-      .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::ePatchList},
-      .tessellationConfig = {.patchControlPoints = 4},
-      .rasterizationConfig =
-        vk::PipelineRasterizationStateCreateInfo{
-          .polygonMode = vk::PolygonMode::eFill,
-          .cullMode = vk::CullModeFlagBits::eBack,
-          .frontFace = vk::FrontFace::eCounterClockwise,
-          .lineWidth = 1.f,
-        },
-      .blendingConfig =
-        {.attachments =
-           {
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-             },
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-             },
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-             },
-           },
-         .logicOp = vk::LogicOp::eSet},
-      .fragmentShaderOutput =
-        {
-          .colorAttachmentFormats = // @TODO: save these into vars
-          {vk::Format::eR32G32B32A32Sfloat,
-           vk::Format::eR32G32B32A32Sfloat,
-           vk::Format::eR32G32B32A32Sfloat},
-          .depthAttachmentFormat = vk::Format::eD32Sfloat,
-        },
-    };
-  auto vegetationPipelineCreateInfo =
-    etna::GraphicsPipeline::CreateInfo{
-      .rasterizationConfig =
-        vk::PipelineRasterizationStateCreateInfo{
-          .polygonMode = vk::PolygonMode::eFill,
-          .cullMode = vk::CullModeFlagBits::eNone,
-          .frontFace = vk::FrontFace::eCounterClockwise,
-          .lineWidth = 1.f,
-        },
-      .blendingConfig =
-        {.attachments =
-           {
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-             },
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-             },
-             vk::PipelineColorBlendAttachmentState{
-               .blendEnable = vk::False,
-               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-             },
-           },
-         .logicOp = vk::LogicOp::eSet},
-      .fragmentShaderOutput =
-        {
-          .colorAttachmentFormats = // @TODO: save these into vars
-          {vk::Format::eR32G32B32A32Sfloat,
-           vk::Format::eR32G32B32A32Sfloat,
-           vk::Format::eR32G32B32A32Sfloat},
-          .depthAttachmentFormat = vk::Format::eD32Sfloat,
-        },
-    };
+           .logicOp = vk::LogicOp::eSet},
+        .fragmentShaderOutput =
+          {
+            .colorAttachmentFormats = // @TODO: save these into vars
+            {vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat},
+            .depthAttachmentFormat = vk::Format::eD32Sfloat,
+          },
+      };
 
   staticMeshPipeline.emplace(
     pipelineManager, "static_mesh", "static_mesh_shadow", meshPipelineCreateInfo);
@@ -874,6 +902,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
           cmd_buf,
           {etna::Binding{0, sceneMgr->getInstanceMatricesBuf().genBinding()},
            etna::Binding{1, srpi.vctx->culledInstancesBuf.genBinding()},
+           etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()},
            etna::Binding{10, srpi.vctx->viewDataBuf.genBinding()}});
       }
@@ -1844,7 +1873,8 @@ void WorldRenderer::renderWorld(
            {{0, 0}, {resolution.x, resolution.y}},
            {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
             {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
-            {.image = gbufNormal.get(), .view = gbufNormal.getView({})}},
+            {.image = gbufNormal.get(), .view = gbufNormal.getView({})},
+            {.image = gbufTransmission.get(), .view = gbufTransmission.getView({})}},
            {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}}});
     }
 
@@ -1863,6 +1893,10 @@ void WorldRenderer::renderWorld(
            gbufMaterial.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
            5, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+         etna::Binding{
+           6,
+           gbufTransmission.genBinding(
+             defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
            7,
            mainViewDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
@@ -2149,6 +2183,8 @@ void WorldRenderer::drawGui()
       ImGui::SliderFloat2("Wind origin", (float*)&windOrigin, -5000.f, 5000.f);
       ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 1.f);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
+      ImGui::Checkbox(
+        "Use albedo as diffuse transmission color", &useAlbedoAsDiffuseTransmissionColor);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
@@ -2512,6 +2548,7 @@ void WorldRenderer::loadDebugConfig()
   csmBlendingBeltSize = unwrap(reader.read<float>());
   csmShadowDist = unwrap(reader.read<float>());
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
+  useAlbedoAsDiffuseTransmissionColor = unwrap(reader.read<bool>());
 
   validate_hist_tonemapping_coeffs(
     histEqTonemappingRegW,
@@ -2583,6 +2620,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(csmBlendingBeltSize));
   ETNA_VERIFY(writer.write(csmShadowDist));
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
+  ETNA_VERIFY(writer.write(useAlbedoAsDiffuseTransmissionColor));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

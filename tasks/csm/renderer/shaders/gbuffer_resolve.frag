@@ -24,6 +24,7 @@ layout(binding = 2, set = 0) readonly buffer light_mats_t
 layout(binding = 3, set = 0) uniform sampler2D gbufAlbedo;
 layout(binding = 4, set = 0) uniform sampler2D gbufMaterial;
 layout(binding = 5, set = 0) uniform sampler2D gbufNormal;
+layout(binding = 6, set = 0) uniform sampler2D gbufTransmission;
 
 layout(binding = 7, set = 0) uniform sampler2D gbufDepth;
 
@@ -88,6 +89,11 @@ float diffuse_brdf()
   return 1.f / PI;
 }
 
+float diffuse_btdf()
+{
+  return 1.f / PI;
+}
+
 float specular_brdf(float nl, float nv, float hl, float hv, float nh, float a2)
 {
   return (d_ggx(nh, a2) * g_smith(nl, nv, hl, hv, a2)) / max(0.001f, 4.f * nl * nv);
@@ -99,7 +105,7 @@ vec3 conductor_frensel_shlick(vec3 f0, float hv)
 }
 
 vec4 shade_cook_torrance(
-  vec3 n, vec3 l, vec3 v, float metalness, float roughness, vec3 albedo, vec3 lightCol)
+  vec3 n, vec3 l, vec3 v, float metalness, float roughness, vec3 albedo, float transmission, vec3 transCol, vec3 lightCol)
 {
   vec3 c = albedo;
   vec3 lc = lightCol;
@@ -116,8 +122,15 @@ vec4 shade_cook_torrance(
   float hv = max(dot(hh, vv), 0.f);
   float nh = max(dot(nn, hh), 0.f);
 
-  if (nv < SHADER_EPSILON || nl < SHADER_EPSILON)
+  if (nv < SHADER_EPSILON)
     return vec4(0.f, 0.f, 0.f, 1.f);
+
+  bool isTrasnmissive = transmission > SHADER_EPSILON; 
+
+  if (!isTrasnmissive && nl < SHADER_EPSILON)
+    return vec4(0.f, 0.f, 0.f, 1.f);
+
+  float inl = max(-dot(nn, ll), 0.f);
 
   float a = roughness * roughness;
   float a2 = a * a;
@@ -131,11 +144,14 @@ vec4 shade_cook_torrance(
   vec3 diff = nl * (1.f - f) * diff_bsdf * c_diff;
   vec3 spec = nl * f * spec_bsdf;
 
+  if (isTrasnmissive)
+    diff = mix(diff, inl * (1.f - f) * diffuse_btdf() * transCol, transmission);
+
   return vec4((spec + diff) * lc, 1.f);
 }
 
 vec4 shade_cook_torrance_diffuse_spec_gloss(
-  vec3 n, vec3 l, vec3 v, vec3 diffuse, vec3 specular, float glossiness, vec3 lightCol)
+  vec3 n, vec3 l, vec3 v, vec3 diffuse, vec3 specular, float glossiness, float transmission, vec3 transCol, vec3 lightCol)
 {
   vec3 lc = lightCol;
 
@@ -149,8 +165,15 @@ vec4 shade_cook_torrance_diffuse_spec_gloss(
   float hv = max(dot(hh, vv), 0.f);
   float nh = max(dot(nn, hh), 0.f);
 
-  if (nv < SHADER_EPSILON || nl < SHADER_EPSILON)
+  if (nv < SHADER_EPSILON)
     return vec4(0.f, 0.f, 0.f, 1.f);
+
+  bool isTrasnmissive = transmission > SHADER_EPSILON; 
+
+  if (!isTrasnmissive && nl < SHADER_EPSILON)
+    return vec4(0.f, 0.f, 0.f, 1.f);
+
+  float inl = max(-dot(nn, ll), 0.f);
 
   float roughness = 1.f - glossiness;
   float a = roughness * roughness;
@@ -168,23 +191,26 @@ vec4 shade_cook_torrance_diffuse_spec_gloss(
   vec3 diff = nl * (1.f - f) * diff_bsdf * c_diff;
   vec3 spec = nl * f * spec_bsdf;
 
+  if (isTrasnmissive)
+    diff = mix(diff, inl * (1.f - f) * diffuse_btdf() * transCol, transmission);
+
   return vec4((spec + diff) * lc, 1.f);
 }
 
 vec3 calculate_pbr(
   vec3 normal, vec3 lightDir, vec3 viewVec,
-  float metalness, float roughness, vec3 albedo, vec3 lightIntensity)
+  float metalness, float roughness, vec3 albedo, float transmission, vec3 transCol, vec3 lightIntensity)
 {
   return shade_cook_torrance(
-    normal, lightDir, viewVec, metalness, roughness, albedo, lightIntensity).xyz;
+    normal, lightDir, viewVec, metalness, roughness, albedo, transmission, transCol, lightIntensity).xyz;
 }
 
 vec3 calculate_pbr_diff_spec_gloss(
   vec3 normal, vec3 lightDir, vec3 viewVec,
-  vec3 diffuse, vec3 specular, float glossiness, vec3 lightIntensity)
+  vec3 diffuse, vec3 specular, float glossiness, float transmission, vec3 transCol, vec3 lightIntensity)
 {
   return shade_cook_torrance_diffuse_spec_gloss(
-    normal, lightDir, viewVec, diffuse, specular, glossiness, lightIntensity).xyz;
+    normal, lightDir, viewVec, diffuse, specular, glossiness, transmission, transCol, lightIntensity).xyz;
 }
 
 float calculate_attenuation(vec3 pos, vec3 lightPos, float range)
@@ -308,6 +334,7 @@ void main(void)
   const vec3 albedo = texture(gbufAlbedo, surf.texCoord).xyz;
   const vec4 matData = texture(gbufMaterial, surf.texCoord);
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
+  const vec4 transData = texture(gbufTransmission, surf.texCoord);
 
   const uint mat = uint(matData.x + 0.001f);
   
@@ -383,9 +410,9 @@ void main(void)
     }
 
     if (mat == MATERIAL_PBR)
-      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightIntensity);
+      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, lightIntensity);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, lightIntensity);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, lightIntensity);
   }
 
   for (int i = 0; i < lights.pointLightsCount; ++i)
@@ -456,9 +483,9 @@ void main(void)
     }
 
     if (mat == MATERIAL_PBR)
-      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, lightColor);
+      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, lightColor);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, lightColor);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, lightColor);
   }
 
   for (int i = 0; i < lights.spotLightsCount; ++i)
@@ -523,9 +550,9 @@ void main(void)
     }
 
     if (mat == MATERIAL_PBR)
-      color += shadow * calculate_pbr(normal, fromPosDir, viewVec, matData.y, matData.z, albedo, lightColor);
+      color += shadow * calculate_pbr(normal, fromPosDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, lightColor);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_pbr_diff_spec_gloss(normal, fromPosDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, lightColor);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, fromPosDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, lightColor);
   }
 
   out_fragColor = debugMultiplier * vec4(color, 1.0f);

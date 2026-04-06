@@ -1039,6 +1039,85 @@ void SceneManager::selectScene(
           gmat.pbrMetallicRoughness.metallicRoughnessTexture.index, vk::Format::eR8G8B8A8Unorm);
       }
 
+      if (auto it = gmat.extensions.find("KHR_materials_diffuse_transmission");
+          it != gmat.extensions.end())
+      {
+        const auto& params = it->second;
+
+        if (params.Has("diffuseTransmissionFactor"))
+        {
+          const auto& factor = params.Get("diffuseTransmissionFactor");
+          ETNA_ASSERT(factor.IsNumber());
+          mat.diffuseTransmissionFactor = float(factor.GetNumberAsDouble());
+        }
+        else
+        {
+          mat.diffuseTransmissionFactor = 0.f;
+        }
+
+        if (params.Has("diffuseTransmissionColorFactor"))
+        {
+          const auto& factor = params.Get("diffuseTransmissionColorFactor");
+          ETNA_ASSERT(factor.IsNumber() || (factor.IsArray() && factor.ArrayLen() == 3));
+          if (factor.IsNumber())
+          {
+            mat.diffuseTransmissionColorFactor = quantizefcol(float(factor.GetNumberAsDouble()));
+          }
+          else
+          {
+            ETNA_ASSERT(
+              factor.Get(0).IsNumber() && factor.Get(1).IsNumber() && factor.Get(2).IsNumber());
+
+            mat.diffuseTransmissionColorFactor = quantize4fcol(
+              {float(factor.Get(0).GetNumberAsDouble()),
+               float(factor.Get(1).GetNumberAsDouble()),
+               float(factor.Get(2).GetNumberAsDouble()),
+               float(0.f)});
+          }
+        }
+        else
+        {
+          mat.diffuseTransmissionColorFactor = 0xFFFFFFFF;
+        }
+
+        if (params.Has("diffuseTransmissionTexture"))
+        {
+          const auto& tex = params.Get("diffuseTransmissionTexture");
+          ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
+          const auto& ind = tex.Get("index");
+          ETNA_ASSERT(ind.IsInt());
+          const int id = ind.GetNumberAsInt();
+          mat.diffuseTransmissionTexSmp = idPairForTexture(id);
+          setTexFmt(id, vk::Format::eR8G8B8A8Unorm);
+        }
+        else
+        {
+          mat.diffuseTransmissionTexSmp = TexSmpIdPair::INVALID;
+        }
+
+        if (params.Has("diffuseTransmissionColorTexture"))
+        {
+          const auto& tex = params.Get("diffuseTransmissionColorTexture");
+          ETNA_ASSERT(tex.IsObject() && tex.Has("index"));
+          const auto& ind = tex.Get("index");
+          ETNA_ASSERT(ind.IsInt());
+          const int id = ind.GetNumberAsInt();
+          mat.diffuseTransmissionColorTexSmp = idPairForTexture(id);
+          setTexFmt(id, vk::Format::eR8G8B8A8Srgb);
+        }
+        else
+        {
+          mat.diffuseTransmissionColorTexSmp = TexSmpIdPair::INVALID;
+        }
+      }
+      else
+      {
+        mat.diffuseTransmissionFactor = 0.f;
+        mat.diffuseTransmissionColorFactor = 0xFFFFFFFF;
+        mat.diffuseTransmissionTexSmp = NO_TEXTURE_ID;
+        mat.diffuseTransmissionColorTexSmp = NO_TEXTURE_ID;
+      }
+
       if (auto jbExtMaybe = jb_terrain_parse_material_desc(gmat))
       {
         mat.heightDisplacementTexSmp = idPairForTexture(jbExtMaybe->displacement);

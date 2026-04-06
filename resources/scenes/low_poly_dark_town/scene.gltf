@@ -3380,6 +3380,7 @@
   ],
   "extensionsUsed": [
     "KHR_materials_pbrSpecularGlossiness",
+    "KHR_materials_diffuse_transmission",
     "KHR_lights_punctual",
     "JB_terrain",
     "JB_skybox"
@@ -3925,11 +3926,19 @@
           "diffuseTexture": {
             "index": 17
           },
-          "glossinessFactor": 0.0,
+          "glossinessFactor": 0.15,
           "specularFactor": [
             0.0,
             0.0,
             0.0
+          ]
+        },
+        "KHR_materials_diffuse_transmission" : {
+          "diffuseTransmissionFactor" : 0.35,
+          "diffuseTransmissionColorFactor" : [
+            0.4,
+            0.4,
+            0.15
           ]
         }
       }

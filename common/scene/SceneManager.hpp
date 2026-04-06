@@ -279,9 +279,10 @@ public:
   // For imgui, kinda hacky
   UniformLights& lightsRW() { return *lightsData; }
 
-  static constexpr std::array<std::string_view, 5> SUPPORTED_EXTENSIONS = {
+  static constexpr std::array<std::string_view, 6> SUPPORTED_EXTENSIONS = {
     "KHR_lights_punctual",
     "KHR_materials_pbrSpecularGlossiness",
+    "KHR_materials_diffuse_transmission",
     "KHR_mesh_quantization",
     "JB_terrain",
     "JB_skybox"};

@@ -93,6 +93,14 @@ void main(void)
   else
     pos.y += (1.f - GRASS_SANK_PORTION) * rule.height * shrinkFactor; 
 
+  // @TODO: proper
+  vec3 norm;
+  if (isBottomVertex)
+    norm = vec3(0.f, -1.f, 0.f);
+  else
+    norm = vec3(0.f, 1.f, 0.f);
+  vec4 tang = vec4(dir.x, 0.f, dir.y, 1.f);
+
   if (constants.windStrength >= 0.001f && !isBottomVertex)
   {
     vec2 windVec = pos.xz - constants.windOrigin;
@@ -107,18 +115,17 @@ void main(void)
     float strengthFalloff = lambda + (1.f - lambda) / (1.f + dist);
     float strengthPeriod = pscale * (plambda + (1.f - plambda) / (1.f + dist));
 
-    // @TODO: more sine waves
+    // @TODO: more sine waves?
     float strengthOscillation = relAmp * wind_oscillator(strengthPeriod * constants.time, inst.pos.xz);
 
     float windInfluenceAmt = constants.windStrength * (1.f + strengthOscillation) * strengthFalloff;
     vec2 windInfluence = (windVec / dist) * windInfluenceAmt;
 
-    pos += vec3(windInfluence.x, -0.5f * (windInfluenceAmt * windInfluenceAmt), windInfluence.y);
+    vec3 posOffset = shrinkFactor * vec3(windInfluence.x, -0.5f * (windInfluenceAmt * windInfluenceAmt), windInfluence.y);
+    pos += posOffset;
+    norm = normalize(rule.height * norm + posOffset);
   }
 
-  // @TODO: sort normal space out (has to match both sides, work with the wind and be adequate)
-  vec3 norm = vec3(-dir.y, 0.f, dir.x);
-  vec4 tang = vec4(dir.x, 0.f, dir.y, 1.f);
   vec2 tc = vec2(isFarVertex ? 1.f : 0.f, isBottomVertex ? 1.f : 0.f);
 
   vOut.wPos     = pos;

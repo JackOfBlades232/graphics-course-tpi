@@ -57,6 +57,10 @@ struct Constants
 
   float time;
   float dt;
+
+  shader_uint useAlbedoAsDiffuseTransmissionColor;
+
+  float pad0_, pad1_, pad2_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

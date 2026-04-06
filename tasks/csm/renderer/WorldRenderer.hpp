@@ -230,6 +230,7 @@ private:
 
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
+  etna::Image gbufTransmission; // @SPEED piggy
   etna::Image mainViewDepth;
 
   etna::Buffer lightMatricesBuf;
@@ -319,6 +320,7 @@ private:
   float csmShadowDist = 400.f;
   float csmBlendingBeltSize = 0.03f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
+  bool useAlbedoAsDiffuseTransmissionColor = true;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

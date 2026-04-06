@@ -99,6 +99,12 @@ struct Material
   TexSmpIdPair diffuseTexSmp;
   TexSmpIdPair specularGlossinessTexSmp;
 
+  // Diffuse transmission
+  float diffuseTransmissionFactor;
+  shader_uint diffuseTransmissionColorFactor;
+  TexSmpIdPair diffuseTransmissionTexSmp;
+  TexSmpIdPair diffuseTransmissionColorTexSmp;
+
   TexSmpIdPair heightDisplacementTexSmp;
   float displacementCoeff;
 };
