@@ -246,10 +246,6 @@ vec4 get_pixel_transmission(uint mat_id, vec2 texcoord, vec4 pixel_albedo)
       transFactor *= sample_bindless_tex(
         materialParams[mat_id].diffuseTransmissionTexSmp, texcoord).a;
     }
-    if (constants.useAlbedoAsDiffuseTransmissionColor != 0)
-    {
-      transColor *= pixel_albedo.xyz;
-    }
     if (materialParams[mat_id].diffuseTransmissionColorTexSmp != NO_TEXTURE_ID)
     {
       transColor *= sample_bindless_tex(
@@ -277,10 +273,6 @@ vec4 get_pixel_transmission_lod(uint mat_id, vec2 texcoord, vec4 pixel_albedo, f
     {
       transFactor *= sample_bindless_tex_lod(
         materialParams[mat_id].diffuseTransmissionTexSmp, texcoord, lod).a;
-    }
-    if (constants.useAlbedoAsDiffuseTransmissionColor != 0)
-    {
-      transColor *= pixel_albedo.xyz;
     }
     if (materialParams[mat_id].diffuseTransmissionColorTexSmp != NO_TEXTURE_ID)
     {

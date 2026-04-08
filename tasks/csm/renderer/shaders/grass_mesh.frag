@@ -22,8 +22,6 @@ layout(binding = 9, set = 0) uniform view_params_t
 layout(location = 0) in VS_OUT
 {
   vec3 wPos;
-  vec3 wNorm;
-  vec4 wTangent;
   vec2 texCoord;
   flat uint matId;
 } surf;
@@ -33,8 +31,8 @@ layout(location = 0) in VS_OUT
 void main(void)
 {
   const uint matId = uint(surf.matId);
-  vec3 norm = normalize(surf.wNorm) * (gl_FrontFacing ? 1.f : -1.f);
-  vec4 tang = surf.wTangent;
+  vec3 norm = vec3(0.f, 1.f, 0.f);
+  vec4 tang = vec4(1.f, 0.f, 0.f, 1.f);
   vec2 tc = surf.texCoord;
 
   // @TODO: rid of redundant sampling
@@ -46,4 +44,10 @@ void main(void)
   get_pixel_gbuf_info(
     matId, norm, tang, tc,
     out_fragAlbedo, out_fragMaterial, out_fragNormal, out_fragTransmission);
+
+  // @TEST, @TODO make param if goes well
+  const float normalViewDependency = 0.5f;
+  vec3 viewPos = surf.wPos - viewParams.mViewPos;
+  out_fragNormal =
+    normalize(out_fragNormal - normalize(viewPos) * normalViewDependency);
 }

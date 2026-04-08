@@ -63,6 +63,9 @@ struct ViewParams
 {
   shader_mat4 mProjView;
   shader_mat4 mView;
+  shader_mat4 mInverseView;
+  shader_vec3 mViewPos;
+  shader_uint pad0_;
   ViewFrustum viewFrustum;
   // Workaround for a bug where [1] array is probably flattened
   shader_vec4 csmFrustumSplits[SHADER_MAX((CSM_CASCADE_COUNT - 1) / 4 + 1, 2)];

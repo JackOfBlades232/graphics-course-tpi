@@ -48,6 +48,12 @@ layout(binding = 11, set = 0) uniform skybox_t
 
 #include "bindless.glsl.inc"
 
+// @TODO dedup with tonemap
+float luminance_bt601(vec3 col)
+{
+  return 0.299f * col.r + 0.587f * col.g + 0.114f * col.b;
+}
+
 layout(location = 0) in VS_OUT
 {
   vec2 texCoord;
@@ -66,6 +72,7 @@ const float GAMMA_POW = 2.2f;
 const float F_DIEL = 0.04f;
 
 // @TODO add (back) anisotropy
+// @TODO refactor these functions into proper brdf calculations without dups
 
 #define HPLUS(v_) ((v_) > 0.f ? 1.f : 0.f)
 
@@ -116,11 +123,13 @@ vec4 shade_cook_torrance(
   vec3 ll = normalize(l);
   vec3 vv = normalize(v);
   vec3 hh = normalize(ll + vv);
-  float nl = max(dot(nn, ll), 0.f);
   float nv = max(dot(nn, vv), 0.f);
   float hl = max(dot(hh, ll), 0.f);
   float hv = max(dot(hh, vv), 0.f);
   float nh = max(dot(nn, hh), 0.f);
+
+  float nlu = dot(nn, ll);
+  float nl = max(nlu, 0.f);
 
   if (nv < SHADER_EPSILON)
     return vec4(0.f, 0.f, 0.f, 1.f);
@@ -130,7 +139,7 @@ vec4 shade_cook_torrance(
   if (!isTrasnmissive && nl < SHADER_EPSILON)
     return vec4(0.f, 0.f, 0.f, 1.f);
 
-  float inl = max(-dot(nn, ll), 0.f);
+  float inlu = -dot(nn, ll);
 
   float a = roughness * roughness;
   float a2 = a * a;
@@ -138,14 +147,23 @@ vec4 shade_cook_torrance(
   vec3 f0 = mix(vec3(F_DIEL), c, metalness);
   vec3 f = conductor_frensel_shlick(f0, hv);
 
-  float diff_bsdf = diffuse_brdf();
-  float spec_bsdf = specular_brdf(nl, nv, hl, hv, nh, a2);
-
-  vec3 diff = nl * (1.f - f) * diff_bsdf * c_diff;
-  vec3 spec = nl * f * spec_bsdf;
-
+  vec3 spec_bsdf = vec3(nl * specular_brdf(nl, nv, hl, hv, nh, a2));
+  vec3 diff_bsdf;
   if (isTrasnmissive)
-    diff = mix(diff, inl * (1.f - f) * diffuse_btdf() * transCol, transmission);
+  {
+    float wrap = mix(0.f, 0.5f, luminance_bt601(transCol));
+    float wrapNormalizationFactor = 1.f / ((1.f + wrap) * (1.f + wrap));
+    float frontFactor = max((nlu + wrap) * wrapNormalizationFactor, 0.f);
+    float backFactor = max((inlu + wrap) * wrapNormalizationFactor, 0.f);
+    diff_bsdf = mix(vec3(frontFactor * diffuse_brdf()), backFactor * diffuse_btdf() * transCol, transmission);
+  }
+  else
+  {
+    diff_bsdf = vec3(nl * diffuse_brdf());
+  }
+
+  vec3 diff = (1.f - f) * diff_bsdf * c_diff;
+  vec3 spec = f * spec_bsdf;
 
   return vec4((spec + diff) * lc, 1.f);
 }
@@ -159,11 +177,13 @@ vec4 shade_cook_torrance_diffuse_spec_gloss(
   vec3 ll = normalize(l);
   vec3 vv = normalize(v);
   vec3 hh = normalize(ll + vv);
-  float nl = max(dot(nn, ll), 0.f);
   float nv = max(dot(nn, vv), 0.f);
   float hl = max(dot(hh, ll), 0.f);
   float hv = max(dot(hh, vv), 0.f);
   float nh = max(dot(nn, hh), 0.f);
+
+  float nlu = dot(nn, ll);
+  float nl = max(nlu, 0.f);
 
   if (nv < SHADER_EPSILON)
     return vec4(0.f, 0.f, 0.f, 1.f);
@@ -173,7 +193,7 @@ vec4 shade_cook_torrance_diffuse_spec_gloss(
   if (!isTrasnmissive && nl < SHADER_EPSILON)
     return vec4(0.f, 0.f, 0.f, 1.f);
 
-  float inl = max(-dot(nn, ll), 0.f);
+  float inlu = -dot(nn, ll);
 
   float roughness = 1.f - glossiness;
   float a = roughness * roughness;
@@ -185,14 +205,23 @@ vec4 shade_cook_torrance_diffuse_spec_gloss(
 
   vec3 f = conductor_frensel_shlick(f0, hv);
 
-  float diff_bsdf = diffuse_brdf();
-  float spec_bsdf = specular_brdf(nl, nv, hl, hv, nh, a2);
-
-  vec3 diff = nl * (1.f - f) * diff_bsdf * c_diff;
-  vec3 spec = nl * f * spec_bsdf;
-
+  vec3 spec_bsdf = vec3(nl * specular_brdf(nl, nv, hl, hv, nh, a2));
+  vec3 diff_bsdf;
   if (isTrasnmissive)
-    diff = mix(diff, inl * (1.f - f) * diffuse_btdf() * transCol, transmission);
+  {
+    float wrap = mix(0.f, 0.5f, luminance_bt601(transCol));
+    float wrapNormalizationFactor = 1.f / ((1.f + wrap) * (1.f + wrap));
+    float frontFactor = max((nlu + wrap) * wrapNormalizationFactor, 0.f);
+    float backFactor = max((inlu + wrap) * wrapNormalizationFactor, 0.f);
+    diff_bsdf = mix(vec3(frontFactor * diffuse_brdf()), backFactor * diffuse_btdf() * transCol, transmission);
+  }
+  else
+  {
+    diff_bsdf = vec3(nl * diffuse_brdf());
+  }
+
+  vec3 diff = (1.f - f) * diff_bsdf * c_diff;
+  vec3 spec = f * spec_bsdf;
 
   return vec4((spec + diff) * lc, 1.f);
 }
@@ -314,12 +343,9 @@ void main(void)
   // Unpack gbuffer
   const float depth = texture(gbufDepth, surf.texCoord).x;
 
-  const mat4 invView = inverse(viewParams.mView);
-  const vec3 camPos = invView[3].xyz / invView[3].w;
-
   const vec3 reconstructedPos = depth_and_tc_to_pos(max(depth, 0.f), surf.texCoord);
   const vec3 pos = reconstructedPos; //texture(gbufPos, surf.texCoord).xyz;
-  const vec3 viewVec = normalize(camPos - pos);
+  const vec3 viewVec = normalize(viewParams.mViewPos - pos);
   const vec3 viewPos = (viewParams.mView * vec4(pos, 1.f)).xyz;
 
   if (depth <= 0.f)
@@ -327,7 +353,7 @@ void main(void)
     if (constants.useSkybox == 0)
       out_fragColor = vec4(0.f, 0.f, 0.f, 1.f);
     else
-      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, reconstructedPos - camPos);
+      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, reconstructedPos - viewParams.mViewPos);
     return;
   }
 

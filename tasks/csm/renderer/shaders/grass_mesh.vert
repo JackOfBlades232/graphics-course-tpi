@@ -33,8 +33,6 @@ layout(binding = 10, set = 0) readonly buffer view_data_t
 layout(location = 0) out VS_OUT
 {
   vec3 wPos;
-  vec3 wNorm;
-  vec4 wTangent;
   vec2 texCoord;
   flat uint matId;
 } vOut;
@@ -58,11 +56,7 @@ void main(void)
   const uint vegTypeId = terrainSource.details[GRASS_INSTANCE_ID(inst)].vegetationId;
   const TerrainVegetationRule rule = terrainSource.vegetationTypes[vegTypeId];
 
-  //ugh
-  const mat4 invView = inverse(viewParams.mView);
-  const vec3 camPos = invView[3].xyz / invView[3].w;
-
-  float instDist = length(inst.pos - camPos);
+  float instDist = length(inst.pos - viewParams.mViewPos);
   float shrinkFactor = min(
     (instDist - constants.vegetationRenderingDistance) /
     (constants.vegetationRenderingDropoffDistance - constants.vegetationRenderingDistance),
@@ -93,14 +87,6 @@ void main(void)
   else
     pos.y += (1.f - GRASS_SANK_PORTION) * rule.height * shrinkFactor; 
 
-  // @TODO: proper
-  vec3 norm;
-  if (isBottomVertex)
-    norm = vec3(0.f, -1.f, 0.f);
-  else
-    norm = vec3(0.f, 1.f, 0.f);
-  vec4 tang = vec4(dir.x, 0.f, dir.y, 1.f);
-
   if (constants.windStrength >= 0.001f && !isBottomVertex)
   {
     vec2 windVec = pos.xz - constants.windOrigin;
@@ -123,14 +109,11 @@ void main(void)
 
     vec3 posOffset = shrinkFactor * vec3(windInfluence.x, -0.5f * (windInfluenceAmt * windInfluenceAmt), windInfluence.y);
     pos += posOffset;
-    norm = normalize(rule.height * norm + posOffset);
   }
 
   vec2 tc = vec2(isFarVertex ? 1.f : 0.f, isBottomVertex ? 1.f : 0.f);
 
   vOut.wPos     = pos;
-  vOut.wNorm    = norm;
-  vOut.wTangent = tang;
   vOut.texCoord = tc;
   vOut.matId    = rule.matId;
 

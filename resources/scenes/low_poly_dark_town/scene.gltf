@@ -3936,9 +3936,9 @@
         "KHR_materials_diffuse_transmission" : {
           "diffuseTransmissionFactor" : 0.35,
           "diffuseTransmissionColorFactor" : [
-            0.4,
-            0.4,
-            0.15
+            1.0,
+            1.0,
+            0.4
           ]
         }
       }
@@ -5236,14 +5236,14 @@
         8.45006,
         1.0
       ],
-      "name": "Sun.001"
-    },
-    {
       "extensions": {
         "KHR_lights_punctual": {
           "light": 0
         }
       },
+      "name": "Sun.001"
+    },
+    {
       "name": "Sun.001"
     },
     {

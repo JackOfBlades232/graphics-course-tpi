@@ -2183,8 +2183,6 @@ void WorldRenderer::drawGui()
       ImGui::SliderFloat2("Wind origin", (float*)&windOrigin, -5000.f, 5000.f);
       ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 1.f);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
-      ImGui::Checkbox(
-        "Use albedo as diffuse transmission color", &useAlbedoAsDiffuseTransmissionColor);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
@@ -2548,7 +2546,6 @@ void WorldRenderer::loadDebugConfig()
   csmBlendingBeltSize = unwrap(reader.read<float>());
   csmShadowDist = unwrap(reader.read<float>());
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
-  useAlbedoAsDiffuseTransmissionColor = unwrap(reader.read<bool>());
 
   validate_hist_tonemapping_coeffs(
     histEqTonemappingRegW,
@@ -2620,7 +2617,6 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(csmBlendingBeltSize));
   ETNA_VERIFY(writer.write(csmShadowDist));
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
-  ETNA_VERIFY(writer.write(useAlbedoAsDiffuseTransmissionColor));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

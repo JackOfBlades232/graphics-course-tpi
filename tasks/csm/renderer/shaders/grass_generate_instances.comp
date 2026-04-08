@@ -87,10 +87,7 @@ void main(void)
   float height = sample_geom_clipmap(grassPosPlanarRelToClipmap);
   vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.y);
 
-  // ugh
-  const mat4 invView = inverse(viewParams.mView);
-  const vec3 camPos = invView[3].xyz / invView[3].w;
-  if (length(camPos - grassPos) > constants.vegetationRenderingDistance)
+  if (length(viewParams.mViewPos - grassPos) > constants.vegetationRenderingDistance)
     return;
 
   const mat4 instMat = translation(grassPos);
