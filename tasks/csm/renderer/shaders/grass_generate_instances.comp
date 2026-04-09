@@ -50,14 +50,30 @@ layout(push_constant) uniform params_t
   uint detailId;
 } params;
 
+float fast_quad_sine_fake(float x)
+{
+  x = mod(x, 2.f * SHADER_PI);
+  float s = x > SHADER_PI ? -1.f : 1.f;
+  x = mod(x, SHADER_PI);
+  float t = x / SHADER_PI;
+  return s * 4.f * t * (1.f - t);
+}
+
 float wind_oscillator(float time, vec2 worldPos)
 {
   float phase = dot(worldPos, vec2(0.3, 0.7));
   float w = 0.0;
-  w += 0.50 * sin(time * 1.0000 + phase);
-  w += 0.25 * sin(time * 2.7183 + phase * 1.7);
-  w += 0.10 * sin(time * 7.3891 + phase * 2.3);
+  w += 0.50 * fast_quad_sine_fake(time * 1.0000 + phase);
+  w += 0.25 * fast_quad_sine_fake(time * 2.7183 + phase * 1.7);
+  w += 0.10 * fast_quad_sine_fake(time * 7.3891 + phase * 2.3);
   return w;
+}
+
+vec2 random_dir_notrig(vec2 seed)
+{
+  const float x = basic_noise(seed);
+  const float y = basic_noise(vec2(x, seed.x));
+  return normalize(2.f * vec2(x, y) - 1.f);
 }
 
 void main(void)
@@ -110,19 +126,22 @@ void main(void)
 
   if (instance_is_in_view(bbox, instMat, constants.cullingMode, payload))
   {
-    const uint rotAngle = basic_noise_int(grassPos.xz, 0, 359);
+    const float shrinkFactor = min(
+      (instDist - constants.vegetationRenderingDistance) /
+      (constants.vegetationRenderingDropoffDistance - constants.vegetationRenderingDistance),
+      1.f);
+
+    const vec2 rotDir = random_dir_notrig(grassPos.xz);
+    const uvec2 rotDirQ = uvec2((rotDir * 0.5f + 0.5f) * 65535.f);
+
     const uint instId = atomicAdd(command.instanceCount, 1);
     culledInstances[instId].pos = grassPos;
-    culledInstances[instId].idAndAnglePacked = (rotAngle << GRASS_ID_BITS) | (vegTypeId & GRASS_ID_MASK);
+    culledInstances[instId].idAndSf = (vegTypeId << GRASS_SF_BITS) | (floatBitsToUint(shrinkFactor) >> (GRASS_ID_BITS - 1));
     culledInstances[instId].windOffset = vec3(0.f);
+    culledInstances[instId].dirQuantized = ((rotDirQ.x & 0xFFFF) << 16) | (rotDirQ.y & 0xFFFF);
 
     if (constants.windStrength >= 0.001f)
     {
-      float shrinkFactor = min(
-        (instDist - constants.vegetationRenderingDistance) /
-        (constants.vegetationRenderingDropoffDistance - constants.vegetationRenderingDistance),
-        1.f);
-
       vec2 windVec = grassPos.xz - constants.windOrigin;
       float dist = length(windVec);
 

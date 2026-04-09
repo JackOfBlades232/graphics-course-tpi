@@ -40,34 +40,39 @@ layout(location = 0) out VS_OUT
 
 out gl_PerVertex { vec4 gl_Position; };
 
+vec2 rotate60(vec2 cs)
+{
+  return vec2(cs.x * 0.5f - cs.y * 0.866025f, cs.y * 0.5f + cs.x * 0.866025f);
+}
+
+vec2 rotate120(vec2 cs)
+{
+  return vec2(-cs.x * 0.5f - cs.y * 0.866025f, -cs.y * 0.5f + cs.x * 0.866025f);
+}
+
 void main(void)
 {
   const GrassInstance inst = culledInstances[gl_InstanceIndex];
 
-  const uint vegTypeId = terrainSource.details[GRASS_INSTANCE_ID(inst)].vegetationId;
+  const uint vegTypeId = terrainSource.details[GRASS_INST_GET_ID(inst)].vegetationId;
   const TerrainVegetationRule rule = terrainSource.vegetationTypes[vegTypeId];
 
-  float instDist = length(inst.pos - viewParams.mViewPos);
-  float shrinkFactor = min(
-    (instDist - constants.vegetationRenderingDistance) /
-    (constants.vegetationRenderingDropoffDistance - constants.vegetationRenderingDistance),
-    1.f);
+  float shrinkFactor = GRASS_INST_GET_SF(inst);
 
-  float rotationAngle = GRASS_INSTANCE_ANGLE(inst);
+  uvec2 dirq = uvec2(inst.dirQuantized >> 16, inst.dirQuantized & 0xFFFF);
+  vec2 dir = (vec2(dirq) / 65535.f) * 2.f - 1.f;
+
   uint quadVId = gl_VertexIndex;
-  if (gl_VertexIndex >= 6)
-  {
-    rotationAngle += SHADER_PI / 3.f;
-    quadVId -= 6;
-  }
   if (gl_VertexIndex >= 12)
   {
-    rotationAngle += SHADER_PI / 3.f;
+    dir = rotate120(dir);
+    quadVId -= 12;
+  }
+  else if (gl_VertexIndex >= 6)
+  {
+    dir = rotate60(dir);
     quadVId -= 6;
   }
-
-  // ugh
-  vec2 dir = normalize(vec2(cos(rotationAngle), sin(rotationAngle)));
 
   // quad winding order does not matter cuz we don't face cull
   bool isBottomVertex = quadVId == 0 || quadVId == 1 || quadVId == 4;
