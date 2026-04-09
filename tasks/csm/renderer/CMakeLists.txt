@@ -18,16 +18,18 @@ target_add_shaders(renderer
   shaders/transfer_light_mats.comp
   shaders/static_mesh.vert
   shaders/static_mesh.frag
-  shaders/static_mesh_shadow.vert
+  shaders/static_mesh_depth.vert
   shaders/terrain_mesh.vert
   shaders/terrain_mesh.tesc
   shaders/terrain_mesh.tese
   shaders/terrain_mesh.frag
-  shaders/terrain_mesh_shadow.tese
+  shaders/terrain_mesh_depth.tese
   shaders/grass_generate_clear_chunks.comp
   shaders/grass_generate_cull_chunks.comp
   shaders/grass_generate_prepare_inst_command.comp
   shaders/grass_generate_instances.comp
   shaders/grass_mesh.vert
   shaders/grass_mesh.frag
+  shaders/grass_mesh_depth.vert
+  shaders/grass_mesh_depth.frag
 )

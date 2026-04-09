@@ -24,25 +24,14 @@ layout(binding = 10, set = 0) readonly buffer view_data_t
 
 #include "terrain_mesh.glsl.inc"
 
-layout(location = 0) out TE_OUT
-{
-  vec3 wPos;
-  vec2 texCoord;
-} teOut;
-
 void main(void)
 {
   // @TODO: apply z perturbations based on view data
   // @TODO: should not be duplicated with terrain_mesh.vert
   const vec2 baseXZ = gl_in[0].gl_Position.xz;
   const vec2 extentXZ = gl_in[2].gl_Position.xz - baseXZ;
-
   const vec2 pointXZ = baseXZ + gl_TessCoord.xy * extentXZ;
-
   const vec2 wOffsetFromClipmapCenter = pointXZ - constants.toroidalUpdatePlayerWorldPos;
-
-  teOut.wPos = vec3(pointXZ.x, sample_geom_clipmap(wOffsetFromClipmapCenter), pointXZ.y);
-  teOut.texCoord = wOffsetFromClipmapCenter; // Special for clipmap sampling
-
-  gl_Position = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(teOut.wPos, 1.f);
+  vec3 wPos = vec3(pointXZ.x, sample_geom_clipmap(wOffsetFromClipmapCenter), pointXZ.y);
+  gl_Position = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(wPos, 1.f);
 }

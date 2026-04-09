@@ -32,7 +32,8 @@
 WorldRenderer::MeshPipeline::MeshPipeline(
   etna::PipelineManager& pipeman,
   const char* prog_name,
-  const char* vertex_prog_name,
+  const char* shadow_prog_name,
+  const char* depth_prog_name,
   const etna::GraphicsPipeline::CreateInfo& ci)
 {
   auto nci = ci;
@@ -41,7 +42,14 @@ WorldRenderer::MeshPipeline::MeshPipeline(
   nci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
   pipelines[size_t(SceneRenderingPass::COLOR)][size_t(DepthFlavour::REVERSE)] =
     pipeman.createGraphicsPipeline(prog_name, nci);
+  nci.depthConfig.depthCompareOp = vk::CompareOp::eEqual;
+  pipelines[size_t(SceneRenderingPass::COLOR_AFTER_PREPASS)][size_t(DepthFlavour::NORMAL)] =
+    pipeman.createGraphicsPipeline(prog_name, nci);
+  pipelines[size_t(SceneRenderingPass::COLOR_AFTER_PREPASS)][size_t(DepthFlavour::REVERSE)] =
+    pipeman.createGraphicsPipeline(prog_name, nci);
   programs[size_t(SceneRenderingPass::COLOR)].emplace(etna::get_shader_program(prog_name));
+  programs[size_t(SceneRenderingPass::COLOR_AFTER_PREPASS)].emplace(
+    etna::get_shader_program(prog_name));
 
   {
     auto wci = ci;
@@ -51,7 +59,14 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     wci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
     pipelines[size_t(SceneRenderingPass::WIRE_COLOR)][size_t(DepthFlavour::REVERSE)] =
       pipeman.createGraphicsPipeline(prog_name, wci);
+    wci.depthConfig.depthCompareOp = vk::CompareOp::eEqual;
+    pipelines[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)][size_t(DepthFlavour::NORMAL)] =
+      pipeman.createGraphicsPipeline(prog_name, nci);
+    pipelines[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)][size_t(DepthFlavour::REVERSE)] =
+      pipeman.createGraphicsPipeline(prog_name, nci);
     programs[size_t(SceneRenderingPass::WIRE_COLOR)].emplace(etna::get_shader_program(prog_name));
+    programs[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)].emplace(
+      etna::get_shader_program(prog_name));
   }
 
   {
@@ -63,12 +78,12 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBias);
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBiasEnable);
     pipelines[size_t(SceneRenderingPass::SHADOW)][size_t(DepthFlavour::NORMAL)] =
-      pipeman.createGraphicsPipeline(vertex_prog_name, sci);
+      pipeman.createGraphicsPipeline(shadow_prog_name, sci);
     sci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
     pipelines[size_t(SceneRenderingPass::SHADOW)][size_t(DepthFlavour::REVERSE)] =
-      pipeman.createGraphicsPipeline(vertex_prog_name, sci);
+      pipeman.createGraphicsPipeline(shadow_prog_name, sci);
     programs[size_t(SceneRenderingPass::SHADOW)].emplace(
-      etna::get_shader_program(vertex_prog_name));
+      etna::get_shader_program(shadow_prog_name));
   }
 
   {
@@ -80,12 +95,25 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBias);
     sci.dynamicStates.push_back(vk::DynamicState::eDepthBiasEnable);
     pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)][size_t(DepthFlavour::NORMAL)] =
-      pipeman.createGraphicsPipeline(vertex_prog_name, sci);
+      pipeman.createGraphicsPipeline(shadow_prog_name, sci);
     sci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
     pipelines[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)][size_t(DepthFlavour::REVERSE)] =
-      pipeman.createGraphicsPipeline(vertex_prog_name, sci);
+      pipeman.createGraphicsPipeline(shadow_prog_name, sci);
     programs[size_t(SceneRenderingPass::SHADOW_FRONT_CULLED)].emplace(
-      etna::get_shader_program(vertex_prog_name));
+      etna::get_shader_program(shadow_prog_name));
+  }
+
+  {
+    auto dci = ci;
+    dci.blendingConfig.attachments = {};
+    dci.fragmentShaderOutput.colorAttachmentFormats = {};
+    pipelines[size_t(SceneRenderingPass::DEPTH_PREPASS)][size_t(DepthFlavour::NORMAL)] =
+      pipeman.createGraphicsPipeline(depth_prog_name, dci);
+    dci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
+    pipelines[size_t(SceneRenderingPass::DEPTH_PREPASS)][size_t(DepthFlavour::REVERSE)] =
+      pipeman.createGraphicsPipeline(depth_prog_name, dci);
+    programs[size_t(SceneRenderingPass::DEPTH_PREPASS)].emplace(
+      etna::get_shader_program(depth_prog_name));
   }
 }
 
@@ -468,7 +496,7 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "static_mesh",
     {RENDERER_SHADERS_ROOT "static_mesh.frag.spv", RENDERER_SHADERS_ROOT "static_mesh.vert.spv"});
-  etna::create_program("static_mesh_shadow", {RENDERER_SHADERS_ROOT "static_mesh_shadow.vert.spv"});
+  etna::create_program("static_mesh_depth", {RENDERER_SHADERS_ROOT "static_mesh_depth.vert.spv"});
   etna::create_program(
     "terrain_mesh",
     {RENDERER_SHADERS_ROOT "terrain_mesh.frag.spv",
@@ -476,10 +504,10 @@ void WorldRenderer::loadShaders()
      RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
   etna::create_program(
-    "terrain_mesh_shadow",
+    "terrain_mesh_depth",
     {RENDERER_SHADERS_ROOT "terrain_mesh.vert.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
-     RENDERER_SHADERS_ROOT "terrain_mesh_shadow.tese.spv"});
+     RENDERER_SHADERS_ROOT "terrain_mesh_depth.tese.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
   etna::create_program(
     "reset_terrain_chunk_height_bounds",
@@ -495,6 +523,10 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "grass_mesh",
     {RENDERER_SHADERS_ROOT "grass_mesh.frag.spv", RENDERER_SHADERS_ROOT "grass_mesh.vert.spv"});
+  etna::create_program(
+    "grass_mesh_depth",
+    {RENDERER_SHADERS_ROOT "grass_mesh_depth.frag.spv",
+     RENDERER_SHADERS_ROOT "grass_mesh_depth.vert.spv"});
   etna::create_program(
     "grass_generate_clear_chunks", {RENDERER_SHADERS_ROOT "grass_generate_clear_chunks.comp.spv"});
   etna::create_program(
@@ -660,11 +692,19 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
       };
 
   staticMeshPipeline.emplace(
-    pipelineManager, "static_mesh", "static_mesh_shadow", meshPipelineCreateInfo);
+    pipelineManager,
+    "static_mesh",
+    "static_mesh_depth",
+    "static_mesh_depth",
+    meshPipelineCreateInfo);
   terrainMeshPipeline.emplace(
-    pipelineManager, "terrain_mesh", "terrain_mesh_shadow", terrainPipelineCreateInfo);
+    pipelineManager,
+    "terrain_mesh",
+    "terrain_mesh_depth",
+    "terrain_mesh_depth",
+    terrainPipelineCreateInfo);
   vegetationMeshPipeline.emplace(
-    pipelineManager, "grass_mesh", "grass_mesh", vegetationPipelineCreateInfo);
+    pipelineManager, "grass_mesh", "grass_mesh", "grass_mesh_depth", vegetationPipelineCreateInfo);
 
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
   resetTerrainChunkHeightBoundsPipeline =
@@ -878,15 +918,20 @@ void WorldRenderer::update(const FramePacket& packet)
 void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&& srpi)
 {
   const auto passHasFragmentStage = [](SceneRenderingPass p) {
-    return p == SceneRenderingPass::COLOR || p == SceneRenderingPass::WIRE_COLOR;
+    return p == SceneRenderingPass::COLOR || p == SceneRenderingPass::WIRE_COLOR ||
+      p == SceneRenderingPass::COLOR_AFTER_PREPASS ||
+      p == SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS;
   };
 
   const bool needToDrawScene = drawScene && (srpi.flags & SRPO_STATIC);
   const bool needToDrawTerrain = terrain && drawTerrain && (srpi.flags & SRPO_TERRAIN);
   const bool needToDrawVegetation = vegetation && drawVegetation && (srpi.flags & SRPO_VEGETATION);
 
-  srpi.vctx->update(srpi.vparams);
-  viewCtxMgr->cullForView(cmd_buf, *srpi.vctx, srpi.vparams, constants->get());
+  if (!srpi.skipCulling)
+  {
+    srpi.vctx->update(srpi.vparams);
+    viewCtxMgr->cullForView(cmd_buf, *srpi.vctx, srpi.vparams, constants->get());
+  }
 
   if (srpi.vparams.needReverseZ)
     srpi.rtargetInfo.depthAttachment.clearDepthStencilValue = {0.f, 0};
@@ -998,28 +1043,6 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         srpi.vctx->indirectDrawBuf.get(), offset, count, sizeof(IndirectCommand));
     }
 
-    if (needToDrawVegetation)
-    {
-      ETNA_PROFILE_GPU(cmd_buf, sceneVegetation);
-
-      const auto& pipe = vegetationMeshPipeline->get(srpi.pass, bool(srpi.vparams.needReverseZ));
-      std::vector vkSets{vegetationDset->getVkSet()};
-
-      if (passHasFragmentStage(srpi.pass))
-      {
-        vkSets.push_back(materialParamsDsetFrag.getVkSet());
-        vkSets.push_back(bindlessTexturesDsetFrag.getVkSet());
-        vkSets.push_back(bindlessSamplersDsetFrag.getVkSet());
-      }
-
-      cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, vkSets, {});
-      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
-
-      cmd_buf.drawIndirect(
-        sceneMgr->getVegetationIndirectDrawBuf().get(), 0, 1, sizeof(IndirectCommand));
-    }
-
     if (needToDrawTerrain)
     {
       ETNA_PROFILE_GPU(cmd_buf, terrain);
@@ -1048,6 +1071,26 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         offset * sizeof(IndirectCommand),
         count,
         sizeof(IndirectCommand));
+    }
+
+    if (needToDrawVegetation)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, sceneVegetation);
+
+      const auto& pipe = vegetationMeshPipeline->get(srpi.pass, bool(srpi.vparams.needReverseZ));
+      std::vector vkSets{vegetationDset->getVkSet()};
+
+      // We always have to sample opacity, even in depth pass
+      vkSets.push_back(materialParamsDsetFrag.getVkSet());
+      vkSets.push_back(bindlessTexturesDsetFrag.getVkSet());
+      vkSets.push_back(bindlessSamplersDsetFrag.getVkSet());
+
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, vkSets, {});
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
+
+      cmd_buf.drawIndirect(
+        sceneMgr->getVegetationIndirectDrawBuf().get(), 0, 1, sizeof(IndirectCommand));
     }
   }
 }
@@ -1859,23 +1902,81 @@ void WorldRenderer::renderWorld(
         .buffer = lightMatricesBuf.get(),
         .size = sizeof(LightMatrices)}});
 
+    const auto mainViewParams =
+      view_params_for_cam(mainCam, aspect(), false, true, csmSplitLambda, csmShadowDist);
+
+    constexpr auto Z_PREPASS_OBJ_MASK = SRPO_ALL;
+    static_assert(Z_PREPASS_OBJ_MASK != 0);
+
+    if (zPrepass)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, zPrepass);
+
+      renderScene(
+        cmd_buf,
+        {.pass = SceneRenderingPass::DEPTH_PREPASS,
+         .flags = Z_PREPASS_OBJ_MASK,
+         .vctx = &mainViewContext.value(),
+         .vparams = mainViewParams,
+         .rtargetInfo = {
+           {{0, 0}, {resolution.x, resolution.y}},
+           {},
+           {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}}});
+    }
+
+
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
 
       renderScene(
         cmd_buf,
-        {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
-         .flags = SRPO_ALL,
+        {.pass = wireframe
+           ? (zPrepass ? SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS
+                       : SceneRenderingPass::WIRE_COLOR)
+           : (zPrepass ? SceneRenderingPass::COLOR_AFTER_PREPASS : SceneRenderingPass::COLOR),
+         .flags = zPrepass ? Z_PREPASS_OBJ_MASK : SRPO_ALL,
          .vctx = &mainViewContext.value(),
-         .vparams =
-           view_params_for_cam(mainCam, aspect(), false, true, csmSplitLambda, csmShadowDist),
-         .rtargetInfo = {
-           {{0, 0}, {resolution.x, resolution.y}},
-           {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
-            {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
-            {.image = gbufNormal.get(), .view = gbufNormal.getView({})},
-            {.image = gbufTransmission.get(), .view = gbufTransmission.getView({})}},
-           {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}}});
+         .vparams = mainViewParams,
+         .rtargetInfo =
+           {{{0, 0}, {resolution.x, resolution.y}},
+            {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
+             {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
+             {.image = gbufNormal.get(), .view = gbufNormal.getView({})},
+             {.image = gbufTransmission.get(), .view = gbufTransmission.getView({})}},
+            {.image = mainViewDepth.get(),
+             .view = mainViewDepth.getView({}),
+             .loadOp = zPrepass ? vk::AttachmentLoadOp::eLoad : vk::AttachmentLoadOp::eClear}},
+         .skipCulling = zPrepass});
+    }
+
+    if (zPrepass && (Z_PREPASS_OBJ_MASK & SRPO_ALL) != SRPO_ALL)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, deferredGpassNoZ);
+
+      renderScene(
+        cmd_buf,
+        {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
+         .flags = ~Z_PREPASS_OBJ_MASK,
+         .vctx = &mainViewContext.value(),
+         .vparams = mainViewParams,
+         .rtargetInfo =
+           {{{0, 0}, {resolution.x, resolution.y}},
+            {{.image = gbufAlbedo.get(),
+              .view = gbufAlbedo.getView({}),
+              .loadOp = vk::AttachmentLoadOp::eLoad},
+             {.image = gbufMaterial.get(),
+              .view = gbufMaterial.getView({}),
+              .loadOp = vk::AttachmentLoadOp::eLoad},
+             {.image = gbufNormal.get(),
+              .view = gbufNormal.getView({}),
+              .loadOp = vk::AttachmentLoadOp::eLoad},
+             {.image = gbufTransmission.get(),
+              .view = gbufTransmission.getView({}),
+              .loadOp = vk::AttachmentLoadOp::eLoad}},
+            {.image = mainViewDepth.get(),
+             .view = mainViewDepth.getView({}),
+             .loadOp = vk::AttachmentLoadOp::eLoad}},
+         .skipCulling = true});
     }
 
     {
@@ -2183,6 +2284,7 @@ void WorldRenderer::drawGui()
       ImGui::SliderFloat2("Wind origin", (float*)&windOrigin, -5000.f, 5000.f);
       ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 1.f);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
+      ImGui::Checkbox("Perform Z Prepass", &zPrepass);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
@@ -2546,6 +2648,7 @@ void WorldRenderer::loadDebugConfig()
   csmBlendingBeltSize = unwrap(reader.read<float>());
   csmShadowDist = unwrap(reader.read<float>());
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
+  zPrepass = unwrap(reader.read<bool>());
 
   validate_hist_tonemapping_coeffs(
     histEqTonemappingRegW,
@@ -2617,6 +2720,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(csmBlendingBeltSize));
   ETNA_VERIFY(writer.write(csmShadowDist));
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
+  ETNA_VERIFY(writer.write(zPrepass));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

@@ -59,8 +59,11 @@ private:
   {
     COLOR,
     WIRE_COLOR,
+    COLOR_AFTER_PREPASS,
+    WIRE_COLOR_AFTER_PREPASS,
     SHADOW,
     SHADOW_FRONT_CULLED,
+    DEPTH_PREPASS,
 
     COUNT
   };
@@ -86,7 +89,7 @@ private:
     SRPO_TERRAIN = 1 << 1,
     SRPO_VEGETATION = 1 << 2,
 
-    SRPO_ALL = ~0u
+    SRPO_ALL = SRPO_STATIC | SRPO_TERRAIN | SRPO_VEGETATION
   };
 
   struct SceneRenderPassInfo
@@ -96,6 +99,7 @@ private:
     ViewContext* vctx;
     ViewParams vparams;
     etna::RenderTargetState::RenderPassInfo rtargetInfo;
+    bool skipCulling = false;
     bool depthBias = false;
     float depthBiasConstantFactor = 0.f;
     float depthBiasClamp = 0.f;
@@ -110,7 +114,8 @@ private:
     MeshPipeline(
       etna::PipelineManager& pipeman,
       const char* prog_name,
-      const char* vertex_prog_name,
+      const char* shadow_prog_name,
+      const char* depth_prog_name,
       const etna::GraphicsPipeline::CreateInfo& ci);
 
     MeshPipeline() = default;
@@ -320,6 +325,7 @@ private:
   float csmShadowDist = 400.f;
   float csmBlendingBeltSize = 0.03f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
+  bool zPrepass = true;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 
