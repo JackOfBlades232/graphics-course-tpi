@@ -50,6 +50,16 @@ layout(push_constant) uniform params_t
   uint detailId;
 } params;
 
+float wind_oscillator(float time, vec2 worldPos)
+{
+  float phase = dot(worldPos, vec2(0.3, 0.7));
+  float w = 0.0;
+  w += 0.50 * sin(time * 1.0000 + phase);
+  w += 0.25 * sin(time * 2.7183 + phase * 1.7);
+  w += 0.10 * sin(time * 7.3891 + phase * 2.3);
+  return w;
+}
+
 void main(void)
 {
   const uint vegTypeId = terrainSource.details[params.detailId].vegetationId;
@@ -87,13 +97,15 @@ void main(void)
   float height = sample_geom_clipmap(grassPosPlanarRelToClipmap);
   vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.y);
 
-  if (length(viewParams.mViewPos - grassPos) > constants.vegetationRenderingDistance)
+  float instDist = length(viewParams.mViewPos - grassPos);
+  if (instDist > constants.vegetationRenderingDistance)
     return;
 
   const mat4 instMat = translation(grassPos);
+  const float r = rule.radius * 1.5f; // for wind
   const BBox bbox = {
-    vec4(-rule.radius, -rule.height * GRASS_SANK_PORTION        , -rule.radius, 1.f),
-    vec4( rule.radius,  rule.height * (1.f - GRASS_SANK_PORTION),  rule.radius, 1.f)};
+    vec4(-r, -rule.height * GRASS_SANK_PORTION        , -r, 1.f),
+    vec4( r,  rule.height * (1.f - GRASS_SANK_PORTION),  r, 1.f)};
   InstanceViewRelatedData payload;
 
   if (instance_is_in_view(bbox, instMat, constants.cullingMode, payload))
@@ -102,5 +114,35 @@ void main(void)
     const uint instId = atomicAdd(command.instanceCount, 1);
     culledInstances[instId].pos = grassPos;
     culledInstances[instId].idAndAnglePacked = (rotAngle << GRASS_ID_BITS) | (vegTypeId & GRASS_ID_MASK);
+    culledInstances[instId].windOffset = vec3(0.f);
+
+    if (constants.windStrength >= 0.001f)
+    {
+      float shrinkFactor = min(
+        (instDist - constants.vegetationRenderingDistance) /
+        (constants.vegetationRenderingDropoffDistance - constants.vegetationRenderingDistance),
+        1.f);
+
+      vec2 windVec = grassPos.xz - constants.windOrigin;
+      float dist = length(windVec);
+
+      // @TODO: settable
+      const float lambda = 0.5f;
+      const float plambda = 0.5f;
+      const float pscale = 5.f;
+      const float relAmp = 0.4f;
+
+      float strengthFalloff = lambda + (1.f - lambda) / (1.f + dist);
+      float strengthPeriod = pscale * (plambda + (1.f - plambda) / (1.f + dist));
+
+      // @TODO: more sine waves?
+      float strengthOscillation = relAmp * wind_oscillator(strengthPeriod * constants.time, grassPos.xz);
+
+      float windInfluenceAmt = constants.windStrength * (1.f + strengthOscillation) * strengthFalloff;
+      vec2 windInfluence = (windVec / dist) * windInfluenceAmt;
+
+      vec3 posOffset = shrinkFactor * vec3(windInfluence.x, -0.5f * (windInfluenceAmt * windInfluenceAmt), windInfluence.y);
+      culledInstances[instId].windOffset = posOffset;
+    }
   }
 }

@@ -40,16 +40,6 @@ layout(location = 0) out VS_OUT
 
 out gl_PerVertex { vec4 gl_Position; };
 
-float wind_oscillator(float time, vec2 worldPos)
-{
-  float phase = dot(worldPos, vec2(0.3, 0.7));
-  float w = 0.0;
-  w += 0.50 * sin(time * 1.0000 + phase);
-  w += 0.25 * sin(time * 2.7183 + phase * 1.7);
-  w += 0.10 * sin(time * 7.3891 + phase * 2.3);
-  return w;
-}
-
 void main(void)
 {
   const GrassInstance inst = culledInstances[gl_InstanceIndex];
@@ -82,42 +72,21 @@ void main(void)
   // quad winding order does not matter cuz we don't face cull
   bool isBottomVertex = quadVId == 0 || quadVId == 1 || quadVId == 4;
   bool isFarVertex = quadVId == 1 || quadVId == 4 || quadVId == 5;
+
   vec3 pos = inst.pos + vec3(dir.x, 0.f, dir.y) * rule.radius * shrinkFactor * (isFarVertex ? 1.f : -1.f);
   if (isBottomVertex)
     pos.y -= GRASS_SANK_PORTION * rule.height * shrinkFactor; 
   else
     pos.y += (1.f - GRASS_SANK_PORTION) * rule.height * shrinkFactor; 
 
-  if (constants.windStrength >= 0.001f && !isBottomVertex)
-  {
-    vec2 windVec = inst.pos.xz - constants.windOrigin;
-    float dist = length(windVec);
-
-    // @TODO: settable
-    const float lambda = 0.5f;
-    const float plambda = 0.5f;
-    const float pscale = 5.f;
-    const float relAmp = 0.4f;
-
-    float strengthFalloff = lambda + (1.f - lambda) / (1.f + dist);
-    float strengthPeriod = pscale * (plambda + (1.f - plambda) / (1.f + dist));
-
-    // @TODO: more sine waves?
-    float strengthOscillation = relAmp * wind_oscillator(strengthPeriod * constants.time, inst.pos.xz);
-
-    float windInfluenceAmt = constants.windStrength * (1.f + strengthOscillation) * strengthFalloff;
-    vec2 windInfluence = (windVec / dist) * windInfluenceAmt;
-
-    vec3 posOffset = shrinkFactor * vec3(windInfluence.x, -0.5f * (windInfluenceAmt * windInfluenceAmt), windInfluence.y);
-    pos += posOffset;
-  }
+  if (!isBottomVertex)
+    pos += inst.windOffset;
 
   vec2 tc = vec2(isFarVertex ? 1.f : 0.f, isBottomVertex ? 1.f : 0.f);
 
 #if GBUF_PASS
   vOut.wPos     = pos;
 #endif
-
   vOut.texCoord = tc;
   vOut.matId    = rule.matId;
 

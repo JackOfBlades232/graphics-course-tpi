@@ -17,6 +17,8 @@ struct GrassInstance
 {
   shader_vec3 pos;
   shader_uint idAndAnglePacked;
+  shader_vec3 windOffset;
+  shader_uint pad0_;
 };
 
 #define GRASS_INSTANCE_ANGLE(inst_)                                                                \
