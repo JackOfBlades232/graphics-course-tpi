@@ -32,22 +32,24 @@
 WorldRenderer::MeshPipeline::MeshPipeline(
   etna::PipelineManager& pipeman,
   const char* prog_name,
+  const char* no_prepass_prog_name,
   const char* shadow_prog_name,
   const char* depth_prog_name,
   const etna::GraphicsPipeline::CreateInfo& ci)
 {
   auto nci = ci;
   pipelines[size_t(SceneRenderingPass::COLOR)][size_t(DepthFlavour::NORMAL)] =
-    pipeman.createGraphicsPipeline(prog_name, nci);
+    pipeman.createGraphicsPipeline(no_prepass_prog_name, nci);
   nci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
   pipelines[size_t(SceneRenderingPass::COLOR)][size_t(DepthFlavour::REVERSE)] =
-    pipeman.createGraphicsPipeline(prog_name, nci);
+    pipeman.createGraphicsPipeline(no_prepass_prog_name, nci);
   nci.depthConfig.depthCompareOp = vk::CompareOp::eEqual;
   pipelines[size_t(SceneRenderingPass::COLOR_AFTER_PREPASS)][size_t(DepthFlavour::NORMAL)] =
     pipeman.createGraphicsPipeline(prog_name, nci);
   pipelines[size_t(SceneRenderingPass::COLOR_AFTER_PREPASS)][size_t(DepthFlavour::REVERSE)] =
     pipeman.createGraphicsPipeline(prog_name, nci);
-  programs[size_t(SceneRenderingPass::COLOR)].emplace(etna::get_shader_program(prog_name));
+  programs[size_t(SceneRenderingPass::COLOR)].emplace(
+    etna::get_shader_program(no_prepass_prog_name));
   programs[size_t(SceneRenderingPass::COLOR_AFTER_PREPASS)].emplace(
     etna::get_shader_program(prog_name));
 
@@ -55,16 +57,17 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     auto wci = ci;
     wci.rasterizationConfig.polygonMode = vk::PolygonMode::eLine;
     pipelines[size_t(SceneRenderingPass::WIRE_COLOR)][size_t(DepthFlavour::NORMAL)] =
-      pipeman.createGraphicsPipeline(prog_name, wci);
+      pipeman.createGraphicsPipeline(no_prepass_prog_name, wci);
     wci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
     pipelines[size_t(SceneRenderingPass::WIRE_COLOR)][size_t(DepthFlavour::REVERSE)] =
-      pipeman.createGraphicsPipeline(prog_name, wci);
+      pipeman.createGraphicsPipeline(no_prepass_prog_name, wci);
     wci.depthConfig.depthCompareOp = vk::CompareOp::eEqual;
     pipelines[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)][size_t(DepthFlavour::NORMAL)] =
       pipeman.createGraphicsPipeline(prog_name, nci);
     pipelines[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)][size_t(DepthFlavour::REVERSE)] =
       pipeman.createGraphicsPipeline(prog_name, nci);
-    programs[size_t(SceneRenderingPass::WIRE_COLOR)].emplace(etna::get_shader_program(prog_name));
+    programs[size_t(SceneRenderingPass::WIRE_COLOR)].emplace(
+      etna::get_shader_program(no_prepass_prog_name));
     programs[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)].emplace(
       etna::get_shader_program(prog_name));
   }
@@ -524,6 +527,10 @@ void WorldRenderer::loadShaders()
     "grass_mesh",
     {RENDERER_SHADERS_ROOT "grass_mesh.frag.spv", RENDERER_SHADERS_ROOT "grass_mesh.vert.spv"});
   etna::create_program(
+    "grass_mesh_no_prepass",
+    {RENDERER_SHADERS_ROOT "grass_mesh_no_prepass.frag.spv",
+     RENDERER_SHADERS_ROOT "grass_mesh.vert.spv"});
+  etna::create_program(
     "grass_mesh_depth",
     {RENDERER_SHADERS_ROOT "grass_mesh_depth.frag.spv",
      RENDERER_SHADERS_ROOT "grass_mesh_depth.vert.spv"});
@@ -531,6 +538,8 @@ void WorldRenderer::loadShaders()
     "grass_generate_clear_chunks", {RENDERER_SHADERS_ROOT "grass_generate_clear_chunks.comp.spv"});
   etna::create_program(
     "grass_generate_cull_chunks", {RENDERER_SHADERS_ROOT "grass_generate_cull_chunks.comp.spv"});
+  etna::create_program(
+    "grass_generate_sort_chunks", {RENDERER_SHADERS_ROOT "grass_generate_sort_chunks.comp.spv"});
   etna::create_program(
     "grass_generate_prepare_inst_command",
     {RENDERER_SHADERS_ROOT "grass_generate_prepare_inst_command.comp.spv"});
@@ -694,17 +703,24 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   staticMeshPipeline.emplace(
     pipelineManager,
     "static_mesh",
+    "static_mesh",
     "static_mesh_depth",
     "static_mesh_depth",
     meshPipelineCreateInfo);
   terrainMeshPipeline.emplace(
     pipelineManager,
     "terrain_mesh",
+    "terrain_mesh",
     "terrain_mesh_depth",
     "terrain_mesh_depth",
     terrainPipelineCreateInfo);
   vegetationMeshPipeline.emplace(
-    pipelineManager, "grass_mesh", "grass_mesh", "grass_mesh_depth", vegetationPipelineCreateInfo);
+    pipelineManager,
+    "grass_mesh",
+    "grass_mesh_no_prepass",
+    "grass_mesh_depth",
+    "grass_mesh_depth",
+    vegetationPipelineCreateInfo);
 
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
   resetTerrainChunkHeightBoundsPipeline =
@@ -718,6 +734,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     pipelineManager.createComputePipeline("grass_generate_clear_chunks", {});
   vegetationGenerateCullChunks =
     pipelineManager.createComputePipeline("grass_generate_cull_chunks", {});
+  vegetationGenerateSortChunks =
+    pipelineManager.createComputePipeline("grass_generate_sort_chunks", {});
   vegetationGeneratePrepareInstCommand =
     pipelineManager.createComputePipeline("grass_generate_prepare_inst_command", {});
   vegetationGenerateInstances =
@@ -1425,6 +1443,38 @@ void WorldRenderer::renderWorld(
           get_linear_wg_count(VEGETATION_GRID_EXTENT, VEGETATION_CHUNK_CULL_GROUP_DIM),
           get_linear_wg_count(VEGETATION_GRID_EXTENT, VEGETATION_CHUNK_CULL_GROUP_DIM),
           1);
+      }
+
+      if (sortVegChunks)
+      {
+        emit_barriers(
+          cmd_buf,
+          {vk::BufferMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .srcAccessMask =
+              vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+            .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .dstAccessMask =
+              vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+            .buffer = vegetation->culledChunkBuffer.get(),
+            .size = vegChunkBufferSizeBytes()}});
+        auto programInfo = etna::get_shader_program("grass_generate_sort_chunks");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {
+            etna::Binding{0, vegetation->culledChunkBuffer.genBinding()},
+            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
+          });
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          vegetationGenerateSortChunks.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, vegetationGenerateSortChunks.getVkPipeline());
+        cmd_buf.dispatch(1, 1, 1);
       }
 
       emit_barriers(
@@ -2270,6 +2320,7 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Draw vegetation", &drawVegetation);
       if (drawVegetation)
       {
+        ImGui::Checkbox("Sort vegetation chunks", &sortVegChunks);
         ImGui::SliderFloat(
           "Vegetation draw disance",
           &vegetationRenderingDistance,
@@ -2649,6 +2700,7 @@ void WorldRenderer::loadDebugConfig()
   csmShadowDist = unwrap(reader.read<float>());
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
   zPrepass = unwrap(reader.read<bool>());
+  sortVegChunks = unwrap(reader.read<bool>());
 
   validate_hist_tonemapping_coeffs(
     histEqTonemappingRegW,
@@ -2721,6 +2773,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(csmShadowDist));
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
   ETNA_VERIFY(writer.write(zPrepass));
+  ETNA_VERIFY(writer.write(sortVegChunks));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

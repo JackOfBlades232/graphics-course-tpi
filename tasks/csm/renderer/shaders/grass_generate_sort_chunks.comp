@@ -1,0 +1,83 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "defs.h"
+#include "geometry.h"
+#include "terrain.h"
+
+#include "grass.comp.inc"
+
+layout(local_size_x = VEGETATION_CHUNK_SORT_GROUP_DIM) in;
+
+layout(binding = 0, set = 0) buffer gen_t
+{
+  GRASS_GEN_DATA_MEMBERS
+};
+
+layout(binding = 9, set = 0) uniform view_params_t
+{
+  ViewParams viewParams;
+};
+
+// shamelessly vibecoded (although I know bitonic sort!). Getting lazy)))
+
+shared vec2 sharedCache[VEGETATION_CHUNK_SORT_MAX_COUNT];
+
+float sort_key(vec2 p)
+{
+  return length(p - viewParams.mViewPos.xz);
+}
+
+void compare_and_swap(uint i, uint j, bool asc)
+{
+  float ki = sort_key(sharedCache[i]);
+  float kj = sort_key(sharedCache[j]);
+  if (asc ? (ki > kj) : (ki < kj))
+  {
+    vec2 tmp = sharedCache[i];
+    sharedCache[i] = sharedCache[j];
+    sharedCache[j] = tmp;
+  }
+}
+
+void main()
+{
+  uint tid = gl_LocalInvocationID.x;
+  uint closestPot = VEGETATION_CHUNK_SORT_MAX_COUNT;
+  while (closestPot / 2 >= chunkCount)
+    closestPot >>= 1;
+
+  for (uint i = 0; i < VEGETATION_CHUNK_SORT_ELEMS_PER_GROUP; ++i)
+  {
+    uint idx = tid + i * VEGETATION_CHUNK_SORT_GROUP_DIM;
+    sharedCache[idx] = idx < chunkCount ? chunkOrigins[idx] : vec2(1.f / 0.f);
+  }
+
+  barrier();
+
+  for (uint k = 2; k <= closestPot; k <<= 1)
+  {
+    for (uint j = k >> 1; j >= 1; j >>= 1)
+    {
+      for (uint i = 0; i < VEGETATION_CHUNK_SORT_ELEMS_PER_GROUP; ++i)
+      {
+        uint idx = tid + i * VEGETATION_CHUNK_SORT_GROUP_DIM;
+        uint ixj = idx ^ j;
+        if (ixj > idx)
+        {
+          bool asc = (idx & k) == 0;
+          compare_and_swap(idx, ixj, asc);
+        }
+      }
+      barrier();
+    }
+  }
+
+  for (uint i = 0; i < VEGETATION_CHUNK_SORT_ELEMS_PER_GROUP; ++i)
+  {
+    uint idx = tid + i * VEGETATION_CHUNK_SORT_GROUP_DIM;
+    if (idx < chunkCount)
+      chunkOrigins[idx] = sharedCache[idx];
+  }
+}

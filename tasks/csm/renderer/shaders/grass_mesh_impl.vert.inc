@@ -90,7 +90,7 @@ void main(void)
 
   if (constants.windStrength >= 0.001f && !isBottomVertex)
   {
-    vec2 windVec = pos.xz - constants.windOrigin;
+    vec2 windVec = inst.pos.xz - constants.windOrigin;
     float dist = length(windVec);
 
     // @TODO: settable

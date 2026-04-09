@@ -114,6 +114,7 @@ private:
     MeshPipeline(
       etna::PipelineManager& pipeman,
       const char* prog_name,
+      const char* no_prepass_prog_name,
       const char* shadow_prog_name,
       const char* depth_prog_name,
       const etna::GraphicsPipeline::CreateInfo& ci);
@@ -226,6 +227,7 @@ private:
   etna::ComputePipeline transferLightMatsPipeline{};
   etna::ComputePipeline vegetationGenerateClearChunks{};
   etna::ComputePipeline vegetationGenerateCullChunks{};
+  etna::ComputePipeline vegetationGenerateSortChunks{};
   etna::ComputePipeline vegetationGeneratePrepareInstCommand{};
   etna::ComputePipeline vegetationGenerateInstances{};
 
@@ -326,6 +328,7 @@ private:
   float csmBlendingBeltSize = 0.03f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
   bool zPrepass = true;
+  bool sortVegChunks = true;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

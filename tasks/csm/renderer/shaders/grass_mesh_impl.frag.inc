@@ -36,11 +36,13 @@ void main(void)
   const uint matId = uint(surf.matId);
   vec2 tc = surf.texCoord;
 
+#if !GBUF_PASS || GBUF_NO_PREPASS
   // @TODO: rid of redundant sampling
   float alpha = get_pixel_albedo(matId, tc).w;
   // @TODO: 0.5 and proper asset
   if (alpha < 0.2)
     discard;
+#endif
 
 #if GBUF_PASS
   vec3 norm = vec3(0.f, 1.f, 0.f);

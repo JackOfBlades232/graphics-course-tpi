@@ -86,6 +86,15 @@ struct TerrainSourceData
 #define VEGETATION_GRID_EXTENT 40
 #define VEGETATION_CHUNK_CULL_GROUP_DIM 8
 
+#define VEGETATION_CHUNK_SORT_GROUP_DIM 256
+#define VEGETATION_CHUNK_SORT_ELEMS_PER_GROUP 8
+#define VEGETATION_CHUNK_SORT_MAX_COUNT                                                            \
+  (VEGETATION_CHUNK_SORT_GROUP_DIM * VEGETATION_CHUNK_SORT_ELEMS_PER_GROUP)
+
+#ifdef __cplusplus
+static_assert(VEGETATION_CHUNK_SORT_MAX_COUNT >= VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT);
+#endif
+
 struct HeightBounds
 {
   shader_uint minZOrdUint;
