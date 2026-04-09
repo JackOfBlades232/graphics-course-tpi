@@ -12,6 +12,7 @@ define_property(TARGET PROPERTY INTERFACE_SHADER_INCLUDE_DIRECTORIES
 )
 
 find_program(glslang_validator glslangValidator)
+find_program(spirv_opt spirv-opt)
 
 # Wokrs same way as target_include_directories, i.e. PUBLIC/PRIVATE/INTERFACE are supported
 function(target_shader_include_directories tgt)
@@ -46,21 +47,35 @@ function(target_add_shaders tgt)
   foreach(glsl_path ${ARGN})
     set(input_path "${CMAKE_CURRENT_LIST_DIR}/${glsl_path}")
     set(output_path "${shader_binaries_dir}/$<PATH:GET_FILENAME,${glsl_path}>.spv")
+    set(unoptimized_output_path "${output_path}.unopt.spv")
     add_custom_command(
-        OUTPUT ${output_path}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_binaries_dir}
-        COMMAND ${glslang_validator}
-          "$<$<BOOL:${incl_dirs}>:-I$<JOIN:${incl_dirs},;-I>>"
-          "$<$<CONFIG:Debug>:-g>"
-          -V
-          ${input_path}
-          -o ${output_path}
-          --depfile "${output_path}.d"
-        VERBATIM
-        COMMAND_EXPAND_LISTS
-        DEPENDS ${input_path}
-        DEPFILE "${output_path}.d"
-      )
+      OUTPUT ${output_path}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_binaries_dir}
+      COMMAND ${glslang_validator}
+        "$<$<BOOL:${incl_dirs}>:-I$<JOIN:${incl_dirs},;-I>>"
+        "$<$<CONFIG:Debug>:-g>"
+        -V
+        ${input_path}
+        -o ${unoptimized_output_path}
+        --depfile "${output_path}.d"
+      COMMAND ${spirv_opt}
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-O>"
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:--eliminate-dead-branches>"
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:--merge-blocks>"
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:--eliminate-dead-code-aggressive>"
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:--inline-entry-points-exhaustive>"
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:--eliminate-dead-functions>"
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:--scalar-replacement=100>"
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:--loop-unroll>"
+        "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:--strip-debug>"
+        "--preserve-bindings"
+        "--preserve-spec-constants"
+        ${unoptimized_output_path} -o ${output_path}
+      VERBATIM
+      COMMAND_EXPAND_LISTS
+      DEPENDS ${input_path}
+      DEPFILE "${output_path}.d"
+    )
     list(APPEND SPIRV_BINARY_FILES ${output_path})
   endforeach(glsl_path)
 

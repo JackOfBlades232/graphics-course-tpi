@@ -114,6 +114,7 @@ inline ViewParams view_params_for_cam(
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
     params.mInverseView = glm::inverse(params.mView);
+    params.mProj = proj;
     params.mViewPos =
       glm::vec3(params.mInverseView[3][0], params.mInverseView[3][1], params.mInverseView[3][2]) /
       params.mInverseView[3][3];
@@ -163,6 +164,7 @@ inline ViewParams view_params_for_cam(
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
     params.mInverseView = glm::inverse(params.mView);
+    params.mProj = proj;
     params.mViewPos =
       glm::vec3(params.mInverseView[3][0], params.mInverseView[3][1], params.mInverseView[3][2]) /
       params.mInverseView[3][3];

@@ -66,6 +66,7 @@ struct ViewParams
   shader_mat4 mInverseView;
   shader_vec3 mViewPos;
   shader_uint pad0_;
+  shader_mat4 mProj;
   ViewFrustum viewFrustum;
   // Workaround for a bug where [1] array is probably flattened
   shader_vec4 csmFrustumSplits[SHADER_MAX((CSM_CASCADE_COUNT - 1) / 4 + 1, 2)];
@@ -129,7 +130,7 @@ mat4 calc_adjusted_viewproj_mat(in ViewParams params, in ViewData data)
   if (params.needDepthBounds == 0)
     return params.mProjView;
   const vec2 zNearFar = get_corrected_depth_bounds(params, data);
-  const mat4 pm = params.mProjView * inverse(params.mView); // @SPEED piggy!
+  const mat4 pm = params.mProj;
   const float znr = params.needReverseZ != 0 ? zNearFar.y : zNearFar.x;
   const float zfr = params.needReverseZ != 0 ? zNearFar.x : zNearFar.y;
   mat4 adjPm;
