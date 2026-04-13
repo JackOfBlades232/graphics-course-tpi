@@ -183,7 +183,10 @@ void Renderer::drawFrame()
     auto newResolution = resolutionProvider();
     auto [w, h] = window->recreateSwapchain(
       etna::Window::DesiredProperties{
-        .resolution = {newResolution.x, newResolution.y}, .vsync = useVsync, .autoGamma = true});
+        .resolution = {newResolution.x, newResolution.y},
+        .vsync = useVsync,
+        .autoGamma = true,
+        .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount()});
 
     if (resolution != glm::uvec2{w, h})
     {
