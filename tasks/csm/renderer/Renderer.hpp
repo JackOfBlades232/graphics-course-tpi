@@ -43,7 +43,7 @@ private:
   std::unique_ptr<WorldRenderer> worldRenderer;
 
   glm::uvec2 resolution;
-  bool useVsync = true;
+  bool useVsync = false;
 
   const Config& cfg;
 };
