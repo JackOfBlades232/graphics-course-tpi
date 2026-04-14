@@ -39,3 +39,5 @@ add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 add_subdirectory(common)
 add_subdirectory(renderer)
 add_subdirectory(baker)
+
+include("cmake/scenes.cmake")

@@ -37,7 +37,7 @@ App::App(const char* scene_name, std::span<const char* const> argv)
 
   // @TODO: how is this validated?
   std::filesystem::path scenePath{
-    (GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/") + std::string{scene_name} + "/baked/"};
+    (GRAPHICS_COURSE_ROOT "/build/baked_scenes/") + std::string{scene_name}};
   if (std::filesystem::exists(scenePath))
   {
     for (const auto& entry : std::filesystem::directory_iterator(scenePath))

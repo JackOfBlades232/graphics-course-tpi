@@ -65,6 +65,12 @@ int main(int argc, char** argv)
   VERIFY(argc >= 2, "Invalid number of args: specify a gltf asset to bake");
   std::filesystem::path path{argv[1]};
 
+  std::filesystem::path dstPath{path};
+  // Construct default -- baked next to scene. In this project, not to be used as such (CMake will deal with it).
+  dstPath.replace_extension("");
+  dstPath.replace_filename("baked/" + dstPath.filename().string());
+  dstPath.replace_extension(".gltf");
+
   bool bestFitNormal = false;
   bool embedImages = false;
   bool embedBuffers = false;
@@ -72,13 +78,27 @@ int main(int argc, char** argv)
   for (int i = 2; i < argc; ++i)
   {
     if (strcmp(argv[i], "-bfn") == 0)
+    {
       bestFitNormal = true;
+    }
     else if (strcmp(argv[i], "-embedImg") == 0)
+    {
       embedImages = true;
+    }
     else if (strcmp(argv[i], "-embedBuf") == 0)
+    {
       embedBuffers = true;
+    }
+    else if (strcmp(argv[i], "-o") == 0)
+    {
+      if (i == argc - 1)
+        FAIL("Invalid args: a filename must follow after -o");
+      dstPath = argv[++i];
+    }
     else
+    {
       FAIL("Invalid arg: {}", argv[i]);
+    }
   }
 
   // Load the model
@@ -400,21 +420,22 @@ int main(int argc, char** argv)
   model.extensionsUsed.emplace_back("KHR_mesh_quantization");
 
   // Patch up pathes so that baked scene refers to the same textures
+  std::filesystem::path relPath = std::filesystem::relative(path.parent_path(), dstPath.parent_path());
   for (auto& img : model.images)
   {
     if (!img.uri.empty())
-      img.uri = "../" + img.uri;
+    {
+      auto pc = relPath;
+      pc += "/" + img.uri;
+      img.uri = pc.generic_string();
+    }
   }
 
-  path.replace_extension("");
-  path.replace_filename("baked/" + path.filename().string());
-  path.replace_extension(".gltf");
-
-  if (!std::filesystem::exists(path.parent_path()))
-    std::filesystem::create_directory(path.parent_path());
+  if (!std::filesystem::exists(dstPath.parent_path()))
+    std::filesystem::create_directory(dstPath.parent_path());
 
   bool res =
-    api.WriteGltfSceneToFile(&model, path.string(), embedImages, embedBuffers, true, false);
+    api.WriteGltfSceneToFile(&model, dstPath.string(), embedImages, embedBuffers, true, false);
   VERIFY(res, "Failed to write baked scene to {}", to_char_str(path.string()));
 
   return 0;
