@@ -76,7 +76,7 @@ struct TerrainSourceData
 
 #define TERRAIN_CHUNK_HBOUNDS_WORK_GROUP_DIM 8
 
-#define TERRAIN_DETAIL_LEVEL_FALLOFF 0.001f
+#define TERRAIN_DETAIL_LEVEL_FALLOFF 0.1f
 
 #define CLIMPAP_UPDATE_GRID_SIZE                                                                   \
   (CLIPMAP_LEVEL_WSIZE(CLIPMAP_LEVEL_COUNT - 1) /                                                  \

@@ -99,6 +99,22 @@ vec3 generate_normal(vec2 worldCoord)
   return normalize(vec3(2.f * (xl - xg), 4.f, 2.f * (zl - zg)));
 }
 
+struct SampledDetail
+{
+  float h;
+  float w;
+  vec3 n;
+  vec3 color;
+  vec3 matData; // Ok to interpolate, cuz mat type is verified to be the same
+};
+
+float sstep(float x)
+{
+  float x2 = x * x;
+  float x3 = x2 * x;
+  return 3 * x2 - 2 * x3;
+}
+
 void main(void)
 {
   const uint pix = gl_GlobalInvocationID.x;
@@ -154,12 +170,21 @@ void main(void)
   const ivec2 destImageCoord = 
     (flatImgCoord + toroidalScrolloff + CLIPMAP_RESOLUTION) % CLIPMAP_RESOLUTION;
 
+  SampledDetail details[TERRAIN_MAX_DETAILS];
+  for (uint i = 0; i < source.detailCount; ++i)
+  {
+    details[i].h = 0.f;
+    details[i].w = 0.f;
+    details[i].n = vec3(0.f);
+    details[i].color = vec3(0.f);
+    details[i].matData = vec3(0.f);
+  }
+
+  uint detailMask = 0;
   float h = 0.f;
   vec3 n = vec3(0.f);
   vec3 color = vec3(0.f);
-  vec3 matData = vec3(0.f); // Ok to interpolate, cuz mat type is verified to be the same
-
-  uint detailMask = 0;
+  vec3 matData = vec3(0.f);
 
   {
     float rh = sample_rel_height(worldCoord);
@@ -175,8 +200,7 @@ void main(void)
     const vec3 gnproj = baseN * dot(grad, baseN);
     const vec4 tang = vec4(normalize(grad - gnproj), 1.f); // @TODO: is this correct?
 
-    float disp = 0.f;
-    float totw = 0.f;
+    float maxw = -10000.f;
 
     for (uint i = 0; i < source.detailCount; ++i)
     {
@@ -191,14 +215,15 @@ void main(void)
       }
       if ((source.details[i].flags & TERRAIN_DETAIL_USE_RH_RANGE_FLAG) != 0)
       {
-        float ld = max(source.details[i].heightRange.x - rh, 0.f);
-        float hd = max(rh - source.details[i].heightRange.y, 0.f);
+        float hForRange = rh + 0.05f * (basic_noise(float(i) * (worldCoord + uv)) - 0.5f);
+        float ld = max(source.details[i].heightRange.x - hForRange, 0.f);
+        float hd = max(hForRange - source.details[i].heightRange.y, 0.f);
 
         // @TODO: correct when there can be another source of w (splatting)
         float lw = 1.f - min(ld / TERRAIN_DETAIL_LEVEL_FALLOFF, 1.f);
         float hw = 1.f - min(hd / TERRAIN_DETAIL_LEVEL_FALLOFF, 1.f);
 
-        w = min(lw, hw);
+        w = sstep(min(lw, hw));
       }
 
       if (w > SHADER_EPSILON)
@@ -208,6 +233,7 @@ void main(void)
         const vec3 detMatdata = get_pixel_matdata_lod(source.details[i].matId, uv, float(params.level));
         const vec3 detNorm = get_pixel_normal_lod(source.details[i].matId, baseN, tang, uv, float(params.level));
 
+        float h = 0.f;
         {
           const uint matId = source.details[i].matId;
           if (matId != NO_MATERIAL)
@@ -217,17 +243,23 @@ void main(void)
 
             if (dispTexId != NO_TEXTURE_ID && abs(dispCoeff) > SHADER_EPSILON)
             {
-              disp += sample_bindless_tex_lod(dispTexId, uv, float(params.level)).x * dispCoeff;
+              h = sample_bindless_tex_lod(dispTexId, uv, float(params.level)).x * dispCoeff;
             }
           }
         }
 
-        color += detCol * w;
-        matData += detMatdata * w;
-        n += detNorm * w;
-        totw += w;
+        w += h;
 
-        detailMask |= (1 << i);
+        details[i].h = h;
+        details[i].w = w;
+        details[i].n = detNorm;
+        details[i].color = detCol;
+        details[i].matData = detMatdata;
+
+        if (w > maxw)
+        {
+          maxw = w;
+        }
       }
     }
 
@@ -239,7 +271,29 @@ void main(void)
     }
     else
     {
-      rh += disp / totw;
+      const float depth = 0.2;
+      maxw -= depth;
+
+      float totw = 0.f;
+      float disp = 0.f;
+
+      for (uint i = 0; i < source.detailCount; ++i)
+      {
+        details[i].w = max(details[i].w - maxw, 0.f);
+        disp += details[i].h * details[i].w;
+        n += details[i].n * details[i].w;
+        color += details[i].color * details[i].w;
+        matData += details[i].matData * details[i].w;
+        totw += details[i].w;
+      }
+
+      for (uint i = 0; i < source.detailCount; ++i)
+      {
+        if (details[i].w / totw > 0.95)
+          detailMask |= (1 << i);
+      }
+      
+      //rh += disp / totw;
       color /= totw;
       matData /= totw;
       n = normalize(n / totw);
