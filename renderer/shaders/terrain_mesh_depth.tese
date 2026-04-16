@@ -32,6 +32,6 @@ void main(void)
   const vec2 extentXZ = gl_in[2].gl_Position.xz - baseXZ;
   const vec2 pointXZ = baseXZ + gl_TessCoord.xy * extentXZ;
   const vec2 wOffsetFromClipmapCenter = pointXZ - constants.toroidalUpdatePlayerWorldPos;
-  vec3 wPos = vec3(pointXZ.x, sample_geom_clipmap(wOffsetFromClipmapCenter), pointXZ.y);
+  vec3 wPos = vec3(pointXZ.x, sample_geom_clipmap_exact(wOffsetFromClipmapCenter), pointXZ.y);
   gl_Position = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(wPos, 1.f);
 }

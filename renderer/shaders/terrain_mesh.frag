@@ -33,9 +33,12 @@ void main(void)
   vec3 materialData;
   vec3 normal;
 
-  surfaceColor = sample_albedo_clipmap(surf.texCoord);
-  materialData = sample_matdata_clipmap(surf.texCoord).xyz;
-  normal = sample_normal_clipmap(surf.texCoord);
+  vec2 tcDdx = dFdx(surf.texCoord);
+  vec2 tcDdy = dFdy(surf.texCoord);
+
+  surfaceColor = sample_albedo_clipmap(surf.texCoord, tcDdx, tcDdy);
+  materialData = sample_matdata_clipmap(surf.texCoord, tcDdx, tcDdy).xyz;
+  normal = sample_normal_clipmap(surf.texCoord, tcDdx, tcDdy);
 
   out_fragAlbedo = surfaceColor;
   out_fragMaterial = materialData;

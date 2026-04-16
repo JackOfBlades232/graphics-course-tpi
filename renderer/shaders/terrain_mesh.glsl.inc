@@ -13,24 +13,27 @@ layout(binding = 7, set = 0) uniform terrain_source_t
 
 const float OFFSET_FOR_NORMAL_EVAL = 0.01f;
 
-// @TODO: proper mip coeff/level choice -- ddx ddy, cuz now we aliasing hard on farther chunks
-
-void get_mip_info(
-  vec2 w_rel_point, out uint base_level, out uint next_level, out float coeff)
+uint get_level_info(vec2 w_rel_point)
 {
   const float relOffs =
     max(abs(w_rel_point.x), abs(w_rel_point.y)) / CLIPMAP_EXTENT_STEP;
   const float levelExact = log2(relOffs);
-  base_level = min(uint(ceil(levelExact + 0.01f)), CLIPMAP_LEVEL_COUNT - 1);
-  next_level = base_level + 1;
+  return min(uint(ceil(levelExact + 0.01f)), CLIPMAP_LEVEL_COUNT - 1);
+}
 
-  const float baseLevelInnerBorder =
-    base_level == 0 ? 0.f : (float(1 << (base_level - 1)) * CLIPMAP_EXTENT_STEP);
-  const float baseLevelOuterBorder =
-    base_level == 0 ? 1.f : (2.f * baseLevelInnerBorder);
-  const float rawCoeff =
-    (relOffs - baseLevelInnerBorder) / (baseLevelOuterBorder - baseLevelInnerBorder);
-  coeff = clamp(rawCoeff, 0.f, 1.f);
+void get_mip_info(
+  vec2 w_rel_point, vec2 wrp_ddx, vec2 wrp_ddy, out uint base_level, out uint next_level, out float coeff)
+{
+  const uint minLevel = get_level_info(w_rel_point);
+
+  vec2 dx = wrp_ddx * CLIPMAP_L0_TEXELS_PER_WORLD_UNIT;
+  vec2 dy = wrp_ddy * CLIPMAP_L0_TEXELS_PER_WORLD_UNIT;
+  float lod = log2(max(length(dx), length(dy)));
+  float rawBase = floor(lod);
+  
+  base_level = uint(clamp(rawBase    , minLevel, CLIPMAP_LEVEL_COUNT - 1));
+  next_level = uint(clamp(rawBase + 1, minLevel, CLIPMAP_LEVEL_COUNT - 1));
+  coeff = fract(lod);
 }
 
 vec2 get_toroidal_uv(vec2 w_rel_point, uint level)
@@ -99,21 +102,57 @@ vec4 load_matdata_clipmap_level(vec2 w_rel_point, uint level)
   return texelFetch(matdataClipmap[level], uv, 0);
 }
 
-float sample_geom_clipmap(vec2 w_rel_point)
+float load_geom_clipmap(vec2 w_rel_point)
 {
-  // @TODO: calculate lod from player pos? Doesn't seem better atm, and will
-  // have to deal somehow with edges if we are out of the inner level
+  return load_geom_clipmap_level(w_rel_point, get_level_info(w_rel_point));
+}
 
-  // @TODO: proper mip coeff/level choice -- ddx ddy (check how it works)
+vec3 load_normal_clipmap(vec2 w_rel_point)
+{
+  return load_normal_clipmap_level(w_rel_point, get_level_info(w_rel_point));
+}
+
+vec4 load_albedo_clipmap(vec2 w_rel_point)
+{
+  return load_albedo_clipmap_level(w_rel_point, get_level_info(w_rel_point));
+}
+
+vec4 load_matdata_clipmap(vec2 w_rel_point)
+{
+  return load_matdata_clipmap_level(w_rel_point, get_level_info(w_rel_point));
+}
+
+float sample_geom_clipmap_exact(vec2 w_rel_point)
+{
+  return sample_geom_clipmap_level(w_rel_point, get_level_info(w_rel_point));
+}
+
+vec3 sample_normal_clipmap_exact(vec2 w_rel_point)
+{
+  return sample_normal_clipmap_level(w_rel_point, get_level_info(w_rel_point));
+}
+
+vec4 sample_albedo_clipmap_exact(vec2 w_rel_point)
+{
+  return sample_albedo_clipmap_level(w_rel_point, get_level_info(w_rel_point));
+}
+
+vec4 sample_matdata_clipmap_exact(vec2 w_rel_point)
+{
+  return sample_matdata_clipmap_level(w_rel_point, get_level_info(w_rel_point));
+}
+
+float sample_geom_clipmap(vec2 w_rel_point, vec2 wrp_ddx, vec2 wrp_ddy)
+{
   // @TODO: Factor player z in
 
   uint baseLevel;
   uint nextLevel;
   float coeff;
-  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+  get_mip_info(w_rel_point, wrp_ddx, wrp_ddy, baseLevel, nextLevel, coeff);
 
   float val = sample_geom_clipmap_level(w_rel_point, baseLevel);
-  if (nextLevel < CLIPMAP_LEVEL_COUNT)
+  if (nextLevel != baseLevel)
   {
     float nextSample = sample_geom_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
@@ -123,15 +162,15 @@ float sample_geom_clipmap(vec2 w_rel_point)
   return val;
 }
 
-vec3 sample_normal_clipmap(vec2 w_rel_point)
+vec3 sample_normal_clipmap(vec2 w_rel_point, vec2 wrp_ddx, vec2 wrp_ddy)
 {
   uint baseLevel;
   uint nextLevel;
   float coeff;
-  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+  get_mip_info(w_rel_point, wrp_ddx, wrp_ddy, baseLevel, nextLevel, coeff);
 
   vec3 val = sample_normal_clipmap_level(w_rel_point, baseLevel);
-  if (nextLevel < CLIPMAP_LEVEL_COUNT)
+  if (nextLevel != baseLevel)
   {
     vec3 nextSample = sample_normal_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
@@ -141,15 +180,15 @@ vec3 sample_normal_clipmap(vec2 w_rel_point)
   return normalize(val);
 }
 
-vec4 sample_albedo_clipmap(vec2 w_rel_point)
+vec4 sample_albedo_clipmap(vec2 w_rel_point, vec2 wrp_ddx, vec2 wrp_ddy)
 {
   uint baseLevel;
   uint nextLevel;
   float coeff;
-  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+  get_mip_info(w_rel_point, wrp_ddx, wrp_ddy, baseLevel, nextLevel, coeff);
 
   vec4 val = sample_albedo_clipmap_level(w_rel_point, baseLevel);
-  if (nextLevel < CLIPMAP_LEVEL_COUNT)
+  if (nextLevel != baseLevel)
   {
     vec4 nextSample = sample_albedo_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
@@ -159,15 +198,15 @@ vec4 sample_albedo_clipmap(vec2 w_rel_point)
   return val;
 }
 
-vec4 sample_matdata_clipmap(vec2 w_rel_point)
+vec4 sample_matdata_clipmap(vec2 w_rel_point, vec2 wrp_ddx, vec2 wrp_ddy)
 {
   uint baseLevel;
   uint nextLevel;
   float coeff;
-  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
+  get_mip_info(w_rel_point, wrp_ddx, wrp_ddy, baseLevel, nextLevel, coeff);
 
   vec4 val = sample_matdata_clipmap_level(w_rel_point, baseLevel);
-  if (nextLevel < CLIPMAP_LEVEL_COUNT)
+  if (nextLevel != baseLevel)
   {
     vec4 nextSample = sample_matdata_clipmap_level(w_rel_point, nextLevel);
     val *= 1.f - coeff;
@@ -175,16 +214,6 @@ vec4 sample_matdata_clipmap(vec2 w_rel_point)
   }
 
   return val;
-}
-
-// @HACK, @TODO implement properly if required
-vec4 load_matdata_clipmap(vec2 w_rel_point)
-{
-  uint baseLevel;
-  uint nextLevel;
-  float coeff;
-  get_mip_info(w_rel_point, baseLevel, nextLevel, coeff);
-  return load_matdata_clipmap_level(w_rel_point, baseLevel);
 }
 
 #endif // TERRAIN_MESH_H_INCLUDED

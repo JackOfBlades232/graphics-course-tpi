@@ -39,7 +39,7 @@ void main(void)
 
   const vec2 wOffsetFromClipmapCenter = pointXZ - constants.toroidalUpdatePlayerWorldPos;
 
-  teOut.wPos = vec3(pointXZ.x, sample_geom_clipmap(wOffsetFromClipmapCenter), pointXZ.y);
+  teOut.wPos = vec3(pointXZ.x, sample_geom_clipmap_exact(wOffsetFromClipmapCenter), pointXZ.y);
   teOut.texCoord = wOffsetFromClipmapCenter; // Special for clipmap sampling
 
   gl_Position = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(teOut.wPos, 1.f);
