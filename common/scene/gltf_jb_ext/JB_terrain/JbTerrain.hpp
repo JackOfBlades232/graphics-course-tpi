@@ -17,7 +17,6 @@ struct JbTerrainExtDetailData
   glm::vec2 uvScale{1.f, 1.f};
   glm::vec2 relHeightRange{0.f, 1.f};
   int splattingCompId{-1};
-  glm::uint splattingCompMask{0};
   int material{-1};
   int vegetation{-1};
   bool useSplattingMask{false};
@@ -43,8 +42,6 @@ struct JbTerrainExtData
 
   std::vector<JbTerrainExtDetailData> details{};
   std::vector<JbTerrainExtVegetationData> vegetations{};
-
-  // @TODO: more
 };
 
 struct JbTerrainExtMaterial

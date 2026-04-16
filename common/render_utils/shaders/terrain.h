@@ -4,8 +4,8 @@
 #include "materials.h"
 #include "cpp_glsl_compat.h"
 
-#define TERRAIN_MAX_DETAILS 8
-#define TERRAIN_MAX_VEGETATION_TYPES 8
+#define TERRAIN_MAX_DETAILS 4
+#define TERRAIN_MAX_VEGETATION_TYPES 4
 
 #define TERRAIN_DETAIL_USE_MASK_FLAG (1)
 #define TERRAIN_DETAIL_USE_RH_RANGE_FLAG (1 << 1)
@@ -15,13 +15,9 @@ struct TerrainDetailRule
   shader_vec2 uvScale;
   shader_vec2 heightRange;
   shader_uint splattingCompId;
-  shader_uint splattingCompMask;
   MaterialId matId;
   shader_uint vegetationId;
   shader_uint flags;
-  shader_uint pad1_;
-  shader_uint pad2_;
-  shader_uint pad3_;
 };
 
 struct TerrainVegetationRule
@@ -79,6 +75,8 @@ struct TerrainSourceData
 
 #define TERRAIN_DETAIL_LEVEL_FALLOFF 0.1f
 
+#define TERRAIN_NO_SPLATTING_COMP (shader_uint(-1))
+
 #define CLIMPAP_UPDATE_GRID_SIZE                                                                   \
   (CLIPMAP_LEVEL_WSIZE(CLIPMAP_LEVEL_COUNT - 1) /                                                  \
    float(TERRAIN_CHUNK_TESSELLATION_FACTOR * TERRAIN_CHUNKS_LEVEL_DIM))
@@ -131,6 +129,20 @@ shader_inline shader_uint calculate_thread_count_for_clipmap_update(shader_ivec2
 {
   return shader_abs(update_dims.x) * CLIPMAP_RESOLUTION +
     shader_abs(update_dims.y) * CLIPMAP_RESOLUTION - shader_abs(update_dims.x * update_dims.y);
+}
+
+shader_inline float get_v4_component(shader_vec4 v, shader_uint i)
+{
+  if (i == 0)
+    return v.x;
+  else if (i == 1)
+    return v.y;
+  else if (i == 2)
+    return v.z;
+  else if (i == 3)
+    return v.w;
+  else
+    return 0.f;
 }
 
 #endif // TERRAIN_H_INCLUDED

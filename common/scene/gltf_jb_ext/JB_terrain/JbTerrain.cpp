@@ -163,7 +163,19 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
         dst.vegetation = veg.GetNumberAsInt();
       }
 
-      // @TODO: syntax for splatting mask components mapping
+      if (elem.Has("splattingComp"))
+      {
+        VERIFY(
+          data.splattingMask != -1,
+          "invalid format: details use splatting mask while texture is not provided");
+        const auto& sp = elem.Get("splattingComp");
+        VERIFY(
+          sp.IsNumber() && sp.GetNumberAsInt() >= 0 && sp.GetNumberAsInt() < 4,
+          "invalid format: detail \"splattingComp\" field must be a non-negative integer in [0, "
+          "3]");
+        dst.splattingCompId = sp.GetNumberAsInt();
+        dst.useSplattingMask = true;
+      }
     }
   }
 

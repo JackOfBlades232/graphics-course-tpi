@@ -1262,7 +1262,6 @@ void SceneManager::selectScene(
       dst.uvScale = det.uvScale;
       dst.heightRange = det.relHeightRange;
       dst.splattingCompId = shader_uint(det.splattingCompId);
-      dst.splattingCompMask = shader_uint(det.splattingCompMask);
       dst.matId = det.material == -1 ? MaterialId::INVALID : materialRemapping[det.material];
       dst.vegetationId = det.vegetation == -1 ? uint32_t(-1) : det.vegetation;
       dst.flags = (det.useSplattingMask ? TERRAIN_DETAIL_USE_MASK_FLAG : 0) |
