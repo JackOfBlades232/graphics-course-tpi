@@ -64,6 +64,7 @@ private:
     SHADOW,
     SHADOW_FRONT_CULLED,
     DEPTH_PREPASS,
+    WIRE_DEPTH_PREPASS,
 
     COUNT
   };

@@ -228,10 +228,13 @@ void main(void)
 
       if (w > SHADER_EPSILON)
       {
+        vec2 ddxy = vec2(CLIPMAP_LEVEL_WSIZE(params.level)) / scale;
+        float lod = log2(max(ddxy.x, ddxy.y));
+
         // @TODO: bring this back into one call
-        const vec3 detCol = get_pixel_albedo_lod(source.details[i].matId, uv, float(params.level)).xyz;
-        const vec3 detMatdata = get_pixel_matdata_lod(source.details[i].matId, uv, float(params.level));
-        const vec3 detNorm = get_pixel_normal_lod(source.details[i].matId, baseN, tang, uv, float(params.level));
+        const vec3 detCol = get_pixel_albedo_lod(source.details[i].matId, uv, lod).xyz;
+        const vec3 detMatdata = get_pixel_matdata_lod(source.details[i].matId, uv, lod);
+        const vec3 detNorm = get_pixel_normal_lod(source.details[i].matId, baseN, tang, uv, lod);
 
         float h = 0.f;
         {

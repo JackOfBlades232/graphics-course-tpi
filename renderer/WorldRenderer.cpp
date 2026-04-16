@@ -63,9 +63,9 @@ WorldRenderer::MeshPipeline::MeshPipeline(
       pipeman.createGraphicsPipeline(no_prepass_prog_name, wci);
     wci.depthConfig.depthCompareOp = vk::CompareOp::eEqual;
     pipelines[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)][size_t(DepthFlavour::NORMAL)] =
-      pipeman.createGraphicsPipeline(prog_name, nci);
+      pipeman.createGraphicsPipeline(prog_name, wci);
     pipelines[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)][size_t(DepthFlavour::REVERSE)] =
-      pipeman.createGraphicsPipeline(prog_name, nci);
+      pipeman.createGraphicsPipeline(prog_name, wci);
     programs[size_t(SceneRenderingPass::WIRE_COLOR)].emplace(
       etna::get_shader_program(no_prepass_prog_name));
     programs[size_t(SceneRenderingPass::WIRE_COLOR_AFTER_PREPASS)].emplace(
@@ -116,6 +116,14 @@ WorldRenderer::MeshPipeline::MeshPipeline(
     pipelines[size_t(SceneRenderingPass::DEPTH_PREPASS)][size_t(DepthFlavour::REVERSE)] =
       pipeman.createGraphicsPipeline(depth_prog_name, dci);
     programs[size_t(SceneRenderingPass::DEPTH_PREPASS)].emplace(
+      etna::get_shader_program(depth_prog_name));
+    dci.rasterizationConfig.polygonMode = vk::PolygonMode::eLine;
+    pipelines[size_t(SceneRenderingPass::WIRE_DEPTH_PREPASS)][size_t(DepthFlavour::NORMAL)] =
+      pipeman.createGraphicsPipeline(depth_prog_name, dci);
+    dci.depthConfig.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
+    pipelines[size_t(SceneRenderingPass::WIRE_DEPTH_PREPASS)][size_t(DepthFlavour::REVERSE)] =
+      pipeman.createGraphicsPipeline(depth_prog_name, dci);
+    programs[size_t(SceneRenderingPass::WIRE_DEPTH_PREPASS)].emplace(
       etna::get_shader_program(depth_prog_name));
   }
 }
@@ -1964,7 +1972,8 @@ void WorldRenderer::renderWorld(
 
       renderScene(
         cmd_buf,
-        {.pass = SceneRenderingPass::DEPTH_PREPASS,
+        {.pass =
+           wireframe ? SceneRenderingPass::WIRE_DEPTH_PREPASS : SceneRenderingPass::DEPTH_PREPASS,
          .flags = Z_PREPASS_OBJ_MASK,
          .vctx = &mainViewContext.value(),
          .vparams = mainViewParams,
