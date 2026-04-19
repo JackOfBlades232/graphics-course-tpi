@@ -50,7 +50,7 @@ uint32_t best_fit_quantize_normal(glm::vec3 normal)
     return quantize4fnorm(glm::vec4{normal * coeff, 0.f});
   };
 
-  std::for_each(std::execution::par, errors.begin(), errors.end(), [&](float& out) {
+  std::for_each(errors.begin(), errors.end(), [&](float& out) {
     auto id = &out - errors.data();
     glm::vec3 dequantizedNorm = dequantize3fnorm(quantizeScaled(id));
     errors[id] = glm::angle(glm::normalize(normal), glm::normalize(dequantizedNorm));

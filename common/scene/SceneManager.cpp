@@ -908,12 +908,15 @@ void SceneManager::selectScene(
       auto setTexFmt = [&](int id, vk::Format fmt) {
         if (id < 0)
           return;
-        if (requiredImageFormats[id] == fmt)
+        const auto& gtex = model.textures[id];
+        const int gid = gtex.source;
+        if (gid < 0)
+          return;
+        if (requiredImageFormats[gid] == fmt)
           return;
 
-        // @TODO: graceful
-        ETNA_ASSERT(requiredImageFormats[id] == vk::Format::eUndefined);
-        requiredImageFormats[id] = fmt;
+        ETNA_ASSERT(requiredImageFormats[gid] == vk::Format::eUndefined);
+        requiredImageFormats[gid] = fmt;
       };
 
       // @TODO: texcoord params from material textures
