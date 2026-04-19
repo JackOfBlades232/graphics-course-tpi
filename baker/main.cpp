@@ -66,7 +66,8 @@ int main(int argc, char** argv)
   std::filesystem::path path{argv[1]};
 
   std::filesystem::path dstPath{path};
-  // Construct default -- baked next to scene. In this project, not to be used as such (CMake will deal with it).
+  // Construct default -- baked next to scene. In this project, not to be used as such (CMake will
+  // deal with it).
   dstPath.replace_extension("");
   dstPath.replace_filename("baked/" + dstPath.filename().string());
   dstPath.replace_extension(".gltf");
@@ -420,7 +421,8 @@ int main(int argc, char** argv)
   model.extensionsUsed.emplace_back("KHR_mesh_quantization");
 
   // Patch up pathes so that baked scene refers to the same textures
-  std::filesystem::path relPath = std::filesystem::relative(path.parent_path(), dstPath.parent_path());
+  std::filesystem::path relPath =
+    std::filesystem::relative(path.parent_path(), dstPath.parent_path());
   for (auto& img : model.images)
   {
     if (!img.uri.empty())

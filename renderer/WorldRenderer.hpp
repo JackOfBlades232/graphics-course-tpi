@@ -284,6 +284,8 @@ private:
   glm::uvec2 resolution;
   const Config& cfg;
 
+  std::vector<glm::vec3> ssaoKernel{};
+
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};
   std::unique_ptr<QuadRenderer> quadRenderer{};
@@ -385,4 +387,6 @@ private:
     return VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT *
       sceneMgr->getVegetationTemplateData().size() * sizeof(GrassInstance);
   }
+
+  static std::vector<glm::vec3> generateSsaoKernel(uint32_t sample_cnt);
 };

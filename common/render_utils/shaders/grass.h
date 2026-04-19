@@ -22,7 +22,8 @@ struct GrassInstance
 };
 
 #define GRASS_INST_GET_ID(inst_) ((inst_).idAndSf >> GRASS_SF_BITS)
-#define GRASS_INST_GET_SF(inst_) (uintBitsToFloat(((inst_).idAndSf & GRASS_SF_MASK) << (GRASS_ID_BITS - 1)))
+#define GRASS_INST_GET_SF(inst_)                                                                   \
+  (uintBitsToFloat(((inst_).idAndSf & GRASS_SF_MASK) << (GRASS_ID_BITS - 1)))
 
 #define GRASS_SANK_PORTION 0.15f
 

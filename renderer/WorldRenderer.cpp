@@ -28,6 +28,7 @@
 #include <cassert>
 #include <memory>
 #include <vector>
+#include <random>
 
 WorldRenderer::MeshPipeline::MeshPipeline(
   etna::PipelineManager& pipeman,
@@ -138,6 +139,8 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   registerTonemapper<HistogramEqTonemapper>(TonemappingTechnique::HISTOGRAM_EQ);
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
   registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
+
+  ssaoKernel = generateSsaoKernel(64);
 
   if (cfg.useDebugConfig)
     loadDebugConfig();
@@ -2515,8 +2518,9 @@ void WorldRenderer::drawGui()
     }
   }
 
+  // @TODO: extend the debug views
+
 #if 0
-  // @TODO: extend the debug view
   if (terrain && terrain->sourceData.vegetationTypeCount > 0)
   {
     ImGui::SetNextWindowSize(ImVec2{400, 400}, ImGuiCond_Always);
@@ -2562,6 +2566,38 @@ void WorldRenderer::drawGui()
     ImGui::End();
   }
 #endif
+
+  auto drawSsaoKernelSlice = [&](float winsz, auto&& sx, auto&& sy, const char* tag) {
+    ImGui::SetNextWindowSize(ImVec2{winsz, winsz}, ImGuiCond_Always);
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "SSAO kernel debug %s", tag);
+    ImGui::Begin(buf);
+
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    ImVec2 size = ImGui::GetContentRegionAvail();
+
+    draw->AddCircle(
+      ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f},
+      0.49f * size.x,
+      IM_COL32(255, 100, 100, 255));
+    for (const auto& sample : ssaoKernel)
+    {
+      draw->AddCircleFilled(
+        ImVec2{
+          origin.x + size.x * (0.49f * sx(sample) + 0.5f),
+          origin.y + size.y * (0.49f * sy(sample) + 0.5f)},
+        0.01f * size.x,
+        IM_COL32(100, 255, 100, 255));
+    }
+
+    ImGui::End();
+  };
+
+  drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.y; }, "xy");
+  drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.z; }, "xz");
+  drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.y; }, [](glm::vec3 v) { return v.z; }, "yz");
 }
 
 void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci)
@@ -2801,4 +2837,25 @@ void WorldRenderer::setAllSpotLightsIntensity(float val)
 {
   for (size_t i = 0; i < sceneMgr->getLights().spotLightsCount; ++i)
     sceneMgr->lightsRW().spotLights[i].intensity = val;
+}
+
+std::vector<glm::vec3> WorldRenderer::generateSsaoKernel(uint32_t sample_cnt)
+{
+  std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
+  std::default_random_engine generator;
+  std::vector<glm::vec3> kernel;
+  for (uint32_t i = 0; i < sample_cnt; ++i)
+  {
+    glm::vec3 sample(
+      randomFloats(generator) * 2.f - 1.f,
+      randomFloats(generator) * 2.f - 1.f,
+      randomFloats(generator));
+    sample = glm::normalize(sample);
+    sample *= randomFloats(generator);
+    float scale = float(i) / 64.0;
+    scale = lerp(0.1f, 1.0f, scale * scale);
+    sample *= scale;
+    kernel.push_back(sample);
+  }
+  return kernel;
 }

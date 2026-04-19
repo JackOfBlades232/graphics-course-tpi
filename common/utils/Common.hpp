@@ -63,6 +63,12 @@ inline T snap_up(T v, T cell)
   return ceil(v / cell) * cell;
 }
 
+template <std::floating_point T>
+T lerp(T a, T b, T f)
+{
+  return a + f * (b - a);
+}
+
 template <class TS>
   requires(std::same_as<TS, std::string> || std::same_as<TS, std::wstring>)
 std::string to_char_str(const TS& s)
