@@ -140,7 +140,7 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
   registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
 
-  ssaoKernel = generateSsaoKernel(64);
+  generateSsaoKernel(ssaoConstData.ssaoKernel);
 
   if (cfg.useDebugConfig)
     loadDebugConfig();
@@ -241,6 +241,28 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
       .name = "stub_storage"});
+
+  ssaoConstBuffer = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = sizeof(SsaoConstData),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "ssao_const_buffer"});
+  memcpy(ssaoConstBuffer.map(), &ssaoConstData, sizeof(SsaoConstData));
+  createManagedImage(
+    ssaoBuffer,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "ssao_buffer",
+      .format = vk::Format::eR32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    ssaoBuffer,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "ssao_blurred_buffer",
+      .format = vk::Format::eR32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
   for (auto& component : rcomponents)
     component->allocateResources(resolution);
@@ -756,6 +778,17 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     "gbuffer_resolve",
     RENDERER_SHADERS_ROOT "gbuffer_resolve.frag.spv",
     vk::Format::eR32G32B32A32Sfloat,
+    {resolution.x, resolution.y}});
+
+  ssaoGen = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
+    "ssao_generate",
+    RENDERER_SHADERS_ROOT "ssao_generate.frag.spv",
+    vk::Format::eR32Sfloat,
+    {resolution.x, resolution.y}});
+  ssaoBlur = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
+    "ssao_blur",
+    RENDERER_SHADERS_ROOT "ssao_blur.frag.spv",
+    vk::Format::eR32Sfloat,
     {resolution.x, resolution.y}});
 
   bboxRenderer = std::make_unique<BboxRenderer>(BboxRenderer::CreateInfo{swapchain_format});
@@ -2582,7 +2615,7 @@ void WorldRenderer::drawGui()
       ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f},
       0.49f * size.x,
       IM_COL32(255, 100, 100, 255));
-    for (const auto& sample : ssaoKernel)
+    for (const auto& sample : ssaoConstData.ssaoKernel)
     {
       draw->AddCircleFilled(
         ImVec2{
@@ -2839,12 +2872,11 @@ void WorldRenderer::setAllSpotLightsIntensity(float val)
     sceneMgr->lightsRW().spotLights[i].intensity = val;
 }
 
-std::vector<glm::vec3> WorldRenderer::generateSsaoKernel(uint32_t sample_cnt)
+void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
 {
   std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
   std::default_random_engine generator;
-  std::vector<glm::vec3> kernel;
-  for (uint32_t i = 0; i < sample_cnt; ++i)
+  for (uint32_t i = 0; i < out_samples.size(); ++i)
   {
     glm::vec3 sample(
       randomFloats(generator) * 2.f - 1.f,
@@ -2855,7 +2887,6 @@ std::vector<glm::vec3> WorldRenderer::generateSsaoKernel(uint32_t sample_cnt)
     float scale = float(i) / 64.0;
     scale = lerp(0.1f, 1.0f, scale * scale);
     sample *= scale;
-    kernel.push_back(sample);
+    out_samples[i] = glm::vec4(sample, 0.f);
   }
-  return kernel;
 }

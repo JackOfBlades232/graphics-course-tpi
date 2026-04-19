@@ -25,6 +25,7 @@
 #include <grass.h>
 #include <skybox.h>
 #include <dispatch.h>
+#include <ssao.h>
 
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
@@ -284,7 +285,12 @@ private:
   glm::uvec2 resolution;
   const Config& cfg;
 
-  std::vector<glm::vec3> ssaoKernel{};
+  SsaoConstData ssaoConstData;
+  etna::Buffer ssaoConstBuffer;
+  etna::Image ssaoBuffer;
+  etna::Image ssaoBlurredBuffer;
+  std::unique_ptr<PostfxRenderer> ssaoGen{};
+  std::unique_ptr<PostfxRenderer> ssaoBlur{};
 
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};
@@ -388,5 +394,5 @@ private:
       sceneMgr->getVegetationTemplateData().size() * sizeof(GrassInstance);
   }
 
-  static std::vector<glm::vec3> generateSsaoKernel(uint32_t sample_cnt);
+  static void generateSsaoKernel(std::span<glm::vec4> out_samples);
 };
