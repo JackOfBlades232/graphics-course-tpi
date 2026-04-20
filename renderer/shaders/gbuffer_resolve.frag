@@ -114,7 +114,7 @@ vec3 conductor_frensel_shlick(vec3 f0, float hv)
 }
 
 vec4 shade_cook_torrance(
-  vec3 n, vec3 l, vec3 v, float metalness, float roughness, vec3 albedo, float transmission, vec3 transCol, vec3 lightCol)
+  vec3 n, vec3 l, vec3 v, float metalness, float roughness, vec3 albedo, float transmission, vec3 transCol, float ao, vec3 lightCol)
 {
   vec3 c = albedo;
   vec3 lc = lightCol;
@@ -167,11 +167,11 @@ vec4 shade_cook_torrance(
   vec3 diff = (1.f - f) * diff_bsdf * c_diff;
   vec3 spec = f * spec_bsdf;
 
-  return vec4((spec + diff) * lc, 1.f);
+  return vec4((spec + diff * ao) * lc, 1.f);
 }
 
 vec4 shade_cook_torrance_diffuse_spec_gloss(
-  vec3 n, vec3 l, vec3 v, vec3 diffuse, vec3 specular, float glossiness, float transmission, vec3 transCol, vec3 lightCol)
+  vec3 n, vec3 l, vec3 v, vec3 diffuse, vec3 specular, float glossiness, float transmission, vec3 transCol, float ao, vec3 lightCol)
 {
   vec3 lc = lightCol;
 
@@ -225,23 +225,23 @@ vec4 shade_cook_torrance_diffuse_spec_gloss(
   vec3 diff = (1.f - f) * diff_bsdf * c_diff;
   vec3 spec = f * spec_bsdf;
 
-  return vec4((spec + diff) * lc, 1.f);
+  return vec4((spec + diff * ao) * lc, 1.f);
 }
 
 vec3 calculate_pbr(
   vec3 normal, vec3 lightDir, vec3 viewVec,
-  float metalness, float roughness, vec3 albedo, float transmission, vec3 transCol, vec3 lightIntensity)
+  float metalness, float roughness, vec3 albedo, float transmission, vec3 transCol, float ao, vec3 lightIntensity)
 {
   return shade_cook_torrance(
-    normal, lightDir, viewVec, metalness, roughness, albedo, transmission, transCol, lightIntensity).xyz;
+    normal, lightDir, viewVec, metalness, roughness, albedo, transmission, transCol, ao, lightIntensity).xyz;
 }
 
 vec3 calculate_pbr_diff_spec_gloss(
   vec3 normal, vec3 lightDir, vec3 viewVec,
-  vec3 diffuse, vec3 specular, float glossiness, float transmission, vec3 transCol, vec3 lightIntensity)
+  vec3 diffuse, vec3 specular, float glossiness, float transmission, vec3 transCol, float ao, vec3 lightIntensity)
 {
   return shade_cook_torrance_diffuse_spec_gloss(
-    normal, lightDir, viewVec, diffuse, specular, glossiness, transmission, transCol, lightIntensity).xyz;
+    normal, lightDir, viewVec, diffuse, specular, glossiness, transmission, transCol, ao, lightIntensity).xyz;
 }
 
 float calculate_attenuation(vec3 pos, vec3 lightPos, float range)
@@ -364,12 +364,15 @@ void main(void)
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
   const vec4 transData = texture(gbufTransmission, surf.texCoord);
 
+  float ao = 1.f;
+  if (constants.useSsao != 0)
+    ao = texture(aoBuffer, surf.texCoord).x;
+
   const uint mat = uint(matData.x + 0.001f);
   
   // Calculate lighting
   
-  // @TODO: parametrize
-  const float ambient = 0.05f;
+  const vec3 ambient = 0.15f * albedo * ao;
 
   vec4 debugMultiplier = vec4(1.f);
 
@@ -438,9 +441,9 @@ void main(void)
     }
 
     if (mat == MATERIAL_PBR)
-      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, lightIntensity);
+      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, ao, lightIntensity);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, lightIntensity);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, ao, lightIntensity);
   }
 
   for (int i = 0; i < lights.pointLightsCount; ++i)
@@ -511,9 +514,9 @@ void main(void)
     }
 
     if (mat == MATERIAL_PBR)
-      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, lightColor);
+      color += shadow * calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, ao, lightColor);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, lightColor);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, ao, lightColor);
   }
 
   for (int i = 0; i < lights.spotLightsCount; ++i)
@@ -578,9 +581,9 @@ void main(void)
     }
 
     if (mat == MATERIAL_PBR)
-      color += shadow * calculate_pbr(normal, fromPosDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, lightColor);
+      color += shadow * calculate_pbr(normal, fromPosDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, ao, lightColor);
     else if (mat == MATERIAL_DIFFUSE)
-      color += shadow * calculate_pbr_diff_spec_gloss(normal, fromPosDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, lightColor);
+      color += shadow * calculate_pbr_diff_spec_gloss(normal, fromPosDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, ao, lightColor);
   }
 
   out_fragColor = debugMultiplier * vec4(color, 1.0f);

@@ -2651,6 +2651,7 @@ void WorldRenderer::drawGui()
   }
 #endif
 
+#if 0
   auto drawSsaoKernelSlice = [&](float winsz, auto&& sx, auto&& sy, const char* tag) {
     ImGui::SetNextWindowSize(ImVec2{winsz, winsz}, ImGuiCond_Always);
 
@@ -2690,6 +2691,7 @@ void WorldRenderer::drawGui()
   drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.y; }, "xy");
   drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.z; }, "xz");
   drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.y; }, [](glm::vec3 v) { return v.z; }, "yz");
+#endif
 }
 
 void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci)

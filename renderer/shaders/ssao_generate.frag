@@ -61,6 +61,8 @@ void main()
   const vec3 reconstructedPos = depth_and_tc_to_pos_with_mat(max(depth, 0.f), surf.texCoord, ivpm);
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
 
+  const float fragDepth = length(reconstructedPos - viewParams.mViewPos);
+
   // @TODO: noise for tbn construction
   vec3 baseVec =
     (abs(normal.x) < SHADER_EPSILON && abs(normal.z) < SHADER_EPSILON)
@@ -82,7 +84,9 @@ void main()
 
     float sampleWorldDepth = length(sampleWorldPos - viewParams.mViewPos);
     float sampleGbufDepth = length(sampleGbufPos - viewParams.mViewPos);
-    occ += (sampleGbufDepth >= sampleWorldDepth + SSAO_BIAS) ? 1.f : 0.f;
+
+    float rangeCutoff = smoothstep(0.f, 1.f, SSAO_KERNEL_WORLDSPACE_RAD / abs(fragDepth - sampleGbufDepth));
+    occ += (sampleWorldDepth >= sampleGbufDepth + SSAO_BIAS ? 1.f : 0.f) * rangeCutoff;
   }
   out_ao = 1.f - (occ / float(SSAO_KERNEL_SIZE));
 }
