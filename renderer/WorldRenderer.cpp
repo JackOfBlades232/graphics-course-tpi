@@ -257,7 +257,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
   createManagedImage(
-    ssaoBuffer,
+    ssaoBlurredBuffer,
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "ssao_blurred_buffer",
@@ -894,6 +894,8 @@ void WorldRenderer::update(const FramePacket& packet)
 
     constantsData.dt = dt;
     constantsData.time = packet.currentTime;
+
+    constantsData.useSsao = useSsao;
   }
 
   if (!cfg.disableDirectionalLightsShadowsFeature)
@@ -2074,6 +2076,50 @@ void WorldRenderer::renderWorld(
          .skipCulling = true});
     }
 
+    if (useSsao)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, ssao);
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, ssaoGen);
+        auto set = etna::create_descriptor_set(
+          ssaoGen->shaderProgramInfo().getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{
+             0,
+             gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{
+             1,
+             mainViewDepth.genBinding(
+               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{2, ssaoConstBuffer.genBinding()},
+           etna::Binding{8, constants->get().genBinding()},
+           etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
+           etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics, ssaoGen->pipelineLayout(), 0, {set.getVkSet()}, {});
+
+        ssaoGen->render(cmd_buf, ssaoBuffer.get(), ssaoBuffer.getView({}));
+      }
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, ssaoBlur);
+        auto set = etna::create_descriptor_set(
+          ssaoBlur->shaderProgramInfo().getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{
+             0,
+             ssaoBuffer.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{8, constants->get().genBinding()}});
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics, ssaoBlur->pipelineLayout(), 0, {set.getVkSet()}, {});
+
+        ssaoBlur->render(cmd_buf, ssaoBlurredBuffer.get(), ssaoBlurredBuffer.getView({}));
+      }
+    }
+
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredResolve);
 
@@ -2099,7 +2145,11 @@ void WorldRenderer::renderWorld(
          etna::Binding{8, constants->get().genBinding()},
          etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
          etna::Binding{10, mainViewContext->viewDataBuf.genBinding()},
-         etna::Binding{11, (skybox ? skybox->source : stubUniBuffer).genBinding()}});
+         etna::Binding{11, (skybox ? skybox->source : stubUniBuffer).genBinding()},
+         etna::Binding{
+           12,
+           ssaoBlurredBuffer.genBinding(
+             defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}});
 
       cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
@@ -2382,6 +2432,7 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Perform Z Prepass", &zPrepass);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
+      ImGui::Checkbox("Use SSAO", &useSsao);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
       {
@@ -2615,6 +2666,14 @@ void WorldRenderer::drawGui()
       ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f},
       0.49f * size.x,
       IM_COL32(255, 100, 100, 255));
+    draw->AddLine(
+      ImVec2{origin.x + size.x * 0.01f, origin.y + size.y * 0.5f},
+      ImVec2{origin.x + size.x * 0.99f, origin.y + size.y * 0.5f},
+      IM_COL32(255, 100, 100, 255));
+    draw->AddLine(
+      ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f - 0.49f * size.x},
+      ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f + 0.49f * size.x},
+      IM_COL32(255, 100, 100, 255));
     for (const auto& sample : ssaoConstData.ssaoKernel)
     {
       draw->AddCircleFilled(
@@ -2779,6 +2838,7 @@ void WorldRenderer::loadDebugConfig()
   currentTonemappingTechnique = unwrap(reader.read<TonemappingTechnique>());
   zPrepass = unwrap(reader.read<bool>());
   sortVegChunks = unwrap(reader.read<bool>());
+  useSsao = unwrap(reader.read<bool>());
 
   validate_hist_tonemapping_coeffs(
     histEqTonemappingRegW,
@@ -2852,6 +2912,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(currentTonemappingTechnique));
   ETNA_VERIFY(writer.write(zPrepass));
   ETNA_VERIFY(writer.write(sortVegChunks));
+  ETNA_VERIFY(writer.write(useSsao));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

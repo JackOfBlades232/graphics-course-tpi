@@ -57,6 +57,9 @@ struct Constants
 
   float time;
   float dt;
+
+  shader_uint useSsao;
+  shader_uint pad0_, pad1_, pad2_;
 };
 
 #endif // CONSTANTS_H_INCLUDED

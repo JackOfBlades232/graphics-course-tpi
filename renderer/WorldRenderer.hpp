@@ -338,6 +338,7 @@ private:
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
   bool zPrepass = true;
   bool sortVegChunks = true;
+  bool useSsao = true;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

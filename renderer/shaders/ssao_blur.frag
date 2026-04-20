@@ -23,5 +23,6 @@ layout(location = 0 ) in VS_OUT
 void main()
 {
   // @TODO
+  out_ao = texture(aoInput, surf.texCoord).x;
 }
 

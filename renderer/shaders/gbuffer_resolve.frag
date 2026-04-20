@@ -46,6 +46,8 @@ layout(binding = 11, set = 0) uniform skybox_t
   SkyboxSourceData skybox;
 };
 
+layout(binding = 12, set = 0) uniform sampler2D aoBuffer;
+
 #include "bindless.glsl.inc"
 
 // @TODO dedup with tonemap
