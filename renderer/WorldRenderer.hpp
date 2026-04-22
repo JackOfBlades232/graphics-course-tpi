@@ -339,6 +339,8 @@ private:
   bool zPrepass = true;
   bool sortVegChunks = true;
   bool useSsao = true;
+  glm::vec3 ambientCoeff = glm::vec3(0.3f);
+  bool useSkyboxForAmbient = true;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

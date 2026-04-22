@@ -58,7 +58,11 @@ struct Constants
   float time;
   float dt;
 
+  shader_vec3 ambientLightCoeff;
+
   shader_uint useSsao;
+  shader_uint useSkyboxForAmbient;
+
   shader_uint pad0_, pad1_, pad2_;
 };
 

@@ -896,6 +896,9 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.time = packet.currentTime;
 
     constantsData.useSsao = useSsao;
+
+    constantsData.ambientLightCoeff = ambientCoeff;
+    constantsData.useSkyboxForAmbient = useSkyboxForAmbient;
   }
 
   if (!cfg.disableDirectionalLightsShadowsFeature)
@@ -2432,6 +2435,14 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Perform Z Prepass", &zPrepass);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
+      if (enableSkybox)
+      {
+        ImGui::Checkbox("Use skybox for ambient", &useSkyboxForAmbient);
+      }
+      ImGui::ColorEdit3(
+        "Ambient light coeff",
+        (float*)&ambientCoeff,
+        ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
       ImGui::Checkbox("Use SSAO", &useSsao);
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
@@ -2841,6 +2852,8 @@ void WorldRenderer::loadDebugConfig()
   zPrepass = unwrap(reader.read<bool>());
   sortVegChunks = unwrap(reader.read<bool>());
   useSsao = unwrap(reader.read<bool>());
+  ambientCoeff = unwrap(reader.read<glm::vec3>());
+  useSkyboxForAmbient = unwrap(reader.read<bool>());
 
   validate_hist_tonemapping_coeffs(
     histEqTonemappingRegW,
@@ -2915,6 +2928,8 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(zPrepass));
   ETNA_VERIFY(writer.write(sortVegChunks));
   ETNA_VERIFY(writer.write(useSsao));
+  ETNA_VERIFY(writer.write(ambientCoeff));
+  ETNA_VERIFY(writer.write(useSkyboxForAmbient));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

@@ -26,6 +26,33 @@ layout(binding = 0, set = 2) uniform texture2D bindlessTextures[];
 layout(binding = 0, set = 2) uniform textureCube bindlessCubeTextures[];
 layout(binding = 0, set = 3) uniform sampler bindlessSamplers[];
 
+ivec2 bindless_tex_size(TexSmpIdPair ids)
+{
+  if (ids == NO_TEXTURE_ID)
+    return ivec2(0);
+
+  const uvec2 texSmpIds = unpack_tex_smp_id_pair(ids);
+  return textureSize(BINDLESS_SAMPLER(texSmpIds), 0);
+}
+
+ivec2 bindless_tex_shadow_size(TexSmpIdPair ids)
+{
+  if (ids == NO_TEXTURE_ID)
+    return ivec2(0);
+
+  const uvec2 texSmpIds = unpack_tex_smp_id_pair(ids);
+  return textureSize(BINDLESS_SHADOW_SAMPLER(texSmpIds), 0);
+}
+
+ivec2 bindless_tex_cube_size(TexSmpIdPair ids)
+{
+  if (ids == NO_TEXTURE_ID)
+    return ivec2(0);
+
+  const uvec2 texSmpIds = unpack_tex_smp_id_pair(ids);
+  return textureSize(BINDLESS_CUBE_SAMPLER(texSmpIds), 0);
+}
+
 vec4 sample_bindless_tex(TexSmpIdPair ids, vec2 uv)
 {
   if (ids == NO_TEXTURE_ID)
