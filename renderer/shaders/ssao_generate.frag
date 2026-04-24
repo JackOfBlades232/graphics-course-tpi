@@ -46,6 +46,15 @@ void main()
     return;
   }
 
+  const ivec2 scrsz = textureSize(gbufDepth, 0);
+  const vec2 pixcoord = surf.texCoord * vec2(scrsz);
+  const uvec2 rotcoord = uvec2(floor(pixcoord)) % uvec2(SSAO_BLUR_KERNEL_SIZE);
+  const uint lincoord = rotcoord.x + rotcoord.y * SSAO_BLUR_KERNEL_SIZE;
+  const uint v4coord = lincoord >> 1;
+  const uint comp = lincoord & 1;
+  const vec4 rr = constants.ssaoData.ssaoKernelRotations[v4coord];
+  const vec2 rot = comp == 0 ? rr.xy : rr.zw;
+
   // piggy
   const mat4 vpm = calc_adjusted_viewproj_mat(viewParams, viewData);
   const mat4 ivpm = inverse(vpm);
@@ -55,10 +64,7 @@ void main()
 
   const float fragDepth = length(reconstructedPos - viewParams.mViewPos);
 
-  // @TODO: noise for tbn construction
-  vec3 baseVec =
-    (abs(normal.x) < SHADER_EPSILON && abs(normal.z) < SHADER_EPSILON)
-      ? vec3(0.f, 0.f, 1.f) : vec3(0.f, 1.f, 0.f);
+  vec3 baseVec = vec3(rot, 0.f);
   vec3 tangent = normalize(baseVec - normal * dot(baseVec, normal));
   vec3 bitangent = cross(normal, tangent);
   mat3 tbnTransform = mat3(tangent, bitangent, normal);
@@ -66,8 +72,7 @@ void main()
   float occ = 0.f;
   // @TODO: temporal accumulation option
   const uint samples = min(constants.ssaoLimitSamples, SSAO_KERNEL_MAX_SIZE);
-  const uint skip = SSAO_KERNEL_MAX_SIZE / samples;
-  for (uint i = 0; i < SSAO_KERNEL_MAX_SIZE; i += skip)
+  for (uint i = 0; i < samples; ++i)
   {
     vec3 sampleWorldPos = reconstructedPos + constants.ssaoRadius * tbnTransform * constants.ssaoData.ssaoKernel[i].xyz;
     vec4 sampleClipPosW = vpm * vec4(sampleWorldPos, 1.f);
@@ -82,5 +87,5 @@ void main()
     float rangeCutoff = smoothstep(0.f, 1.f, constants.ssaoRadius / abs(fragDepth - sampleGbufDepth));
     occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
   }
-  out_ao = 1.f - (occ / float(samples));
+  out_ao = 1.f - (occ / float(constants.ssaoLimitSamples));
 }

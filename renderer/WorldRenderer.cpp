@@ -141,6 +141,7 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
 
   generateSsaoKernel(constantsData.ssaoData.ssaoKernel);
+  generateSsaoKernelRotations(constantsData.ssaoData.ssaoKernelRotations);
 
   if (cfg.useDebugConfig)
     loadDebugConfig();
@@ -844,7 +845,10 @@ void WorldRenderer::update(const FramePacket& packet)
   }
 
   if (needRegenSsaoKernel)
+  {
     generateSsaoKernel(constantsData.ssaoData.ssaoKernel);
+    generateSsaoKernelRotations(constantsData.ssaoData.ssaoKernelRotations);
+  }
 
   if (cfg.disablePointLightsShadowsFeature)
     pointLightShadowsSettings.enable = false;
@@ -3026,6 +3030,21 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
     sample *= scale;
     out_samples[i] = glm::vec4(sample, 0.f);
   }
-
+  // Redistribute to break "heat" pattern
   std::shuffle(out_samples.begin(), out_samples.end(), generator);
+}
+
+void WorldRenderer::generateSsaoKernelRotations(std::span<glm::vec4> out_rotations)
+{
+  std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
+  std::default_random_engine generator;
+  for (uint32_t i = 0; i < out_rotations.size(); ++i)
+  {
+    glm::vec4 rotvPair(
+      randomFloats(generator) * 2.f - 1.f,
+      randomFloats(generator) * 2.f - 1.f,
+      randomFloats(generator) * 2.f - 1.f,
+      randomFloats(generator) * 2.f - 1.f);
+    out_rotations[i] = rotvPair;
+  }
 }

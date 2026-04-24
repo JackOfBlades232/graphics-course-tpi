@@ -24,14 +24,14 @@ void main()
 {
   vec2 texelSize = 1.f / vec2(textureSize(aoInput, 0));
   float result = 0.f;
-  for (int x = -2; x < 3; ++x) 
+  for (int x = -SSAO_BLUR_KERNEL_HS; x <= SSAO_BLUR_KERNEL_HS; ++x) 
   {
-    for (int y = -2; y < 3; ++y) 
+    for (int y = -SSAO_BLUR_KERNEL_HS; y <= SSAO_BLUR_KERNEL_HS; ++y) 
     {
       vec2 off = vec2(float(x), float(y)) * texelSize;
       result += texture(aoInput, surf.texCoord + off).x;
     }
   }
-  out_ao = result / (5.f * 5.f);
+  out_ao = result / float(SSAO_BLUR_KERNEL_SIZE * SSAO_BLUR_KERNEL_SIZE);
 }
 

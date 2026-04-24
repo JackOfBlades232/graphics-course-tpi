@@ -344,8 +344,8 @@ private:
   bool showGrassChunkDebug = false;
   bool showSsaoKernelDebug = false;
   bool ssaoKernelHemisphereOnly = true;
-  float ssaoKernelRadius = 0.5f;
-  float ssaoBias = 0.025f;
+  float ssaoKernelRadius = 0.2f;
+  float ssaoBias = 0.0025f;
   uint32_t ssaoTotalLimitSamples = 64;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
@@ -404,4 +404,5 @@ private:
   }
 
   void generateSsaoKernel(std::span<glm::vec4> out_samples);
+  void generateSsaoKernelRotations(std::span<glm::vec4> out_rotations);
 };
