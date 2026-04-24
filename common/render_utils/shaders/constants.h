@@ -4,6 +4,7 @@
 #include "cpp_glsl_compat.h"
 #include "geometry.h"
 #include "lights.h"
+#include "ssao.h"
 
 #define BIG_EPSILON 0.001f
 
@@ -63,7 +64,11 @@ struct Constants
   shader_uint useSsao;
   shader_uint useSkyboxForAmbient;
 
-  shader_uint pad0_, pad1_, pad2_;
+  shader_uint ssaoLimitSamples;
+  float ssaoRadius;
+  float ssaoBias;
+
+  SsaoConstData ssaoData;
 };
 
 #endif // CONSTANTS_H_INCLUDED

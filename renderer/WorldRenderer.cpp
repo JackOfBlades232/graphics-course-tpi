@@ -140,7 +140,7 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
   registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
 
-  generateSsaoKernel(ssaoConstData.ssaoKernel);
+  generateSsaoKernel(constantsData.ssaoData.ssaoKernel);
 
   if (cfg.useDebugConfig)
     loadDebugConfig();
@@ -242,13 +242,6 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
       .name = "stub_storage"});
 
-  ssaoConstBuffer = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = sizeof(SsaoConstData),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "ssao_const_buffer"});
-  memcpy(ssaoConstBuffer.map(), &ssaoConstData, sizeof(SsaoConstData));
   createManagedImage(
     ssaoBuffer,
     etna::Image::CreateInfo{
@@ -850,6 +843,9 @@ void WorldRenderer::update(const FramePacket& packet)
     }
   }
 
+  if (needRegenSsaoKernel)
+    generateSsaoKernel(constantsData.ssaoData.ssaoKernel);
+
   if (cfg.disablePointLightsShadowsFeature)
     pointLightShadowsSettings.enable = false;
   if (cfg.disableSpotLightsShadowsFeature)
@@ -899,6 +895,10 @@ void WorldRenderer::update(const FramePacket& packet)
 
     constantsData.ambientLightCoeff = ambientCoeff;
     constantsData.useSkyboxForAmbient = useSkyboxForAmbient;
+
+    constantsData.ssaoRadius = ssaoKernelRadius;
+    constantsData.ssaoBias = ssaoBias;
+    constantsData.ssaoLimitSamples = ssaoTotalLimitSamples;
   }
 
   if (!cfg.disableDirectionalLightsShadowsFeature)
@@ -2095,7 +2095,6 @@ void WorldRenderer::renderWorld(
              1,
              mainViewDepth.genBinding(
                defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{2, ssaoConstBuffer.genBinding()},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
            etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});
@@ -2430,6 +2429,7 @@ void WorldRenderer::drawGui()
           0.01f,
           vegetationRenderingDistance);
       }
+      ImGui::Checkbox("Show vegetation debug", &showGrassChunkDebug);
       ImGui::SliderFloat2("Wind origin", (float*)&windOrigin, -5000.f, 5000.f);
       ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 1.f);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
@@ -2444,6 +2444,39 @@ void WorldRenderer::drawGui()
         (float*)&ambientCoeff,
         ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
       ImGui::Checkbox("Use SSAO", &useSsao);
+      if (useSsao)
+      {
+        bool prevKHO = ssaoKernelHemisphereOnly;
+        uint32_t prevSampleCount = ssaoTotalLimitSamples;
+        ImGui::Checkbox("SSAO kernel hemisphere only", &ssaoKernelHemisphereOnly);
+        constexpr const char* SSAO_SC_NAMES[] = {"4", "8", "16", "32", "64", "128"};
+        constexpr uint32_t SSAO_SC_VALUES[] = {4, 8, 16, 32, 64, 128};
+        size_t curScId = size_t(
+          std::find(std::begin(SSAO_SC_VALUES), std::end(SSAO_SC_VALUES), ssaoTotalLimitSamples) -
+          std::begin(SSAO_SC_VALUES));
+        if (ImGui::BeginCombo("SSAO kernel size", SSAO_SC_NAMES[curScId]))
+        {
+          for (size_t i = 0; i < ARRCNT(SSAO_SC_NAMES); i++)
+          {
+            bool selected = curScId == i;
+            if (ImGui::Selectable(SSAO_SC_NAMES[i], selected))
+            {
+              curScId = i;
+              ssaoTotalLimitSamples = SSAO_SC_VALUES[i];
+            }
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::EndCombo();
+        }
+
+        if (prevKHO != ssaoKernelHemisphereOnly || prevSampleCount != ssaoTotalLimitSamples)
+          needRegenSsaoKernel = true;
+        ImGui::SliderFloat("SSAO kernel rad", &ssaoKernelRadius, 0.f, 5.f);
+        ImGui::SliderFloat("SSAO bias", &ssaoBias, 0.f, 0.2f);
+        ImGui::Checkbox("Show SSAO debug", &showSsaoKernelDebug);
+      }
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
       if (doTonemapping)
       {
@@ -2613,96 +2646,104 @@ void WorldRenderer::drawGui()
     }
   }
 
-  // @TODO: extend the debug views
-
-#if 0
-  if (terrain && terrain->sourceData.vegetationTypeCount > 0)
+  if (showGrassChunkDebug && terrain && terrain->sourceData.vegetationTypeCount > 0)
   {
-    ImGui::SetNextWindowSize(ImVec2{400, 400}, ImGuiCond_Always);
-    ImGui::Begin("Grass debug");
-
-    ImVec2 origin = ImGui::GetCursorScreenPos();
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-
-    auto data = sceneMgr->getVegetationTemplateData();
-    const auto& veg = terrain->sourceData.vegetationTypes[0];
-    auto positions = data.subspan(veg.templateBufferOffset, veg.templateBufferSize);
-
-    ImVec2 size = ImGui::GetContentRegionAvail();
-
-    glm::vec2 sizeRatio = {size.x / VEGETATION_CHUNK_SIZE, size.y / VEGETATION_CHUNK_SIZE};
-
-    for (const auto& pos : positions)
+    for (uint32_t i = 0; i < terrain->sourceData.vegetationTypeCount; ++i)
     {
-      if (veg.radius <= veg.sparsenessRadius)
-      {
-        draw->AddCircleFilled(
-          ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
-          veg.sparsenessRadius * sizeRatio.x,
-          IM_COL32(150, 150, 150, 175));
-        draw->AddCircleFilled(
-          ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
-          veg.radius * sizeRatio.x,
-          IM_COL32(100, 255, 100, 255));
-      }
-      else
-      {
-        draw->AddCircleFilled(
-          ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
-          veg.radius * sizeRatio.x,
-          IM_COL32(100, 255, 100, 255));
-        draw->AddCircleFilled(
-          ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
-          veg.sparsenessRadius * sizeRatio.x,
-          IM_COL32(25, 64, 25, 255));
-      }
-    }
+      char buf[64];
+      snprintf(buf, sizeof(buf), "Grass template debug %d", i);
 
-    ImGui::End();
+      ImGui::SetNextWindowSize(ImVec2{400, 400}, ImGuiCond_Always);
+      ImGui::Begin(buf);
+
+      ImVec2 origin = ImGui::GetCursorScreenPos();
+      ImDrawList* draw = ImGui::GetWindowDrawList();
+
+      auto data = sceneMgr->getVegetationTemplateData();
+      const auto& veg = terrain->sourceData.vegetationTypes[0];
+      auto positions = data.subspan(veg.templateBufferOffset, veg.templateBufferSize);
+
+      ImVec2 size = ImGui::GetContentRegionAvail();
+
+      glm::vec2 sizeRatio = {size.x / VEGETATION_CHUNK_SIZE, size.y / VEGETATION_CHUNK_SIZE};
+
+      for (const auto& pos : positions)
+      {
+        if (veg.radius <= veg.sparsenessRadius)
+        {
+          draw->AddCircleFilled(
+            ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
+            veg.sparsenessRadius * sizeRatio.x,
+            IM_COL32(150, 150, 150, 175));
+          draw->AddCircleFilled(
+            ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
+            veg.radius * sizeRatio.x,
+            IM_COL32(100, 255, 100, 255));
+        }
+        else
+        {
+          draw->AddCircleFilled(
+            ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
+            veg.radius * sizeRatio.x,
+            IM_COL32(100, 255, 100, 255));
+          draw->AddCircleFilled(
+            ImVec2{origin.x + pos.x * sizeRatio.x, origin.y + pos.y * sizeRatio.y},
+            veg.sparsenessRadius * sizeRatio.x,
+            IM_COL32(25, 64, 25, 255));
+        }
+      }
+
+      ImGui::End();
+    }
   }
-#endif
 
-#if 0
-  auto drawSsaoKernelSlice = [&](float winsz, auto&& sx, auto&& sy, const char* tag) {
-    ImGui::SetNextWindowSize(ImVec2{winsz, winsz}, ImGuiCond_Always);
+  if (showSsaoKernelDebug)
+  {
+    auto drawSsaoKernelSlice = [&](float winsz, auto&& sx, auto&& sy, const char* tag) {
+      ImGui::SetNextWindowSize(ImVec2{winsz, winsz}, ImGuiCond_Always);
 
-    char buf[64];
-    snprintf(buf, sizeof(buf), "SSAO kernel debug %s", tag);
-    ImGui::Begin(buf);
+      char buf[64];
+      snprintf(buf, sizeof(buf), "SSAO kernel debug %s", tag);
+      ImGui::Begin(buf);
 
-    ImVec2 origin = ImGui::GetCursorScreenPos();
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    ImVec2 size = ImGui::GetContentRegionAvail();
+      ImVec2 origin = ImGui::GetCursorScreenPos();
+      ImDrawList* draw = ImGui::GetWindowDrawList();
+      ImVec2 size = ImGui::GetContentRegionAvail();
 
-    draw->AddCircle(
-      ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f},
-      0.49f * size.x,
-      IM_COL32(255, 100, 100, 255));
-    draw->AddLine(
-      ImVec2{origin.x + size.x * 0.01f, origin.y + size.y * 0.5f},
-      ImVec2{origin.x + size.x * 0.99f, origin.y + size.y * 0.5f},
-      IM_COL32(255, 100, 100, 255));
-    draw->AddLine(
-      ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f - 0.49f * size.x},
-      ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f + 0.49f * size.x},
-      IM_COL32(255, 100, 100, 255));
-    for (const auto& sample : ssaoConstData.ssaoKernel)
-    {
-      draw->AddCircleFilled(
-        ImVec2{
-          origin.x + size.x * (0.49f * sx(sample) + 0.5f),
-          origin.y + size.y * (0.49f * sy(sample) + 0.5f)},
-        0.01f * size.x,
-        IM_COL32(100, 255, 100, 255));
-    }
+      draw->AddCircle(
+        ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f},
+        0.49f * size.x,
+        IM_COL32(255, 100, 100, 255));
+      draw->AddLine(
+        ImVec2{origin.x + size.x * 0.01f, origin.y + size.y * 0.5f},
+        ImVec2{origin.x + size.x * 0.99f, origin.y + size.y * 0.5f},
+        IM_COL32(255, 100, 100, 255));
+      draw->AddLine(
+        ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f - 0.49f * size.x},
+        ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f + 0.49f * size.x},
+        IM_COL32(255, 100, 100, 255));
 
-    ImGui::End();
-  };
+      for (const auto& sample :
+           std::span{constantsData.ssaoData.ssaoKernel}.subspan(0, constantsData.ssaoLimitSamples))
+      {
+        draw->AddCircleFilled(
+          ImVec2{
+            origin.x + size.x * (0.49f * sx(sample) + 0.5f),
+            origin.y + size.y * (0.49f * sy(sample) + 0.5f)},
+          0.01f * size.x,
+          IM_COL32(100, 255, 100, 255));
+      }
 
-  drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.y; }, "xy");
-  drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.z; }, "xz");
-  drawSsaoKernelSlice(200, [](glm::vec3 v) { return v.y; }, [](glm::vec3 v) { return v.z; }, "yz");
-#endif
+      ImGui::End();
+    };
+
+    drawSsaoKernelSlice(
+      200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.y; }, "xy");
+    drawSsaoKernelSlice(
+      200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.z; }, "xz");
+    drawSsaoKernelSlice(
+      200, [](glm::vec3 v) { return v.y; }, [](glm::vec3 v) { return v.z; }, "yz");
+  }
 }
 
 void WorldRenderer::createManagedImage(etna::Image& dst, etna::Image::CreateInfo&& ci)
@@ -2854,6 +2895,16 @@ void WorldRenderer::loadDebugConfig()
   useSsao = unwrap(reader.read<bool>());
   ambientCoeff = unwrap(reader.read<glm::vec3>());
   useSkyboxForAmbient = unwrap(reader.read<bool>());
+  showGrassChunkDebug = unwrap(reader.read<bool>());
+  showSsaoKernelDebug = unwrap(reader.read<bool>());
+  ssaoKernelHemisphereOnly = unwrap(reader.read<bool>());
+  ssaoKernelRadius = unwrap(reader.read<float>());
+  ssaoBias = unwrap(reader.read<float>());
+  ssaoTotalLimitSamples = unwrap(reader.read<uint32_t>());
+
+  ETNA_ASSERT(
+    ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
+    ssaoTotalLimitSamples == 32 || ssaoTotalLimitSamples == 64 || ssaoTotalLimitSamples == 128);
 
   validate_hist_tonemapping_coeffs(
     histEqTonemappingRegW,
@@ -2930,6 +2981,12 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(useSsao));
   ETNA_VERIFY(writer.write(ambientCoeff));
   ETNA_VERIFY(writer.write(useSkyboxForAmbient));
+  ETNA_VERIFY(writer.write(showGrassChunkDebug));
+  ETNA_VERIFY(writer.write(showSsaoKernelDebug));
+  ETNA_VERIFY(writer.write(ssaoKernelHemisphereOnly));
+  ETNA_VERIFY(writer.write(ssaoKernelRadius));
+  ETNA_VERIFY(writer.write(ssaoBias));
+  ETNA_VERIFY(writer.write(ssaoTotalLimitSamples));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }
@@ -2960,11 +3017,15 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
       randomFloats(generator) * 2.f - 1.f,
       randomFloats(generator) * 2.f - 1.f,
       randomFloats(generator));
+    if (!ssaoKernelHemisphereOnly)
+      sample.z = sample.z * 2.f - 1.f;
     sample = glm::normalize(sample);
     sample *= randomFloats(generator);
-    float scale = float(i) / 64.0;
+    float scale = float(i) / float(SSAO_KERNEL_MAX_SIZE);
     scale = lerp(0.1f, 1.0f, scale * scale);
     sample *= scale;
     out_samples[i] = glm::vec4(sample, 0.f);
   }
+
+  std::shuffle(out_samples.begin(), out_samples.end(), generator);
 }

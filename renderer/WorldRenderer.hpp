@@ -255,6 +255,8 @@ private:
   bool spotLightsSettingsDirty = true;
   bool directionalLightsSettingsDirty = true;
 
+  bool needRegenSsaoKernel = false;
+
   UniformLights prevLights{};
 
   std::optional<TerrainRenderingData> terrain{};
@@ -285,8 +287,6 @@ private:
   glm::uvec2 resolution;
   const Config& cfg;
 
-  SsaoConstData ssaoConstData;
-  etna::Buffer ssaoConstBuffer;
   etna::Image ssaoBuffer;
   etna::Image ssaoBlurredBuffer;
   std::unique_ptr<PostfxRenderer> ssaoGen{};
@@ -341,6 +341,12 @@ private:
   bool useSsao = true;
   glm::vec3 ambientCoeff = glm::vec3(0.3f);
   bool useSkyboxForAmbient = true;
+  bool showGrassChunkDebug = false;
+  bool showSsaoKernelDebug = false;
+  bool ssaoKernelHemisphereOnly = true;
+  float ssaoKernelRadius = 0.5f;
+  float ssaoBias = 0.025f;
+  uint32_t ssaoTotalLimitSamples = 64;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 
@@ -397,5 +403,5 @@ private:
       sceneMgr->getVegetationTemplateData().size() * sizeof(GrassInstance);
   }
 
-  static void generateSsaoKernel(std::span<glm::vec4> out_samples);
+  void generateSsaoKernel(std::span<glm::vec4> out_samples);
 };

@@ -6,18 +6,10 @@
 #include "geometry.h"
 #include "constants.h"
 
-#define SSAO_KERNEL_WORLDSPACE_RAD 0.5f
-#define SSAO_BIAS 0.025f
-
 layout(location = 0) out float out_ao;
 
 layout(binding = 0, set = 0) uniform sampler2D gbufNormal;
 layout(binding = 1, set = 0) uniform sampler2D gbufDepth;
-
-layout(binding = 2, set = 0) uniform ssao_data_t
-{
-  SsaoConstData sscd;
-};
 
 layout(binding = 8, set = 0) uniform constants_t
 {
@@ -73,9 +65,11 @@ void main()
 
   float occ = 0.f;
   // @TODO: temporal accumulation option
-  for (uint i = 0; i < SSAO_KERNEL_SIZE; ++i)
+  const uint samples = min(constants.ssaoLimitSamples, SSAO_KERNEL_MAX_SIZE);
+  const uint skip = SSAO_KERNEL_MAX_SIZE / samples;
+  for (uint i = 0; i < SSAO_KERNEL_MAX_SIZE; i += skip)
   {
-    vec3 sampleWorldPos = reconstructedPos + SSAO_KERNEL_WORLDSPACE_RAD * tbnTransform * sscd.ssaoKernel[i].xyz;
+    vec3 sampleWorldPos = reconstructedPos + constants.ssaoRadius * tbnTransform * constants.ssaoData.ssaoKernel[i].xyz;
     vec4 sampleClipPosW = vpm * vec4(sampleWorldPos, 1.f);
     vec3 sampleClipPos = sampleClipPosW.xyz / sampleClipPosW.w;
     vec2 sampleTc = sampleClipPos.xy * 0.5f + 0.5f;
@@ -85,8 +79,8 @@ void main()
     float sampleWorldDepth = length(sampleWorldPos - viewParams.mViewPos);
     float sampleGbufDepth = length(sampleGbufPos - viewParams.mViewPos);
 
-    float rangeCutoff = smoothstep(0.f, 1.f, SSAO_KERNEL_WORLDSPACE_RAD / abs(fragDepth - sampleGbufDepth));
-    occ += (sampleWorldDepth >= sampleGbufDepth + SSAO_BIAS ? 1.f : 0.f) * rangeCutoff;
+    float rangeCutoff = smoothstep(0.f, 1.f, constants.ssaoRadius / abs(fragDepth - sampleGbufDepth));
+    occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
   }
-  out_ao = 1.f - (occ / float(SSAO_KERNEL_SIZE));
+  out_ao = 1.f - (occ / float(samples));
 }

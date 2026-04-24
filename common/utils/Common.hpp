@@ -115,3 +115,5 @@ static std::array<T, N> array_make(F&& make)
   }
 
 #define VARIANT_IS(v_, t_) (std::is_same_v<std::remove_cvref_t<decltype(v_)>, t_>)
+
+#define ARRCNT(a_) (sizeof(a_) / sizeof((a_)[0]))
