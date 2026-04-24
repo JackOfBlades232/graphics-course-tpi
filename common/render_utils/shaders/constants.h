@@ -68,6 +68,9 @@ struct Constants
   float ssaoRadius;
   float ssaoBias;
 
+  float ssaoPower;
+  float pad0_, pad1_, pad2_;
+
   SsaoConstData ssaoData;
 };
 

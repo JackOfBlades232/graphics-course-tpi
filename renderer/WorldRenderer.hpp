@@ -347,6 +347,7 @@ private:
   float ssaoKernelRadius = 0.2f;
   float ssaoBias = 0.0025f;
   uint32_t ssaoTotalLimitSamples = 64;
+  float ssaoPower = 3.0f;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

@@ -902,6 +902,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
     constantsData.ssaoRadius = ssaoKernelRadius;
     constantsData.ssaoBias = ssaoBias;
+    constantsData.ssaoPower = ssaoPower;
     constantsData.ssaoLimitSamples = ssaoTotalLimitSamples;
   }
 
@@ -2479,6 +2480,7 @@ void WorldRenderer::drawGui()
           needRegenSsaoKernel = true;
         ImGui::SliderFloat("SSAO kernel rad", &ssaoKernelRadius, 0.f, 5.f);
         ImGui::SliderFloat("SSAO bias", &ssaoBias, 0.f, 0.2f);
+        ImGui::SliderFloat("SSAO power", &ssaoPower, 0.f, 5.f);
         ImGui::Checkbox("Show SSAO debug", &showSsaoKernelDebug);
       }
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
@@ -2905,6 +2907,7 @@ void WorldRenderer::loadDebugConfig()
   ssaoKernelRadius = unwrap(reader.read<float>());
   ssaoBias = unwrap(reader.read<float>());
   ssaoTotalLimitSamples = unwrap(reader.read<uint32_t>());
+  ssaoPower = unwrap(reader.read<float>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -2991,6 +2994,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(ssaoKernelRadius));
   ETNA_VERIFY(writer.write(ssaoBias));
   ETNA_VERIFY(writer.write(ssaoTotalLimitSamples));
+  ETNA_VERIFY(writer.write(ssaoPower));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

@@ -87,5 +87,8 @@ void main()
     float rangeCutoff = smoothstep(0.f, 1.f, constants.ssaoRadius / abs(fragDepth - sampleGbufDepth));
     occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
   }
-  out_ao = 1.f - (occ / float(constants.ssaoLimitSamples));
+  occ = 1.f - (occ / float(constants.ssaoLimitSamples));
+  if (abs(constants.ssaoPower - 1.f) > SHADER_EPSILON)
+    occ = pow(occ, constants.ssaoPower);
+  out_ao = occ;
 }
