@@ -6,10 +6,12 @@
 #include "geometry.h"
 #include "constants.h"
 
-layout(location = 0) out float out_ao;
+layout(location = 0) out vec2 out_ao;
 
 layout(binding = 0, set = 0) uniform sampler2D gbufNormal;
 layout(binding = 1, set = 0) uniform sampler2D gbufDepth;
+
+layout(binding = 2, set = 0) uniform sampler2D prevFrameAo;
 
 layout(binding = 8, set = 0) uniform constants_t
 {
@@ -42,7 +44,7 @@ void main()
   const float depth = texture(gbufDepth, surf.texCoord).x;
   if (depth <= 0.f)
   {
-    out_ao = 1.f;
+    out_ao = vec2(1.f, depth);
     return;
   }
 
@@ -90,5 +92,5 @@ void main()
   occ = 1.f - (occ / float(constants.ssaoLimitSamples));
   if (abs(constants.ssaoPower - 1.f) > SHADER_EPSILON)
     occ = pow(occ, constants.ssaoPower);
-  out_ao = occ;
+  out_ao = vec2(occ, depth);
 }

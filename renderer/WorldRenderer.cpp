@@ -244,11 +244,18 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .name = "stub_storage"});
 
   createManagedImage(
-    ssaoBuffer,
+    ssaoBuffers[0],
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-      .name = "ssao_buffer",
-      .format = vk::Format::eR32Sfloat,
+      .name = "ssao_buffer0",
+      .format = vk::Format::eR32G32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    ssaoBuffers[1],
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "ssao_buffer1",
+      .format = vk::Format::eR32G32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
   createManagedImage(
     ssaoBlurredBuffer,
@@ -777,7 +784,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   ssaoGen = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "ssao_generate",
     RENDERER_SHADERS_ROOT "ssao_generate.frag.spv",
-    vk::Format::eR32Sfloat,
+    vk::Format::eR32G32Sfloat,
     {resolution.x, resolution.y}});
   ssaoBlur = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "ssao_blur",
@@ -844,10 +851,14 @@ void WorldRenderer::update(const FramePacket& packet)
     }
   }
 
+  switchSsaoFrame();
+
   if (needRegenSsaoKernel)
   {
     generateSsaoKernel(constantsData.ssaoData.ssaoKernel);
     generateSsaoKernelRotations(constantsData.ssaoData.ssaoKernelRotations);
+    constantsData.ssaoForceDropHistory = true;
+    needRegenSsaoKernel = false;
   }
 
   if (cfg.disablePointLightsShadowsFeature)
@@ -904,6 +915,12 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.ssaoBias = ssaoBias;
     constantsData.ssaoPower = ssaoPower;
     constantsData.ssaoLimitSamples = ssaoTotalLimitSamples;
+
+    constantsData.ssaoDoTemporalAccum = ssaoTemporalAccumBacklog > 1;
+    constantsData.ssaoTemporalAccumBacklog = ssaoTemporalAccumBacklog;
+    constantsData.ssaoTemporalAccumBacklog = ssaoTemporalAccumBacklog;
+    constantsData.ssaoEmaCoeff = ssaoEmaCoeff;
+    constantsData.ssaoDepthRejectionThreshold = ssaoDepthRejectionThreshold;
   }
 
   if (!cfg.disableDirectionalLightsShadowsFeature)
@@ -2100,6 +2117,10 @@ void WorldRenderer::renderWorld(
              1,
              mainViewDepth.genBinding(
                defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{
+             2,
+             getPrevSsaoBuffer().genBinding(
+               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
            etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});
@@ -2107,7 +2128,7 @@ void WorldRenderer::renderWorld(
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics, ssaoGen->pipelineLayout(), 0, {set.getVkSet()}, {});
 
-        ssaoGen->render(cmd_buf, ssaoBuffer.get(), ssaoBuffer.getView({}));
+        ssaoGen->render(cmd_buf, getCurSsaoBuffer().get(), getCurSsaoBuffer().getView({}));
       }
 
       {
@@ -2117,8 +2138,11 @@ void WorldRenderer::renderWorld(
           cmd_buf,
           {etna::Binding{
              0,
-             ssaoBuffer.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{8, constants->get().genBinding()}});
+             getCurSsaoBuffer().genBinding(
+               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{8, constants->get().genBinding()},
+           etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
+           etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});
 
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics, ssaoBlur->pipelineLayout(), 0, {set.getVkSet()}, {});
@@ -2453,7 +2477,10 @@ void WorldRenderer::drawGui()
       {
         bool prevKHO = ssaoKernelHemisphereOnly;
         uint32_t prevSampleCount = ssaoTotalLimitSamples;
+        uint32_t prevTemporalAccumBacklog = ssaoTemporalAccumBacklog;
+
         ImGui::Checkbox("SSAO kernel hemisphere only", &ssaoKernelHemisphereOnly);
+
         constexpr const char* SSAO_SC_NAMES[] = {"4", "8", "16", "32", "64", "128"};
         constexpr uint32_t SSAO_SC_VALUES[] = {4, 8, 16, 32, 64, 128};
         size_t curScId = size_t(
@@ -2476,11 +2503,44 @@ void WorldRenderer::drawGui()
           ImGui::EndCombo();
         }
 
-        if (prevKHO != ssaoKernelHemisphereOnly || prevSampleCount != ssaoTotalLimitSamples)
+        constexpr const char* SSAO_TA_NAMES[] = {"1", "2", "4"};
+        constexpr uint32_t SSAO_TA_VALUES[] = {1, 2, 4};
+        size_t curTaId = size_t(
+          std::find(
+            std::begin(SSAO_TA_VALUES), std::end(SSAO_TA_VALUES), ssaoTemporalAccumBacklog) -
+          std::begin(SSAO_TA_VALUES));
+        if (ImGui::BeginCombo("SSAO temporal accum backlog depth", SSAO_TA_NAMES[curTaId]))
+        {
+          for (size_t i = 0; i < ARRCNT(SSAO_TA_NAMES); i++)
+          {
+            bool selected = curTaId == i;
+            if (ImGui::Selectable(SSAO_TA_NAMES[i], selected))
+            {
+              curTaId = i;
+              ssaoTemporalAccumBacklog = SSAO_TA_VALUES[i];
+            }
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::EndCombo();
+        }
+
+        if (
+          prevKHO != ssaoKernelHemisphereOnly || prevSampleCount != ssaoTotalLimitSamples ||
+          prevTemporalAccumBacklog != ssaoTemporalAccumBacklog)
+        {
           needRegenSsaoKernel = true;
+        }
         ImGui::SliderFloat("SSAO kernel rad", &ssaoKernelRadius, 0.f, 5.f);
         ImGui::SliderFloat("SSAO bias", &ssaoBias, 0.f, 0.2f);
         ImGui::SliderFloat("SSAO power", &ssaoPower, 0.f, 5.f);
+        if (ssaoTemporalAccumBacklog > 1)
+        {
+          ImGui::SliderFloat("SSAO ema coeff", &ssaoEmaCoeff, 0.f, 1.f);
+          ImGui::SliderFloat(
+            "SSAO depth rejection threshold", &ssaoDepthRejectionThreshold, 0.f, 1.f);
+        }
         ImGui::Checkbox("Show SSAO debug", &showSsaoKernelDebug);
       }
       ImGui::Checkbox("Use tonemapping", &doTonemapping);
@@ -2609,7 +2669,6 @@ void WorldRenderer::drawGui()
       if (!vegetation)
         drawVegetation = false;
 
-      // @TODO: text
       if (ImGui::BeginCombo(
             "Debug texture view", currentDebugDrawer ? currentDebugDrawer->c_str() : "none"))
       {
@@ -2908,6 +2967,9 @@ void WorldRenderer::loadDebugConfig()
   ssaoBias = unwrap(reader.read<float>());
   ssaoTotalLimitSamples = unwrap(reader.read<uint32_t>());
   ssaoPower = unwrap(reader.read<float>());
+  ssaoTemporalAccumBacklog = unwrap(reader.read<uint32_t>());
+  ssaoEmaCoeff = unwrap(reader.read<float>());
+  ssaoDepthRejectionThreshold = unwrap(reader.read<float>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -2995,6 +3057,9 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(ssaoBias));
   ETNA_VERIFY(writer.write(ssaoTotalLimitSamples));
   ETNA_VERIFY(writer.write(ssaoPower));
+  ETNA_VERIFY(writer.write(ssaoTemporalAccumBacklog));
+  ETNA_VERIFY(writer.write(ssaoEmaCoeff));
+  ETNA_VERIFY(writer.write(ssaoDepthRejectionThreshold));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

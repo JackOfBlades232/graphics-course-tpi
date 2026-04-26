@@ -19,9 +19,14 @@ void emit_barriers(
     std::visit(
       [&](const auto& b) {
         if constexpr (VARIANT_IS(b, vk::BufferMemoryBarrier2))
+        {
           bufferBarriers.push_back(b);
+          bufferBarriers.back().size = std::max(bufferBarriers.back().size, vk::DeviceSize{1});
+        }
         else
+        {
           imageBarriers.push_back(b);
+        }
       },
       barrier);
   }

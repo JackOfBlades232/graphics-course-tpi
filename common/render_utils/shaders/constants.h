@@ -69,7 +69,18 @@ struct Constants
   float ssaoBias;
 
   float ssaoPower;
-  float pad0_, pad1_, pad2_;
+
+  float ssaoEmaCoeff;
+  float ssaoDepthRejectionThreshold;
+
+  float pad0_;
+
+  shader_uint ssaoDoTemporalAccum;
+
+  shader_uint ssaoTemporalAccumBacklog;
+  shader_uint ssaoForceDropHistory;
+
+  shader_uint pad1_;
 
   SsaoConstData ssaoData;
 };

@@ -287,7 +287,16 @@ private:
   glm::uvec2 resolution;
   const Config& cfg;
 
-  etna::Image ssaoBuffer;
+  etna::Image ssaoBuffers[2];
+  int curSsaoBuffer = 0;
+
+  int prevSsaoBufferId() { return 1 & ~curSsaoBuffer; }
+  void switchSsaoFrame() { curSsaoBuffer = prevSsaoBufferId(); }
+  etna::Image &getCurSsaoBuffer() { return ssaoBuffers[curSsaoBuffer]; }
+  etna::Image &getPrevSsaoBuffer() { return ssaoBuffers[prevSsaoBufferId()]; }
+  const etna::Image &getCurSsaoBuffer() const { return ssaoBuffers[curSsaoBuffer]; }
+  const etna::Image &getPrevSsaoBuffer() const { return ssaoBuffers[curSsaoBuffer]; }
+
   etna::Image ssaoBlurredBuffer;
   std::unique_ptr<PostfxRenderer> ssaoGen{};
   std::unique_ptr<PostfxRenderer> ssaoBlur{};
@@ -348,6 +357,9 @@ private:
   float ssaoBias = 0.0025f;
   uint32_t ssaoTotalLimitSamples = 64;
   float ssaoPower = 3.0f;
+  uint32_t ssaoTemporalAccumBacklog = 4;
+  float ssaoEmaCoeff = 0.9f;
+  float ssaoDepthRejectionThreshold = 0.1f;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

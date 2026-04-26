@@ -1410,7 +1410,7 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
                .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
                .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-               .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+               .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
                .buffer = bboxesBuf.get(),
                .size = getBboxes().size_bytes()},
              vk::BufferMemoryBarrier2{
