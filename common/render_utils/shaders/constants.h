@@ -80,7 +80,7 @@ struct Constants
   shader_uint ssaoTemporalAccumBacklog;
   shader_uint ssaoForceDropHistory;
 
-  shader_uint pad1_;
+  shader_uint frameNo;
 
   SsaoConstData ssaoData;
 };

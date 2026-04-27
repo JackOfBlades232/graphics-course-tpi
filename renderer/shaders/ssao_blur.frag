@@ -49,5 +49,7 @@ void main()
     }
   }
   out_ao = result / tw;
+  if (abs(constants.ssaoPower - 1.f) > SHADER_EPSILON)
+    out_ao = pow(out_ao, constants.ssaoPower);
 }
 

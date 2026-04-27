@@ -14,7 +14,6 @@ struct SsaoConstData
 {
   shader_vec4 ssaoKernel[SSAO_KERNEL_MAX_SIZE];
   shader_vec4 ssaoKernelRotations[SSAO_BLUR_KERNEL_TSIZE_V4];
-  // @TODO: kernel rotations for less patterns
 };
 
 #endif

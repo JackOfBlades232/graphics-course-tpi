@@ -284,6 +284,8 @@ private:
 
   int frame = -1;
 
+  ViewParams mainViewParams{};
+
   glm::uvec2 resolution;
   const Config& cfg;
 

@@ -64,7 +64,7 @@ void main()
   const vec3 reconstructedPos = depth_and_tc_to_pos_with_mat(max(depth, 0.f), surf.texCoord, ivpm);
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
 
-  const float fragDepth = length(reconstructedPos - viewParams.mViewPos);
+  const float fragDepth = length(reconstructedPos - viewParams.viewPos);
 
   vec3 baseVec = vec3(rot, 0.f);
   vec3 tangent = normalize(baseVec - normal * dot(baseVec, normal));
@@ -72,9 +72,14 @@ void main()
   mat3 tbnTransform = mat3(tangent, bitangent, normal);
 
   float occ = 0.f;
-  // @TODO: temporal accumulation option
-  const uint samples = min(constants.ssaoLimitSamples, SSAO_KERNEL_MAX_SIZE);
-  for (uint i = 0; i < samples; ++i)
+  uint samples = min(constants.ssaoLimitSamples, SSAO_KERNEL_MAX_SIZE);
+  uint frameId = 0;
+  if (constants.ssaoDoTemporalAccum != 0)
+  {
+    samples /= constants.ssaoTemporalAccumBacklog;
+    frameId = constants.frameNo % constants.ssaoTemporalAccumBacklog;
+  }
+  for (uint i = frameId * samples; i < (frameId + 1) * samples; ++i)
   {
     vec3 sampleWorldPos = reconstructedPos + constants.ssaoRadius * tbnTransform * constants.ssaoData.ssaoKernel[i].xyz;
     vec4 sampleClipPosW = vpm * vec4(sampleWorldPos, 1.f);
@@ -83,14 +88,32 @@ void main()
     float sampleDepth = texture(gbufDepth, sampleTc).x;
     vec3 sampleGbufPos = depth_and_tc_to_pos_with_mat(max(sampleDepth, 0.f), sampleTc, ivpm);
 
-    float sampleWorldDepth = length(sampleWorldPos - viewParams.mViewPos);
-    float sampleGbufDepth = length(sampleGbufPos - viewParams.mViewPos);
+    float sampleWorldDepth = length(sampleWorldPos - viewParams.viewPos);
+    float sampleGbufDepth = length(sampleGbufPos - viewParams.viewPos);
 
     float rangeCutoff = smoothstep(0.f, 1.f, constants.ssaoRadius / abs(fragDepth - sampleGbufDepth));
     occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
   }
-  occ = 1.f - (occ / float(constants.ssaoLimitSamples));
-  if (abs(constants.ssaoPower - 1.f) > SHADER_EPSILON)
-    occ = pow(occ, constants.ssaoPower);
+  occ = 1.f - (occ / float(samples));
+  if (constants.ssaoDoTemporalAccum != 0 && constants.ssaoForceDropHistory == 0 && constants.frameNo > 0)
+  {
+    vec4 prevUvz = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(reconstructedPos, 1.f); 
+    prevUvz /= prevUvz.w;
+    vec2 uv = prevUvz.xy * 0.5f + 0.5f;
+    if (uv.x >= 0.f && uv.x < 1.f && uv.y >= 0.f && uv.y < 1.f)
+    {
+      vec2 prevAoDepth = texture(prevFrameAo, uv).xy;
+
+      float ppViewDepth = linearize_prev_z(prevUvz.z, viewParams, viewData);
+      float rpViewDepth = linearize_prev_z(prevAoDepth.y, viewParams, viewData);
+
+      float disocclusionParam = abs(1.f - ppViewDepth / rpViewDepth);
+
+      if (disocclusionParam < constants.ssaoDepthRejectionThreshold)
+      {
+        occ = constants.ssaoEmaCoeff * occ + (1.f - constants.ssaoEmaCoeff) * prevAoDepth.x;
+      }
+    }
+  }
   out_ao = vec2(occ, depth);
 }

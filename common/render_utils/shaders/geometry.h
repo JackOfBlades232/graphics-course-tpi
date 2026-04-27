@@ -64,10 +64,14 @@ struct ViewParams
   shader_mat4 mProjView;
   shader_mat4 mView;
   shader_mat4 mInverseView;
-  shader_vec3 mViewPos;
-  shader_uint pad0_;
   shader_mat4 mProj;
+  shader_mat4 mPrevProjView;
+  shader_mat4 mPrevView;
+  shader_mat4 mPrevProj;
   ViewFrustum viewFrustum;
+  ViewFrustum prevViewFrustum;
+  shader_vec3 viewPos;
+  shader_uint pad0_;
   // Workaround for a bug where [1] array is probably flattened
   shader_vec4 csmFrustumSplits[SHADER_MAX((CSM_CASCADE_COUNT - 1) / 4 + 1, 2)];
   ViewType type;
@@ -81,6 +85,8 @@ struct ViewData
 {
   shader_uint minViewZOrderedUint;
   shader_uint maxViewZOrderedUint;
+  shader_uint prevMinViewZOrderedUint;
+  shader_uint prevMaxViewZOrderedUint;
 };
 
 #define CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD 32
@@ -116,27 +122,48 @@ float get_frustum_split(in ViewParams p, uint i)
     return p.csmFrustumSplits[i & ~3].w;
 }
 
-vec2 get_corrected_depth_bounds_impl(in ViewParams params, in ViewData data)
+vec2 get_corrected_depth_bounds_impl(float n, float f, uint minord, uint maxord)
 {
-  float sceneMinZ = ordered_uint_to_float(data.minViewZOrderedUint) - 0.001f;
-  float sceneMaxZ = ordered_uint_to_float(data.maxViewZOrderedUint) + 0.001f;
-  float correctedNearZ = max(sceneMinZ, params.viewFrustum.nearZ);
-  float correctedFarZ = min(sceneMaxZ, params.viewFrustum.farZ);
+  float sceneMinZ = ordered_uint_to_float(minord) - 0.001f;
+  float sceneMaxZ = ordered_uint_to_float(maxord) + 0.001f;
+  float correctedNearZ = max(sceneMinZ, n);
+  float correctedFarZ = min(sceneMaxZ, f);
   return vec2(correctedNearZ, correctedFarZ);
 }
 
-vec2 get_corrected_depth_bounds(in ViewParams params, in ViewData data)
+vec2 get_corrected_depth_bounds(in ViewParams params, in ViewData data, bool prev)
 {
-  if (params.needDepthBounds == 0)
-    return vec2(params.viewFrustum.nearZ, params.viewFrustum.farZ);
-  return get_corrected_depth_bounds_impl(params, data);
+  vec2 nf;
+  if (prev)
+  {
+    if (params.needDepthBounds == 0)
+      nf = vec2(params.prevViewFrustum.nearZ, params.prevViewFrustum.farZ);
+    else
+    {
+      nf = get_corrected_depth_bounds_impl(
+        params.prevViewFrustum.nearZ, params.prevViewFrustum.farZ,
+        data.prevMinViewZOrderedUint, data.prevMaxViewZOrderedUint);
+    }
+  }
+  else
+  {
+    if (params.needDepthBounds == 0)
+      nf = vec2(params.viewFrustum.nearZ, params.viewFrustum.farZ);
+    else
+    {
+      nf = get_corrected_depth_bounds_impl(
+        params.viewFrustum.nearZ, params.viewFrustum.farZ,
+        data.minViewZOrderedUint, data.maxViewZOrderedUint);
+    }
+  }
+  return nf;
 }
 
 mat4 calc_adjusted_viewproj_mat(in ViewParams params, in ViewData data)
 {
   if (params.needDepthBounds == 0)
     return params.mProjView;
-  const vec2 zNearFar = get_corrected_depth_bounds_impl(params, data);
+  const vec2 zNearFar = get_corrected_depth_bounds(params, data, false);
   const mat4 pm = params.mProj;
   const float znr = params.needReverseZ != 0 ? zNearFar.y : zNearFar.x;
   const float zfr = params.needReverseZ != 0 ? zNearFar.x : zNearFar.y;
@@ -148,9 +175,36 @@ mat4 calc_adjusted_viewproj_mat(in ViewParams params, in ViewData data)
   return adjPm * params.mView;
 }
 
+mat4 calc_prev_adjusted_viewproj_mat(in ViewParams params, in ViewData data)
+{
+  if (params.needDepthBounds == 0)
+    return params.mPrevProjView;
+  const vec2 zNearFar = get_corrected_depth_bounds(params, data, true);
+  const mat4 pm = params.mPrevProj;
+  const float znr = params.needReverseZ != 0 ? zNearFar.y : zNearFar.x;
+  const float zfr = params.needReverseZ != 0 ? zNearFar.x : zNearFar.y;
+  mat4 adjPm;
+  if (params.type == VIEW_TYPE_PERSPECTIVE)
+    adjPm = patch_depth_bounds_persp(pm, znr, zfr);
+  else // VIEW_TYPE_ORTHO
+    adjPm = patch_depth_bounds_ortho(pm, znr, zfr);
+  return adjPm * params.mPrevView;
+}
+
 float linearize_z(float z, in ViewParams params, in ViewData data)
 {
-  vec2 nf = get_corrected_depth_bounds(params, data);
+  vec2 nf = get_corrected_depth_bounds(params, data, false);
+  float n = nf.x;
+  float f = nf.y;
+  if (params.needReverseZ != 0)
+    return (f * n) / (n - z * (n - f));
+  else
+    return (f * n) / (f - z * (f - n));
+}
+
+float linearize_prev_z(float z, in ViewParams params, in ViewData data)
+{
+  vec2 nf = get_corrected_depth_bounds(params, data, true);
   float n = nf.x;
   float f = nf.y;
   if (params.needReverseZ != 0)

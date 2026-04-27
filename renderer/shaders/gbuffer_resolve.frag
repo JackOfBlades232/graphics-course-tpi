@@ -358,7 +358,7 @@ void main(void)
 
   const vec3 reconstructedPos = depth_and_tc_to_pos(max(depth, 0.f), surf.texCoord);
   const vec3 pos = reconstructedPos; //texture(gbufPos, surf.texCoord).xyz;
-  const vec3 viewVec = normalize(viewParams.mViewPos - pos);
+  const vec3 viewVec = normalize(viewParams.viewPos - pos);
   const vec3 viewPos = (viewParams.mView * vec4(pos, 1.f)).xyz;
 
   if (depth <= 0.f)
@@ -366,7 +366,7 @@ void main(void)
     if (constants.useSkybox == 0)
       out_fragColor = vec4(0.f, 0.f, 0.f, 1.f);
     else
-      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, reconstructedPos - viewParams.mViewPos);
+      out_fragColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, reconstructedPos - viewParams.viewPos);
     return;
   }
 

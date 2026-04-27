@@ -11,7 +11,7 @@ layout(binding = 0, set = 0) writeonly buffer commands_t
 {
   IndirectCommand commands[];
 };
-layout(binding = 1, set = 0) writeonly buffer data_t
+layout(binding = 1, set = 0) buffer data_t
 {
   ViewData vdata;
 };
@@ -21,6 +21,8 @@ void main(void)
   uint idx = gl_GlobalInvocationID.x;
   if (idx == 0)
   {
+    vdata.prevMinViewZOrderedUint = vdata.minViewZOrderedUint;
+    vdata.prevMaxViewZOrderedUint = vdata.maxViewZOrderedUint;
     vdata.minViewZOrderedUint = SHADER_UINT_MAX;
     vdata.maxViewZOrderedUint = 0;
   }

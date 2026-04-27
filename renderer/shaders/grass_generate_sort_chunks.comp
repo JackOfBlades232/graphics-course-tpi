@@ -26,7 +26,7 @@ shared vec2 sharedCache[VEGETATION_CHUNK_SORT_MAX_COUNT];
 
 float sort_key(vec2 p)
 {
-  return length(p - viewParams.mViewPos.xz);
+  return length(p - viewParams.viewPos.xz);
 }
 
 void compare_and_swap(uint i, uint j, bool asc)

@@ -113,7 +113,7 @@ void main(void)
   float height = sample_geom_clipmap_exact(grassPosPlanarRelToClipmap);
   vec3 grassPos = vec3(grassPosPlanar.x, height, grassPosPlanar.y);
 
-  float instDist = length(viewParams.mViewPos - grassPos);
+  float instDist = length(viewParams.viewPos - grassPos);
   if (instDist > constants.vegetationRenderingDistance)
     return;
 

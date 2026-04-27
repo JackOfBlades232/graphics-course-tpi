@@ -98,6 +98,7 @@ inline ViewParams view_params_for_cam(
   float aspect,
   bool need_depth_bounds,
   bool need_reverse_z,
+  const ViewParams* prev_params,
   float csm_split_lambda = -1.f,
   float csm_shadow_dist = FLT_MAX)
 {
@@ -115,10 +116,11 @@ inline ViewParams view_params_for_cam(
     params.mProjView = proj * params.mView;
     params.mInverseView = glm::inverse(params.mView);
     params.mProj = proj;
-    params.mViewPos =
+    params.viewPos =
       glm::vec3(params.mInverseView[3][0], params.mInverseView[3][1], params.mInverseView[3][2]) /
       params.mInverseView[3][3];
   }
+
 
   // pass frustum dimensions
   {
@@ -126,6 +128,15 @@ inline ViewParams view_params_for_cam(
     params.viewFrustum.nearX = aspect * params.viewFrustum.nearY;
     params.viewFrustum.nearZ = cam.zNear;
     params.viewFrustum.farZ = cam.zFar;
+  }
+
+  // transfer prev frame data
+  if (prev_params)
+  {
+    params.mPrevProjView = prev_params->mProjView;
+    params.mPrevProj = prev_params->mProj;
+    params.mPrevView = prev_params->mView;
+    params.prevViewFrustum = prev_params->viewFrustum;
   }
 
   // Frustum split for cascade maps
@@ -153,7 +164,11 @@ inline ViewParams view_params_for_cam(
 }
 
 inline ViewParams view_params_for_cam(
-  const OrthoCamera& cam, float xext, float yext, bool need_depth_bounds)
+  const OrthoCamera& cam,
+  float xext,
+  float yext,
+  bool need_depth_bounds,
+  const ViewParams* prev_params)
 {
   ViewParams params{};
   params.type = ViewType::ORTHO;
@@ -165,7 +180,7 @@ inline ViewParams view_params_for_cam(
     params.mProjView = proj * params.mView;
     params.mInverseView = glm::inverse(params.mView);
     params.mProj = proj;
-    params.mViewPos =
+    params.viewPos =
       glm::vec3(params.mInverseView[3][0], params.mInverseView[3][1], params.mInverseView[3][2]) /
       params.mInverseView[3][3];
   }
@@ -176,6 +191,15 @@ inline ViewParams view_params_for_cam(
     params.viewFrustum.nearY = yext;
     params.viewFrustum.nearZ = cam.zNear;
     params.viewFrustum.farZ = cam.zFar;
+  }
+
+  // transfer prev frame data
+  if (prev_params)
+  {
+    params.mPrevProjView = prev_params->mProjView;
+    params.mPrevProj = prev_params->mProj;
+    params.mPrevView = prev_params->mView;
+    params.prevViewFrustum = prev_params->viewFrustum;
   }
 
   params.needDepthBounds = shader_uint(need_depth_bounds);

@@ -54,7 +54,7 @@ void main(void)
 
   // @TEST, @TODO make param if goes well
   const float normalViewDependency = 0.5f;
-  vec3 viewPos = surf.wPos - viewParams.mViewPos;
+  vec3 viewPos = surf.wPos - viewParams.viewPos;
   out_fragNormal =
     normalize(out_fragNormal - normalize(viewPos) * normalViewDependency);
 #endif

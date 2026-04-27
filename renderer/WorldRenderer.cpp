@@ -860,6 +860,10 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.ssaoForceDropHistory = true;
     needRegenSsaoKernel = false;
   }
+  else
+  {
+    constantsData.ssaoForceDropHistory = false;
+  }
 
   if (cfg.disablePointLightsShadowsFeature)
     pointLightShadowsSettings.enable = false;
@@ -905,6 +909,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
     constantsData.dt = dt;
     constantsData.time = packet.currentTime;
+    constantsData.frameNo = shader_uint(frame);
 
     constantsData.useSsao = useSsao;
 
@@ -923,11 +928,12 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.ssaoDepthRejectionThreshold = ssaoDepthRejectionThreshold;
   }
 
+  mainViewParams = view_params_for_cam(
+    mainCam, aspect(), false, true, &mainViewParams, csmSplitLambda, csmShadowDist);
+
   if (!cfg.disableDirectionalLightsShadowsFeature)
   {
     auto& lights = sceneMgr->lightsRW();
-    const auto mainViewParams =
-      view_params_for_cam(mainCam, aspect(), false, false, csmSplitLambda, csmShadowDist);
     const auto [xNear, yNear, zNear, zFar] = mainViewParams.viewFrustum;
 
     const auto invView = glm::inverse(mainViewParams.mView);
@@ -1450,9 +1456,7 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, grassGen);
 
-      // @TODO: unify
-      mainViewContext->update(
-        view_params_for_cam(mainCam, aspect(), false, true, csmSplitLambda, csmShadowDist));
+      mainViewContext->update(mainViewParams);
 
       emit_barriers(
         cmd_buf,
@@ -1830,7 +1834,7 @@ void WorldRenderer::renderWorld(
                .flags = SRPO_STATIC | SRPO_TERRAIN,
                .vctx = &pointLightViews[i][j],
                .vparams = view_params_for_cam(
-                 cam, 1.f, true, false), // @TODO: reverse depth is broken on point lights
+                 cam, 1.f, true, false, nullptr), // @TODO: reverse depth is broken on point lights
                .rtargetInfo =
                  {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
                   {},
@@ -1906,7 +1910,7 @@ void WorldRenderer::renderWorld(
              .flags = SRPO_STATIC | SRPO_TERRAIN,
              .vctx = &spotLightViews[i],
              .vparams = view_params_for_cam(
-               cam, 1.f, true, false), // @TODO: reverse depth is broken on spot lights
+               cam, 1.f, true, false, nullptr), // @TODO: reverse depth is broken on spot lights
              .rtargetInfo =
                {{{0, 0}, {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION}},
                 {},
@@ -1985,7 +1989,7 @@ void WorldRenderer::renderWorld(
                  : SceneRenderingPass::SHADOW,
                .flags = SRPO_STATIC | SRPO_TERRAIN,
                .vctx = &directionalLightCascadeViews[i][j],
-               .vparams = view_params_for_cam(cam, xExt, yExt, true),
+               .vparams = view_params_for_cam(cam, xExt, yExt, true, nullptr),
                .rtargetInfo =
                  {{{0, 0}, {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION}},
                   {},
@@ -2022,9 +2026,6 @@ void WorldRenderer::renderWorld(
         .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
         .buffer = lightMatricesBuf.get(),
         .size = sizeof(LightMatrices)}});
-
-    const auto mainViewParams =
-      view_params_for_cam(mainCam, aspect(), false, true, csmSplitLambda, csmShadowDist);
 
     constexpr auto Z_PREPASS_OBJ_MASK = SRPO_ALL;
     static_assert(Z_PREPASS_OBJ_MASK != 0);
@@ -2274,10 +2275,8 @@ void WorldRenderer::drawGui()
     if (directionalLightShadowsSettings.enable)
     {
       std::string text = fmt::format("Csm splits: [{}]{{{}", CSM_CASCADE_COUNT, mainCam.zNear);
-      const ViewParams mainCamParams =
-        view_params_for_cam(mainCam, aspect(), false, false, csmSplitLambda, csmShadowDist);
       for (float split : std::span{
-             reinterpret_cast<const float*>(mainCamParams.csmFrustumSplits), CSM_CASCADE_COUNT})
+             reinterpret_cast<const float*>(mainViewParams.csmFrustumSplits), CSM_CASCADE_COUNT})
       {
         text.append(", ");
         text.append(std::to_string(split));
@@ -2540,6 +2539,7 @@ void WorldRenderer::drawGui()
           ImGui::SliderFloat("SSAO ema coeff", &ssaoEmaCoeff, 0.f, 1.f);
           ImGui::SliderFloat(
             "SSAO depth rejection threshold", &ssaoDepthRejectionThreshold, 0.f, 1.f);
+          ssaoEmaCoeff = std::min(ssaoEmaCoeff, 1.f / float(ssaoTemporalAccumBacklog));
         }
         ImGui::Checkbox("Show SSAO debug", &showSsaoKernelDebug);
       }
