@@ -50,8 +50,8 @@ void main()
 
   const ivec2 scrsz = textureSize(gbufDepth, 0);
   const vec2 pixcoord = surf.texCoord * vec2(scrsz);
-  const uvec2 rotcoord = uvec2(floor(pixcoord)) % uvec2(SSAO_BLUR_KERNEL_SIZE);
-  const uint lincoord = rotcoord.x + rotcoord.y * SSAO_BLUR_KERNEL_SIZE;
+  const uvec2 rotcoord = (uvec2(floor(pixcoord)) + uvec2(constants.frameNo)) % uvec2(SSAO_BLUR_KERNEL_SIZE);
+  const uint lincoord = (rotcoord.x + rotcoord.y * SSAO_BLUR_KERNEL_SIZE) % SSAO_BLUR_KERNEL_TSIZE;
   const uint v4coord = lincoord >> 1;
   const uint comp = lincoord & 1;
   const vec4 rr = constants.ssaoData.ssaoKernelRotations[v4coord];
@@ -71,7 +71,6 @@ void main()
   vec3 bitangent = cross(normal, tangent);
   mat3 tbnTransform = mat3(tangent, bitangent, normal);
 
-  float occ = 0.f;
   uint samples = min(constants.ssaoLimitSamples, SSAO_KERNEL_MAX_SIZE);
   uint frameId = 0;
   if (constants.ssaoDoTemporalAccum != 0)
@@ -79,35 +78,41 @@ void main()
     samples /= constants.ssaoTemporalAccumBacklog;
     frameId = constants.frameNo % constants.ssaoTemporalAccumBacklog;
   }
+
+  float occ = 0.f;
+  float totw = 0.f;
   for (uint i = frameId * samples; i < (frameId + 1) * samples; ++i)
   {
     vec3 sampleWorldPos = reconstructedPos + constants.ssaoRadius * tbnTransform * constants.ssaoData.ssaoKernel[i].xyz;
     vec4 sampleClipPosW = vpm * vec4(sampleWorldPos, 1.f);
     vec3 sampleClipPos = sampleClipPosW.xyz / sampleClipPosW.w;
     vec2 sampleTc = sampleClipPos.xy * 0.5f + 0.5f;
-    float sampleDepth = texture(gbufDepth, sampleTc).x;
-    vec3 sampleGbufPos = depth_and_tc_to_pos_with_mat(max(sampleDepth, 0.f), sampleTc, ivpm);
+    if (sampleTc.x >= 0.f && sampleTc.x <= 1.f && sampleTc.y >= 0.f && sampleTc.y <= 1.f)
+    {
+      float sampleDepth = texture(gbufDepth, sampleTc).x;
+      vec3 sampleGbufPos = depth_and_tc_to_pos_with_mat(max(sampleDepth, 0.f), sampleTc, ivpm);
 
-    float sampleWorldDepth = length(sampleWorldPos - viewParams.viewPos);
-    float sampleGbufDepth = length(sampleGbufPos - viewParams.viewPos);
+      float sampleWorldDepth = length(sampleWorldPos - viewParams.viewPos);
+      float sampleGbufDepth = length(sampleGbufPos - viewParams.viewPos);
 
-    float rangeCutoff = smoothstep(0.f, 1.f, constants.ssaoRadius / abs(fragDepth - sampleGbufDepth));
-    occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
+      float rangeCutoff = smoothstep(0.f, 1.f, constants.ssaoRadius / abs(fragDepth - sampleGbufDepth));
+      occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
+      totw += 1.f;
+    }
   }
-  occ = 1.f - (occ / float(samples));
+  occ = 1.f - (totw == 0.f ? 0.f : occ / totw);
   if (constants.ssaoDoTemporalAccum != 0 && constants.ssaoForceDropHistory == 0 && constants.frameNo > 0)
   {
     vec4 prevUvz = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(reconstructedPos, 1.f); 
     prevUvz /= prevUvz.w;
     vec2 uv = prevUvz.xy * 0.5f + 0.5f;
-    if (uv.x >= 0.f && uv.x < 1.f && uv.y >= 0.f && uv.y < 1.f)
+    if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
       vec2 prevAoDepth = texture(prevFrameAo, uv).xy;
 
-      float ppViewDepth = linearize_prev_z(prevUvz.z, viewParams, viewData);
-      float rpViewDepth = linearize_prev_z(prevAoDepth.y, viewParams, viewData);
+      float ppViewDepth = length(reconstructedPos - viewParams.prevViewPos);
 
-      float disocclusionParam = abs(1.f - ppViewDepth / rpViewDepth);
+      float disocclusionParam = abs(1.f - ppViewDepth / prevAoDepth.y);
 
       if (disocclusionParam < constants.ssaoDepthRejectionThreshold)
       {
@@ -115,5 +120,5 @@ void main()
       }
     }
   }
-  out_ao = vec2(occ, depth);
+  out_ao = vec2(occ, fragDepth);
 }

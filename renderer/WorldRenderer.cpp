@@ -3094,7 +3094,7 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
       sample.z = sample.z * 2.f - 1.f;
     sample = glm::normalize(sample);
     sample *= randomFloats(generator);
-    float scale = float(i) / float(SSAO_KERNEL_MAX_SIZE);
+    float scale = float(i) / float(out_samples.size());
     scale = lerp(0.1f, 1.0f, scale * scale);
     sample *= scale;
     out_samples[i] = glm::vec4(sample, 0.f);

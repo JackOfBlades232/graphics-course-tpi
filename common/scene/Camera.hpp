@@ -137,6 +137,7 @@ inline ViewParams view_params_for_cam(
     params.mPrevProj = prev_params->mProj;
     params.mPrevView = prev_params->mView;
     params.prevViewFrustum = prev_params->viewFrustum;
+    params.prevViewPos = prev_params->viewPos;
   }
 
   // Frustum split for cascade maps
@@ -200,6 +201,7 @@ inline ViewParams view_params_for_cam(
     params.mPrevProj = prev_params->mProj;
     params.mPrevView = prev_params->mView;
     params.prevViewFrustum = prev_params->viewFrustum;
+    params.prevViewPos = prev_params->viewPos;
   }
 
   params.needDepthBounds = shader_uint(need_depth_bounds);

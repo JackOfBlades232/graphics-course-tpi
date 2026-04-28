@@ -31,7 +31,7 @@ layout(location = 0 ) in VS_OUT
 void main()
 {
   vec2 texelSize = 1.f / vec2(textureSize(aoInput, 0));
-  float centerDepth = linearize_z(texture(aoInput, surf.texCoord).y, viewParams, viewData);
+  float centerDepth = texture(aoInput, surf.texCoord).y;
   float result = 0.f;
   float tw = 0.f;
   for (int x = -SSAO_BLUR_KERNEL_HS; x <= SSAO_BLUR_KERNEL_HS; ++x) 
@@ -41,7 +41,7 @@ void main()
       vec2 off = vec2(float(x), float(y)) * texelSize;
       vec2 aoz = texture(aoInput, surf.texCoord + off).xy;
       float ao = aoz.x;
-      float d = linearize_z(aoz.y, viewParams, viewData);
+      float d = aoz.y;
       float dd = abs(centerDepth - d);
       float dw = max(0.f, 1.f - dd / (2.f * constants.ssaoRadius)); // 0 when kernels do not intersect
       result += ao * dw;
