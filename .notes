@@ -1,1 +1,6 @@
-
+SSAO (temporal)
+- Read up more on temporal aspect of ssao and imlementations
+- Watch the lec
+- Try using obscurance function (from alchemy)
+- Try making a deterministic kernel spiralling outward (from SAO)
+- Try adding a band around depth for proper sampling (for this, the easiest solution is enforcing depth prepass for all)
