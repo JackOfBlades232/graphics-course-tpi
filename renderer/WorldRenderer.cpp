@@ -140,7 +140,7 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
   registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
 
-  generateSsaoKernel(constantsData.ssaoData.ssaoKernel);
+  generateSsaoKernel(std::span{constantsData.ssaoData.ssaoKernel, ssaoTotalLimitSamples});
   generateSsaoKernelRotations(constantsData.ssaoData.ssaoKernelRotations);
 
   if (cfg.useDebugConfig)
@@ -855,7 +855,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
   if (needRegenSsaoKernel)
   {
-    generateSsaoKernel(constantsData.ssaoData.ssaoKernel);
+    generateSsaoKernel(std::span{constantsData.ssaoData.ssaoKernel, ssaoTotalLimitSamples});
     generateSsaoKernelRotations(constantsData.ssaoData.ssaoKernelRotations);
     constantsData.ssaoForceDropHistory = true;
     needRegenSsaoKernel = false;
@@ -2539,7 +2539,6 @@ void WorldRenderer::drawGui()
           ImGui::SliderFloat("SSAO ema coeff", &ssaoEmaCoeff, 0.f, 1.f);
           ImGui::SliderFloat(
             "SSAO depth rejection threshold", &ssaoDepthRejectionThreshold, 0.f, 1.f);
-          ssaoEmaCoeff = std::min(ssaoEmaCoeff, 1.f / float(ssaoTemporalAccumBacklog));
         }
         ImGui::Checkbox("Show SSAO debug", &showSsaoKernelDebug);
       }
@@ -2788,15 +2787,25 @@ void WorldRenderer::drawGui()
         ImVec2{origin.x + size.x * 0.5f, origin.y + size.y * 0.5f + 0.49f * size.x},
         IM_COL32(255, 100, 100, 255));
 
-      for (const auto& sample :
-           std::span{constantsData.ssaoData.ssaoKernel}.subspan(0, constantsData.ssaoLimitSamples))
+      for (size_t i = 0; const auto& sample : std::span{constantsData.ssaoData.ssaoKernel}.subspan(
+                           0, constantsData.ssaoLimitSamples))
       {
+        const ImU32 colors[4] = {
+          IM_COL32(100, 255, 100, 255),
+          IM_COL32(255, 100, 100, 255),
+          IM_COL32(100, 100, 255, 255),
+          IM_COL32(255, 255, 100, 255)};
+        size_t group = (i / (constantsData.ssaoLimitSamples / size_t(ssaoTemporalAccumBacklog))) %
+          ARRCNT(colors);
+
         draw->AddCircleFilled(
           ImVec2{
             origin.x + size.x * (0.49f * sx(sample) + 0.5f),
             origin.y + size.y * (0.49f * sy(sample) + 0.5f)},
           0.01f * size.x,
-          IM_COL32(100, 255, 100, 255));
+          colors[group]);
+
+        ++i;
       }
 
       ImGui::End();
@@ -3082,6 +3091,8 @@ void WorldRenderer::setAllSpotLightsIntensity(float val)
 
 void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
 {
+#if 0
+  // Uniform with heat
   std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
   std::default_random_engine generator;
   for (uint32_t i = 0; i < out_samples.size(); ++i)
@@ -3090,8 +3101,6 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
       randomFloats(generator) * 2.f - 1.f,
       randomFloats(generator) * 2.f - 1.f,
       randomFloats(generator));
-    if (!ssaoKernelHemisphereOnly)
-      sample.z = sample.z * 2.f - 1.f;
     sample = glm::normalize(sample);
     sample *= randomFloats(generator);
     float scale = float(i) / float(out_samples.size());
@@ -3101,6 +3110,32 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
   }
   // Redistribute to break "heat" pattern
   std::shuffle(out_samples.begin(), out_samples.end(), generator);
+#else
+  // Spiral as in SAO, uniform z-angle dist
+  std::uniform_real_distribution<float> randomFloats(0.0, 1.f);
+  std::default_random_engine generator;
+  auto alphaFromI = [&](auto i) { return (float(i) + 0.5f) / float(out_samples.size()); };
+  float alphaNormalization = 1.f / alphaFromI(out_samples.size() - 1);
+  const float spiralRevolutionFactor = 1.3f;
+  for (uint32_t i = 0; i < out_samples.size(); ++i)
+  {
+    float alpha = alphaFromI(i);
+    float r = alpha * alphaNormalization;
+    float phiFlat = 2.f * M_PI * alpha * spiralRevolutionFactor;
+    float phiVert = 2.f * M_PI * randomFloats(generator);
+    float x = cosf(phiFlat) * cosf(phiVert);
+    float y = sinf(phiFlat) * cosf(phiVert);
+    float z = sinf(phiVert);
+
+    uint32_t interlacedIndex = (i % 4) * (out_samples.size() / 4) + (i / 4);
+    out_samples[interlacedIndex] = r * glm::vec4(x, y, z, 0.f);
+  }
+#endif
+  if (ssaoKernelHemisphereOnly)
+  {
+    for (auto& sample : out_samples)
+      sample.z = glm::abs(sample.z);
+  }
 }
 
 void WorldRenderer::generateSsaoKernelRotations(std::span<glm::vec4> out_rotations)

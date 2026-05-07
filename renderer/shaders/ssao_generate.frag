@@ -66,6 +66,11 @@ void main()
 
   const float fragDepth = length(reconstructedPos - viewParams.viewPos);
 
+  const float maxKernToFovy = 0.75f;
+  const float kernelScalingFactor =
+    min(fragDepth * maxKernToFovy / abs(viewParams.mProj[1][1]), 1.f);
+  const float rad = kernelScalingFactor * constants.ssaoRadius;
+
   vec3 baseVec = vec3(rot, 0.f);
   vec3 tangent = normalize(baseVec - normal * dot(baseVec, normal));
   vec3 bitangent = cross(normal, tangent);
@@ -83,7 +88,7 @@ void main()
   float totw = 0.f;
   for (uint i = frameId * samples; i < (frameId + 1) * samples; ++i)
   {
-    vec3 sampleWorldPos = reconstructedPos + constants.ssaoRadius * tbnTransform * constants.ssaoData.ssaoKernel[i].xyz;
+    vec3 sampleWorldPos = reconstructedPos + rad * tbnTransform * constants.ssaoData.ssaoKernel[i].xyz;
     vec4 sampleClipPosW = vpm * vec4(sampleWorldPos, 1.f);
     vec3 sampleClipPos = sampleClipPosW.xyz / sampleClipPosW.w;
     vec2 sampleTc = sampleClipPos.xy * 0.5f + 0.5f;
@@ -95,7 +100,7 @@ void main()
       float sampleWorldDepth = length(sampleWorldPos - viewParams.viewPos);
       float sampleGbufDepth = length(sampleGbufPos - viewParams.viewPos);
 
-      float rangeCutoff = smoothstep(0.f, 1.f, constants.ssaoRadius / abs(fragDepth - sampleGbufDepth));
+      float rangeCutoff = smoothstep(0.f, 1.f, rad / abs(fragDepth - sampleGbufDepth));
       occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
       totw += 1.f;
     }

@@ -360,8 +360,8 @@ private:
   uint32_t ssaoTotalLimitSamples = 64;
   float ssaoPower = 3.0f;
   uint32_t ssaoTemporalAccumBacklog = 4;
-  float ssaoEmaCoeff = 0.9f;
-  float ssaoDepthRejectionThreshold = 0.1f;
+  float ssaoEmaCoeff = 0.1f;
+  float ssaoDepthRejectionThreshold = 0.025f;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

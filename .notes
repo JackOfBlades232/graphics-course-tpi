@@ -1,6 +1,8 @@
 SSAO (temporal)
-- Read up more on temporal aspect of ssao and imlementations
-- Watch the lec
-- Try using obscurance function (from alchemy)
-- Try making a deterministic kernel spiralling outward (from SAO)
-- Try adding a band around depth for proper sampling (for this, the easiest solution is enforcing depth prepass for all)
+v Watch the lec
+v Try making a deterministic kernel spiralling outward (from SAO)
+v Try limiting screen-space ssao rad for closeups
+- Read up more on temporal aspect of ssao and imlementations (TAA post tail, gears prez, reproj paper)
+- Fix ghosting artifacts on screen edge
+- Try different depth rejection/clamping tech (foliage looks meh rn)
+- Try using obscurance function (from alchemy or similar, i e modulate on dist)
