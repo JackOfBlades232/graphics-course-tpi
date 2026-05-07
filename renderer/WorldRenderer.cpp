@@ -3089,12 +3089,14 @@ void WorldRenderer::setAllSpotLightsIntensity(float val)
     sceneMgr->lightsRW().spotLights[i].intensity = val;
 }
 
+using def_rng = std::linear_congruential_engine<uint64_t, 16807ul, 0ul, 2147483647ul>;
+
 void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
 {
 #if 0
   // Uniform with heat
   std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
-  std::default_random_engine generator;
+  def_rng generator;
   for (uint32_t i = 0; i < out_samples.size(); ++i)
   {
     glm::vec3 sample(
@@ -3113,7 +3115,7 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
 #else
   // Spiral as in SAO, uniform z-angle dist
   std::uniform_real_distribution<float> randomFloats(0.0, 1.f);
-  std::default_random_engine generator;
+  def_rng generator(1);
   auto alphaFromI = [&](auto i) { return (float(i) + 0.5f) / float(out_samples.size()); };
   float alphaNormalization = 1.f / alphaFromI(out_samples.size() - 1);
   const float spiralRevolutionFactor = 1.3f;
@@ -3141,7 +3143,7 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
 void WorldRenderer::generateSsaoKernelRotations(std::span<glm::vec4> out_rotations)
 {
   std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
-  std::default_random_engine generator;
+  def_rng generator(1);
   for (uint32_t i = 0; i < out_rotations.size(); ++i)
   {
     glm::vec4 rotvPair(
