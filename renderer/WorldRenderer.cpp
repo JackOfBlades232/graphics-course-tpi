@@ -926,6 +926,8 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.ssaoTemporalAccumBacklog = ssaoTemporalAccumBacklog;
     constantsData.ssaoEmaCoeff = ssaoEmaCoeff;
     constantsData.ssaoDepthRejectionThreshold = ssaoDepthRejectionThreshold;
+
+    constantsData.ssaoConservariveTemporalCaching = ssaoConservariveTemporalCaching;
   }
 
   mainViewParams = view_params_for_cam(
@@ -2480,8 +2482,8 @@ void WorldRenderer::drawGui()
 
         ImGui::Checkbox("SSAO kernel hemisphere only", &ssaoKernelHemisphereOnly);
 
-        constexpr const char* SSAO_SC_NAMES[] = {"4", "8", "16", "32", "64", "128"};
-        constexpr uint32_t SSAO_SC_VALUES[] = {4, 8, 16, 32, 64, 128};
+        constexpr const char* SSAO_SC_NAMES[] = {"8", "16", "32", "64", "128"};
+        constexpr uint32_t SSAO_SC_VALUES[] = {8, 16, 32, 64, 128};
         size_t curScId = size_t(
           std::find(std::begin(SSAO_SC_VALUES), std::end(SSAO_SC_VALUES), ssaoTotalLimitSamples) -
           std::begin(SSAO_SC_VALUES));
@@ -2502,8 +2504,8 @@ void WorldRenderer::drawGui()
           ImGui::EndCombo();
         }
 
-        constexpr const char* SSAO_TA_NAMES[] = {"1", "2", "4"};
-        constexpr uint32_t SSAO_TA_VALUES[] = {1, 2, 4};
+        constexpr const char* SSAO_TA_NAMES[] = {"1", "2", "4", "8"};
+        constexpr uint32_t SSAO_TA_VALUES[] = {1, 2, 4, 8};
         size_t curTaId = size_t(
           std::find(
             std::begin(SSAO_TA_VALUES), std::end(SSAO_TA_VALUES), ssaoTemporalAccumBacklog) -
@@ -2539,6 +2541,7 @@ void WorldRenderer::drawGui()
           ImGui::SliderFloat("SSAO ema coeff", &ssaoEmaCoeff, 0.f, 1.f);
           ImGui::SliderFloat(
             "SSAO depth rejection threshold", &ssaoDepthRejectionThreshold, 0.f, 1.f);
+          ImGui::Checkbox("SSAO conservative caching", &ssaoConservariveTemporalCaching);
         }
         ImGui::Checkbox("Show SSAO debug", &showSsaoKernelDebug);
       }
@@ -2790,11 +2793,16 @@ void WorldRenderer::drawGui()
       for (size_t i = 0; const auto& sample : std::span{constantsData.ssaoData.ssaoKernel}.subspan(
                            0, constantsData.ssaoLimitSamples))
       {
-        const ImU32 colors[4] = {
+        const ImU32 colors[8] = {
           IM_COL32(100, 255, 100, 255),
           IM_COL32(255, 100, 100, 255),
           IM_COL32(100, 100, 255, 255),
-          IM_COL32(255, 255, 100, 255)};
+          IM_COL32(255, 255, 100, 255),
+          IM_COL32(100, 255, 255, 255),
+          IM_COL32(255, 100, 255, 255),
+          IM_COL32(255, 255, 255, 255),
+          IM_COL32(100, 100, 100, 255)
+        };
         size_t group = (i / (constantsData.ssaoLimitSamples / size_t(ssaoTemporalAccumBacklog))) %
           ARRCNT(colors);
 
@@ -2979,6 +2987,7 @@ void WorldRenderer::loadDebugConfig()
   ssaoTemporalAccumBacklog = unwrap(reader.read<uint32_t>());
   ssaoEmaCoeff = unwrap(reader.read<float>());
   ssaoDepthRejectionThreshold = unwrap(reader.read<float>());
+  ssaoConservariveTemporalCaching = unwrap(reader.read<bool>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -3069,6 +3078,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(ssaoTemporalAccumBacklog));
   ETNA_VERIFY(writer.write(ssaoEmaCoeff));
   ETNA_VERIFY(writer.write(ssaoDepthRejectionThreshold));
+  ETNA_VERIFY(writer.write(ssaoConservariveTemporalCaching));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

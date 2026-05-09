@@ -73,7 +73,7 @@ struct Constants
   float ssaoEmaCoeff;
   float ssaoDepthRejectionThreshold;
 
-  float pad0_;
+  shader_uint ssaoConservariveTemporalCaching;
 
   shader_uint ssaoDoTemporalAccum;
 

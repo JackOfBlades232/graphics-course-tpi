@@ -362,6 +362,7 @@ private:
   uint32_t ssaoTemporalAccumBacklog = 4;
   float ssaoEmaCoeff = 0.1f;
   float ssaoDepthRejectionThreshold = 0.025f;
+  bool ssaoConservariveTemporalCaching = false;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

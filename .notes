@@ -1,8 +1,14 @@
+TODO: recover lists from shadows and them for history
+
 SSAO (temporal)
 v Watch the lec
 v Try making a deterministic kernel spiralling outward (from SAO)
 v Try limiting screen-space ssao rad for closeups
-- Read up more on temporal aspect of ssao and imlementations (TAA post tail, gears prez, reproj paper)
-- Fix ghosting artifacts on screen edge
+v Read up more on temporal aspect of ssao and imlementations (TAA post tail, gears prez, reproj paper)
+- Fix ghosting artifacts on screen edge (something better than conservative cache fill?)
+- Fix ghosting trails on object disocclusion (something better than conservative cache fill?)
 - Try different depth rejection/clamping tech (foliage looks meh rn)
+- Try adding an apron around the screen for more info -- now when geo enters screen, it adds occlusion data. Reprojection caching makes in smear worse.
 - Try using obscurance function (from alchemy or similar, i e modulate on dist)
+- Investigate influence of rotation texture shifts on ghosting and stuff -- is it meaningful?
+- Investigate filtering for cache & depth textures -- is it meaningful?

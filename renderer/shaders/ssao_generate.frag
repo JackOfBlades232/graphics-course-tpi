@@ -76,7 +76,8 @@ void main()
   vec3 bitangent = cross(normal, tangent);
   mat3 tbnTransform = mat3(tangent, bitangent, normal);
 
-  uint samples = min(constants.ssaoLimitSamples, SSAO_KERNEL_MAX_SIZE);
+  uint allSamples = min(constants.ssaoLimitSamples, SSAO_KERNEL_MAX_SIZE);
+  uint samples = allSamples;
   uint frameId = 0;
   if (constants.ssaoDoTemporalAccum != 0)
   {
@@ -84,9 +85,42 @@ void main()
     frameId = constants.frameNo % constants.ssaoTemporalAccumBacklog;
   }
 
+  float prevOcc = 0.f;
+  float prevOccW = 0.f;
+  if (constants.ssaoDoTemporalAccum != 0 && constants.ssaoForceDropHistory == 0 && constants.frameNo > 0)
+  {
+    vec4 prevUvz = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(reconstructedPos, 1.f); 
+    prevUvz /= prevUvz.w;
+    vec2 uv = prevUvz.xy * 0.5f + 0.5f;
+    if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
+    {
+      vec2 prevAoDepth = texture(prevFrameAo, uv).xy;
+
+      float ppViewDepth = length(reconstructedPos - viewParams.prevViewPos);
+
+      float disocclusionParam = abs(1.f - ppViewDepth / prevAoDepth.y);
+
+      if (disocclusionParam < constants.ssaoDepthRejectionThreshold)
+      {
+        prevOcc = prevAoDepth.x;
+        prevOccW = (1.f - constants.ssaoEmaCoeff);
+      }
+    }
+  }
+
+  uint firstSample = frameId * samples;
+  uint capSample = firstSample + samples;
+
+  // If discarding cache, in conservative mode dynamically accelerate conversion
+  if (constants.ssaoConservariveTemporalCaching != 0 && prevOccW < SHADER_EPSILON)
+  {
+    firstSample = 0;
+    capSample = allSamples;
+  }
+
   float occ = 0.f;
   float totw = 0.f;
-  for (uint i = frameId * samples; i < (frameId + 1) * samples; ++i)
+  for (uint i = firstSample; i < capSample; ++i)
   {
     vec3 sampleWorldPos = reconstructedPos + rad * tbnTransform * constants.ssaoData.ssaoKernel[i].xyz;
     vec4 sampleClipPosW = vpm * vec4(sampleWorldPos, 1.f);
@@ -105,25 +139,8 @@ void main()
       totw += 1.f;
     }
   }
+
   occ = 1.f - (totw == 0.f ? 0.f : occ / totw);
-  if (constants.ssaoDoTemporalAccum != 0 && constants.ssaoForceDropHistory == 0 && constants.frameNo > 0)
-  {
-    vec4 prevUvz = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(reconstructedPos, 1.f); 
-    prevUvz /= prevUvz.w;
-    vec2 uv = prevUvz.xy * 0.5f + 0.5f;
-    if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
-    {
-      vec2 prevAoDepth = texture(prevFrameAo, uv).xy;
-
-      float ppViewDepth = length(reconstructedPos - viewParams.prevViewPos);
-
-      float disocclusionParam = abs(1.f - ppViewDepth / prevAoDepth.y);
-
-      if (disocclusionParam < constants.ssaoDepthRejectionThreshold)
-      {
-        occ = constants.ssaoEmaCoeff * occ + (1.f - constants.ssaoEmaCoeff) * prevAoDepth.x;
-      }
-    }
-  }
+  occ = occ * (1.f - prevOccW) + prevOcc * prevOccW;
   out_ao = vec2(occ, fragDepth);
 }
