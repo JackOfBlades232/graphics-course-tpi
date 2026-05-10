@@ -202,6 +202,12 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
   defaultSampler = etna::Sampler(
     etna::Sampler::CreateInfo{
       .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
+  defaultMirrorSampler = etna::Sampler(
+    etna::Sampler::CreateInfo{
+      .addressMode = vk::SamplerAddressMode::eMirroredRepeat,
+      .name = "default_mirror_sampler",
+      .minLod = 0.f,
+      .maxLod = VK_LOD_CLAMP_NONE});
 
   constants.emplace(wc, [](size_t) {
     return create_buffer(
@@ -248,14 +254,14 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "ssao_buffer0",
-      .format = vk::Format::eR32G32Sfloat,
+      .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
   createManagedImage(
     ssaoBuffers[1],
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "ssao_buffer1",
-      .format = vk::Format::eR32G32Sfloat,
+      .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
   createManagedImage(
     ssaoBlurredBuffer,
@@ -784,7 +790,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   ssaoGen = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "ssao_generate",
     RENDERER_SHADERS_ROOT "ssao_generate.frag.spv",
-    vk::Format::eR32G32Sfloat,
+    vk::Format::eR32G32B32A32Sfloat,
     {resolution.x, resolution.y}});
   ssaoBlur = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "ssao_blur",
@@ -797,6 +803,15 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   for (auto& component : rcomponents)
     component->setupPipelines(swapchain_format, debugDrawers);
+}
+
+void WorldRenderer::onShadersReloaded()
+{
+  queueClipmapInvalidation();
+  needRegenSsaoKernel = true;
+  pointLightsSettingsDirty = true;
+  spotLightsSettingsDirty = true;
+  directionalLightsSettingsDirty = true;
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -2049,7 +2064,6 @@ void WorldRenderer::renderWorld(
            {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}}});
     }
 
-
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpass);
 
@@ -2123,7 +2137,7 @@ void WorldRenderer::renderWorld(
            etna::Binding{
              2,
              getPrevSsaoBuffer().genBinding(
-               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+               defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
            etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});
@@ -2142,7 +2156,7 @@ void WorldRenderer::renderWorld(
           {etna::Binding{
              0,
              getCurSsaoBuffer().genBinding(
-               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+               defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
            etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});
@@ -2801,8 +2815,7 @@ void WorldRenderer::drawGui()
           IM_COL32(100, 255, 255, 255),
           IM_COL32(255, 100, 255, 255),
           IM_COL32(255, 255, 255, 255),
-          IM_COL32(100, 100, 100, 255)
-        };
+          IM_COL32(100, 100, 100, 255)};
         size_t group = (i / (constantsData.ssaoLimitSamples / size_t(ssaoTemporalAccumBacklog))) %
           ARRCNT(colors);
 

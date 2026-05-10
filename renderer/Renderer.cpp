@@ -108,6 +108,7 @@ void Renderer::debugInput(const Keyboard& kb, const Mouse& ms, bool mouse_captur
     {
       ETNA_CHECK_VK_RESULT(etna::get_context().getDevice().waitIdle());
       etna::reload_shaders();
+      worldRenderer->onShadersReloaded();
       spdlog::info("Successfully reloaded shaders!");
     }
   }

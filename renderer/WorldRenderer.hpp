@@ -48,6 +48,7 @@ public:
   void loadShaders();
   void allocateResources(glm::uvec2 swapchain_resolution);
   void setupPipelines(vk::Format swapchain_format);
+  void onShadersReloaded();
 
   void debugInput(const Keyboard& kb, const Mouse& ms, bool mouse_captured);
   void update(const FramePacket& packet);
@@ -263,8 +264,8 @@ private:
   std::optional<VegetationRenderingData> vegetation{};
   std::optional<SkyboxRenderingData> skybox{};
 
-  // @TODO: unify with one in scene manager
   etna::Sampler defaultSampler;
+  etna::Sampler defaultMirrorSampler;
 
   etna::Buffer stubUniBuffer;
   etna::Buffer stubStorageBuffer;
