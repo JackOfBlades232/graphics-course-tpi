@@ -1,4 +1,25 @@
-TODO: recover lists from shadows and them for history
+CSM
+v Prepare the frustum split
+v Calculate view space viewports
+v Cpu matrix calculation
+v Gpu matrix calculation
+v Render cascades cpu side
+v Sample with matrix in resolve
+v PCF
+v Optimize sm rendering with dirty lights
+v Stabilize visuals
+  v Tightening depth bounds from culling
+  v Fixed cascade pix size
+  v Artifacts
+  v Reverse Z to help zfighting
+- Soft shadows, perspective aliasing, far shadows
+  v Try hardware-style pcf
+  v Try PCF blending for cascades
+  v Try separate shadow pass with downsample + upsample for blur
+  - VSM option for far cascade (last-inf)
+  - ESM option for far cascade
+  - VSM option for all
+  - ESM option for all
 
 SSAO (temporal)
 v Watch the lec
