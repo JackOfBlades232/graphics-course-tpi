@@ -35,3 +35,4 @@ v Try finding a fix for ghosting artifacts on screen edge & disocc without singl
 - Investigate filtering for cache & depth textures -- is it meaningful?
 - Try history neighbourhood clamping, if still some merit to it
 - Optimize code and data (pack ssao buffer, reduce sfu-s/tex fetches, nothing crazy)
+- Try extending conservative cache mode -- keep oversampling for a bunch of low history sizes, not only the first

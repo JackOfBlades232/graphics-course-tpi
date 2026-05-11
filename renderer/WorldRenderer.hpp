@@ -9,6 +9,7 @@
 
 #include <render_utils/PostfxRenderer.hpp>
 #include <render_utils/BitonicSort.hpp>
+#include <render_utils/DoubleBuffer.hpp>
 #include <render_utils/BboxRenderer.hpp>
 #include <render_utils/QuadRenderer.hpp>
 
@@ -290,19 +291,12 @@ private:
   glm::uvec2 resolution;
   const Config& cfg;
 
-  etna::Image ssaoBuffers[2];
-  int curSsaoBuffer = 0;
-
-  int prevSsaoBufferId() { return 1 & ~curSsaoBuffer; }
-  void switchSsaoFrame() { curSsaoBuffer = prevSsaoBufferId(); }
-  etna::Image &getCurSsaoBuffer() { return ssaoBuffers[curSsaoBuffer]; }
-  etna::Image &getPrevSsaoBuffer() { return ssaoBuffers[prevSsaoBufferId()]; }
-  const etna::Image &getCurSsaoBuffer() const { return ssaoBuffers[curSsaoBuffer]; }
-  const etna::Image &getPrevSsaoBuffer() const { return ssaoBuffers[curSsaoBuffer]; }
-
+  DoubleBufferedImage ssaoBuffer;
   etna::Image ssaoBlurredBuffer;
   std::unique_ptr<PostfxRenderer> ssaoGen{};
   std::unique_ptr<PostfxRenderer> ssaoBlur{};
+
+  DoubleBufferedImage motionVectors;
 
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};

@@ -133,6 +133,8 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   : sceneMgr{std::make_unique<SceneManager>(wc)}
   , wc{wc}
   , cfg{config}
+  , ssaoBuffer{DoubleBufferedImage::CreateInfo{&wc}}
+  , motionVectors{DoubleBufferedImage::CreateInfo{&wc}}
 {
   registerViewContextManager();
 
@@ -199,6 +201,21 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
+  createManagedImage(
+    motionVectors.curBuf(),
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "motion_vectors0",
+      .format = vk::Format::eR32G32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    motionVectors.prevBuf(),
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "motion_vectors1",
+      .format = vk::Format::eR32G32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+
   defaultSampler = etna::Sampler(
     etna::Sampler::CreateInfo{
       .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
@@ -250,14 +267,14 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .name = "stub_storage"});
 
   createManagedImage(
-    ssaoBuffers[0],
+    ssaoBuffer.curBuf(),
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "ssao_buffer0",
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
   createManagedImage(
-    ssaoBuffers[1],
+    ssaoBuffer.prevBuf(),
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "ssao_buffer1",
@@ -865,8 +882,6 @@ void WorldRenderer::update(const FramePacket& packet)
       }
     }
   }
-
-  switchSsaoFrame();
 
   if (needRegenSsaoKernel)
   {
@@ -2136,7 +2151,7 @@ void WorldRenderer::renderWorld(
                defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{
              2,
-             getPrevSsaoBuffer().genBinding(
+             ssaoBuffer.prevBuf().genBinding(
                defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
@@ -2145,7 +2160,7 @@ void WorldRenderer::renderWorld(
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics, ssaoGen->pipelineLayout(), 0, {set.getVkSet()}, {});
 
-        ssaoGen->render(cmd_buf, getCurSsaoBuffer().get(), getCurSsaoBuffer().getView({}));
+        ssaoGen->render(cmd_buf, ssaoBuffer.curBuf().get(), ssaoBuffer.curBuf().getView({}));
       }
 
       {
@@ -2155,7 +2170,7 @@ void WorldRenderer::renderWorld(
           cmd_buf,
           {etna::Binding{
              0,
-             getCurSsaoBuffer().genBinding(
+             ssaoBuffer.curBuf().genBinding(
                defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
