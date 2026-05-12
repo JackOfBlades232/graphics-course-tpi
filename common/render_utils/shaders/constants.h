@@ -82,6 +82,9 @@ struct Constants
 
   shader_uint frameNo;
 
+  shader_vec2 mainTargetResolution;
+  float pad0_, pad1_;
+
   SsaoConstData ssaoData;
 };
 

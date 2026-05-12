@@ -13,6 +13,9 @@ layout(binding = 1, set = 0) uniform sampler2D gbufDepth;
 
 layout(binding = 2, set = 0) uniform sampler2D prevFrameAo;
 
+layout(binding = 3, set = 0) uniform sampler2D motionVectors;
+layout(binding = 4, set = 0) uniform sampler2D prevMotionVectors;
+
 layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
@@ -91,9 +94,8 @@ void main()
   float prevOccW = 0.f;
   if (constants.ssaoDoTemporalAccum != 0 && constants.ssaoForceDropHistory == 0 && constants.frameNo > 0)
   {
-    vec4 prevUvz = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(reconstructedPos, 1.f); 
-    prevUvz /= prevUvz.w;
-    vec2 uv = prevUvz.xy * 0.5f + 0.5f;
+    vec2 motion = texture(motionVectors, surf.texCoord).xy;
+    vec2 uv = surf.texCoord - motion;
     if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
       vec3 prevAoDepthHl = texture(prevFrameAo, uv).xyz;

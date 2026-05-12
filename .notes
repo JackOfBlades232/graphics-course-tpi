@@ -1,3 +1,5 @@
+- Fix buch-o-artifacts on linux -- directional shadows, grass reprojection
+
 CSM
 v Prepare the frustum split
 v Calculate view space viewports
@@ -30,9 +32,10 @@ v Fix ghosting artifacts on screen edge & disocc any way possible (done via full
 x Try adding an apron around the screen for more info -- now when geo enters screen, it adds occlusion data.
 x Try resampling from inside the screen instead of sample discard
 v Try finding a fix for ghosting artifacts on screen edge & disocc without single frame load spike -- BF3 counter-capped coeff for rapid conv
-- Try adding velocity texture and using it with motion vectors to gauge disocclusion
+v Try adding velocity texture and using it with motion vectors to gauge disocclusion
 - Try using obscurance function (from alchemy or similar, i e modulate on dist)
 - Investigate filtering for cache & depth textures -- is it meaningful?
 - Try history neighbourhood clamping, if still some merit to it
-- Optimize code and data (pack ssao buffer, reduce sfu-s/tex fetches, nothing crazy)
+- Try velocity diff rejection instead of depth rejection
 - Try extending conservative cache mode -- keep oversampling for a bunch of low history sizes, not only the first
+- Optimize code and data (pack ssao buffer, reduce sfu-s/tex fetches, nothing crazy)

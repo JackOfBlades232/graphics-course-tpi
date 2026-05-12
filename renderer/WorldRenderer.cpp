@@ -652,6 +652,11 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
                  .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                    vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
                },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
              },
            .logicOp = vk::LogicOp::eSet},
         .fragmentShaderOutput =
@@ -660,7 +665,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
             {vk::Format::eR32G32B32A32Sfloat,
              vk::Format::eR32G32B32A32Sfloat,
              vk::Format::eR32G32B32A32Sfloat,
-             vk::Format::eR32G32B32A32Sfloat},
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32Sfloat},
             .depthAttachmentFormat = vk::Format::eD32Sfloat,
           },
       };
@@ -699,6 +705,11 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
                  .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                    vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
                },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
              },
            .logicOp = vk::LogicOp::eSet},
         .fragmentShaderOutput =
@@ -707,7 +718,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
             {vk::Format::eR32G32B32A32Sfloat,
              vk::Format::eR32G32B32A32Sfloat,
              vk::Format::eR32G32B32A32Sfloat,
-             vk::Format::eR32G32B32A32Sfloat},
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32Sfloat},
             .depthAttachmentFormat = vk::Format::eD32Sfloat,
           },
       };
@@ -744,6 +756,11 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
                  .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                    vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
                },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
              },
            .logicOp = vk::LogicOp::eSet},
         .fragmentShaderOutput =
@@ -752,7 +769,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
             {vk::Format::eR32G32B32A32Sfloat,
              vk::Format::eR32G32B32A32Sfloat,
              vk::Format::eR32G32B32A32Sfloat,
-             vk::Format::eR32G32B32A32Sfloat},
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32Sfloat},
             .depthAttachmentFormat = vk::Format::eD32Sfloat,
           },
       };
@@ -940,6 +958,7 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.dt = dt;
     constantsData.time = packet.currentTime;
     constantsData.frameNo = shader_uint(frame);
+    constantsData.mainTargetResolution = resolution;
 
     constantsData.useSsao = useSsao;
 
@@ -2093,10 +2112,13 @@ void WorldRenderer::renderWorld(
          .vparams = mainViewParams,
          .rtargetInfo =
            {{{0, 0}, {resolution.x, resolution.y}},
-            {{.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
-             {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
-             {.image = gbufNormal.get(), .view = gbufNormal.getView({})},
-             {.image = gbufTransmission.get(), .view = gbufTransmission.getView({})}},
+            {
+              {.image = gbufAlbedo.get(), .view = gbufAlbedo.getView({})},
+              {.image = gbufMaterial.get(), .view = gbufMaterial.getView({})},
+              {.image = gbufNormal.get(), .view = gbufNormal.getView({})},
+              {.image = gbufTransmission.get(), .view = gbufTransmission.getView({})},
+              {.image = motionVectors.curBuf().get(), .view = motionVectors.curBuf().getView({})},
+            },
             {.image = mainViewDepth.get(),
              .view = mainViewDepth.getView({}),
              .loadOp = zPrepass ? vk::AttachmentLoadOp::eLoad : vk::AttachmentLoadOp::eClear}},
@@ -2126,6 +2148,9 @@ void WorldRenderer::renderWorld(
               .loadOp = vk::AttachmentLoadOp::eLoad},
              {.image = gbufTransmission.get(),
               .view = gbufTransmission.getView({}),
+              .loadOp = vk::AttachmentLoadOp::eLoad},
+             {.image = motionVectors.curBuf().get(),
+              .view = motionVectors.curBuf().getView({}),
               .loadOp = vk::AttachmentLoadOp::eLoad}},
             {.image = mainViewDepth.get(),
              .view = mainViewDepth.getView({}),
@@ -2152,6 +2177,14 @@ void WorldRenderer::renderWorld(
            etna::Binding{
              2,
              ssaoBuffer.prevBuf().genBinding(
+               defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{
+             3,
+             motionVectors.curBuf().genBinding(
+               defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{
+             4,
+             motionVectors.prevBuf().genBinding(
                defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},

@@ -19,6 +19,8 @@ struct GrassInstance
   shader_uint idAndSf;
   shader_vec3 windOffset;
   shader_uint dirQuantized;
+  shader_vec3 prevWindOffset;
+  shader_uint pad0_;
 };
 
 #define GRASS_INST_GET_ID(inst_) ((inst_).idAndSf >> GRASS_SF_BITS)

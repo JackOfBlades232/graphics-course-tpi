@@ -76,6 +76,15 @@ vec2 random_dir_notrig(vec2 seed)
   return normalize(2.f * vec2(x, y) - 1.f);
 }
 
+vec3 calc_wind_pos_offset(float t, float relAmp, float strengthPeriod, vec3 grassPos, float strengthFalloff, vec2 wvn, float shrinkFactor)
+{
+  float strengthOscillation = relAmp * wind_oscillator(strengthPeriod * t, grassPos.xz);
+
+  float windInfluenceAmt = constants.windStrength * (1.f + strengthOscillation) * strengthFalloff;
+  vec2 windInfluence = wvn * windInfluenceAmt;
+  return shrinkFactor * vec3(windInfluence.x, -0.5f * (windInfluenceAmt * windInfluenceAmt), windInfluence.y);
+}
+
 void main(void)
 {
   const uint vegTypeId = terrainSource.details[params.detailId].vegetationId;
@@ -144,6 +153,7 @@ void main(void)
     {
       vec2 windVec = grassPos.xz - constants.windOrigin;
       float dist = length(windVec);
+      vec2 wvn = windVec / dist;
 
       // @TODO: settable
       const float lambda = 0.5f;
@@ -154,14 +164,8 @@ void main(void)
       float strengthFalloff = lambda + (1.f - lambda) / (1.f + dist);
       float strengthPeriod = pscale * (plambda + (1.f - plambda) / (1.f + dist));
 
-      // @TODO: more sine waves?
-      float strengthOscillation = relAmp * wind_oscillator(strengthPeriod * constants.time, grassPos.xz);
-
-      float windInfluenceAmt = constants.windStrength * (1.f + strengthOscillation) * strengthFalloff;
-      vec2 windInfluence = (windVec / dist) * windInfluenceAmt;
-
-      vec3 posOffset = shrinkFactor * vec3(windInfluence.x, -0.5f * (windInfluenceAmt * windInfluenceAmt), windInfluence.y);
-      culledInstances[instId].windOffset = posOffset;
+      culledInstances[instId].windOffset = calc_wind_pos_offset(constants.time, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor);
+      culledInstances[instId].prevWindOffset = calc_wind_pos_offset(constants.time - constants.dt, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor);
     }
   }
 }

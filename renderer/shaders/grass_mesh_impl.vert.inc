@@ -33,6 +33,7 @@ layout(location = 0) out VS_OUT
 {
 #if GBUF_PASS
   vec3 wPos;
+  vec3 wPrevPos;
 #endif
   vec2 texCoord;
   flat uint matId;
@@ -84,13 +85,18 @@ void main(void)
   else
     pos.y += (1.f - GRASS_SANK_PORTION) * rule.height * shrinkFactor; 
 
+  vec3 prevPos = pos;
   if (!isBottomVertex)
+  {
     pos += inst.windOffset;
+    prevPos += inst.prevWindOffset;
+  }
 
   vec2 tc = vec2(isFarVertex ? 1.f : 0.f, isBottomVertex ? 1.f : 0.f);
 
 #if GBUF_PASS
   vOut.wPos     = pos;
+  vOut.wPrevPos = prevPos;
 #endif
   vOut.texCoord = tc;
   vOut.matId    = rule.matId;
