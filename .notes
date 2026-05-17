@@ -38,4 +38,3 @@ x Try history neighbourhood clamping, if still some merit to it -- too much rein
 x Try velocity diff rejection instead of depth rejection -- a weird mix of ghosting and jittering at the same time, not sure why.
 x Try adding accelerated convergence when valid sample count changes -- couldn't do quickly, maybe the problem is different even. Can't see in final frame anyways.
 v Try extending conservative cache mode, keep oversampling for a bunch of low history sizes, not only the first
-- Optimize code and data (pack ssao buffer, reduce sfu-s/tex fetches, nothing crazy)

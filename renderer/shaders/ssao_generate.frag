@@ -33,14 +33,6 @@ layout(location = 0 ) in VS_OUT
   vec2 texCoord;
 } surf;
 
-// @TODO: dedup, optimize
-vec3 depth_and_tc_to_pos_with_mat(float depth, vec2 tc, mat4 ivpm)
-{
-  const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
-  const vec4 posHom = ivpm * cameraToScreen;
-  return posHom.xyz / posHom.w;
-}
-
 void main()
 {
   const float depth = texture(gbufDepth, surf.texCoord).x;
@@ -134,6 +126,8 @@ void main()
       capSample = firstSample + allSamples / 4;
     }
   }
+
+  // @TODO: optimize
 
   float occ = 0.f;
   for (uint i = firstSample; i < capSample; ++i)

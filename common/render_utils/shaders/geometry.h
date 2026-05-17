@@ -193,6 +193,8 @@ mat4 calc_prev_adjusted_viewproj_mat(in ViewParams params, in ViewData data)
   return adjPm * params.mPrevView;
 }
 
+// @TODO: fix, seems botched
+
 float linearize_z(float z, in ViewParams params, in ViewData data)
 {
   vec2 nf = get_corrected_depth_bounds(params, data, false);
@@ -213,6 +215,14 @@ float linearize_prev_z(float z, in ViewParams params, in ViewData data)
     return (f * n) / (n - z * (n - f));
   else
     return (f * n) / (f - z * (f - n));
+}
+
+// @TODO: optimize
+vec3 depth_and_tc_to_pos_with_mat(float depth, vec2 tc, mat4 ivpm)
+{
+  const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
+  const vec4 posHom = ivpm * cameraToScreen;
+  return posHom.xyz / posHom.w;
 }
 
 #endif
