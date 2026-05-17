@@ -29,13 +29,13 @@ v Try making a deterministic kernel spiralling outward (from SAO)
 v Try limiting screen-space ssao rad for closeups
 v Read up more on temporal aspect of ssao and imlementations (TAA post tail, gears prez, reproj paper)
 v Fix ghosting artifacts on screen edge & disocc any way possible (done via full resample on history discard)
-x Try adding an apron around the screen for more info -- now when geo enters screen, it adds occlusion data.
-x Try resampling from inside the screen instead of sample discard
+x Try adding an apron around the screen for more info -- this is not the common way, can be worked around.
+x Try resampling from inside the screen instead of sample discard -- still seeing ghosts.
 v Try finding a fix for ghosting artifacts on screen edge & disocc without single frame load spike -- BF3 counter-capped coeff for rapid conv
 v Try adding velocity texture and using it with motion vectors to gauge disocclusion
-- Try using obscurance function (from alchemy or similar, i e modulate on dist)
-- Investigate filtering for cache & depth textures -- is it meaningful?
-- Try history neighbourhood clamping, if still some merit to it
-- Try velocity diff rejection instead of depth rejection
-- Try extending conservative cache mode -- keep oversampling for a bunch of low history sizes, not only the first
+v Investigate filtering for cache & depth textures, is it meaningful? -- not really here, we are ok with temporal _filtering_, we don't need much sharpness (except depth aware, which is dealt w/ by disocc).
+x Try history neighbourhood clamping, if still some merit to it -- too much reintroduced jitter.
+x Try velocity diff rejection instead of depth rejection -- a weird mix of ghosting and jittering at the same time, not sure why.
+x Try adding accelerated convergence when valid sample count changes -- couldn't do quickly, maybe the problem is different even. Can't see in final frame anyways.
+v Try extending conservative cache mode, keep oversampling for a bunch of low history sizes, not only the first
 - Optimize code and data (pack ssao buffer, reduce sfu-s/tex fetches, nothing crazy)

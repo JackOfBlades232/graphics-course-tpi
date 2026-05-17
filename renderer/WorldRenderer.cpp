@@ -2182,10 +2182,6 @@ void WorldRenderer::renderWorld(
              3,
              motionVectors.curBuf().genBinding(
                defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{
-             4,
-             motionVectors.prevBuf().genBinding(
-               defaultMirrorSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
            etna::Binding{10, mainViewContext->viewDataBuf.genBinding()}});

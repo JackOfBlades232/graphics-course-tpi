@@ -14,7 +14,6 @@ layout(binding = 1, set = 0) uniform sampler2D gbufDepth;
 layout(binding = 2, set = 0) uniform sampler2D prevFrameAo;
 
 layout(binding = 3, set = 0) uniform sampler2D motionVectors;
-layout(binding = 4, set = 0) uniform sampler2D prevMotionVectors;
 
 layout(binding = 8, set = 0) uniform constants_t
 {
@@ -88,7 +87,7 @@ void main()
     frameId = constants.frameNo % constants.ssaoTemporalAccumBacklog;
   }
 
-  uint validHistoryLength = 0;
+  uint validHistoryLength = 1;
 
   float prevOcc = 0.f;
   float prevOccW = 0.f;
@@ -117,14 +116,26 @@ void main()
   uint capSample = firstSample + samples;
 
   // If discarding cache, in conservative mode dynamically accelerate conversion
-  if (constants.ssaoConservariveTemporalCaching != 0 && prevOccW < SHADER_EPSILON)
+  if (constants.ssaoDoTemporalAccum != 0 && constants.ssaoConservariveTemporalCaching != 0)
   {
-    firstSample = 0;
-    capSample = allSamples;
+    if (validHistoryLength < 2)
+    {
+      firstSample = 0;
+      capSample = allSamples;
+    }
+    else if (constants.ssaoTemporalAccumBacklog > 2 && validHistoryLength < 4)
+    {
+      firstSample = validHistoryLength - 2;
+      capSample = firstSample + allSamples / 2;
+    }
+    else if (constants.ssaoTemporalAccumBacklog > 4 && validHistoryLength < 8)
+    {
+      firstSample = validHistoryLength - 4;
+      capSample = firstSample + allSamples / 4;
+    }
   }
 
   float occ = 0.f;
-  float totw = 0.f;
   for (uint i = firstSample; i < capSample; ++i)
   {
     vec3 sampleWorldPos = reconstructedPos + rad * tbnTransform * constants.ssaoData.ssaoKernel[i].xyz;
@@ -141,15 +152,10 @@ void main()
 
       float rangeCutoff = smoothstep(0.f, 1.f, rad / abs(fragDepth - sampleGbufDepth));
       occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
-      totw += 1.f;
-    }
-    else
-    {
-      totw += 0.5f;
     }
   }
 
-  occ = 1.f - (totw == 0.f ? 0.f : occ / totw);
+  occ = 1.f - occ / float(capSample - firstSample);
   occ = occ * (1.f - prevOccW) + prevOcc * prevOccW;
   out_ao = vec3(occ, fragDepth, float(validHistoryLength));
 }
