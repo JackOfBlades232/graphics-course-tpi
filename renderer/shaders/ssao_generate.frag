@@ -33,9 +33,19 @@ layout(location = 0 ) in VS_OUT
   vec2 texCoord;
 } surf;
 
+float recover_view_dist(
+  vec2 ndcuv, float z, vec2 invaspect,
+  in ViewParams params, in ViewData data)
+{
+  float linz = linearize_z(z, params, data);
+  vec2 ray = ndcuv * invaspect;
+  float raylen = sqrt(dot(ray, ray) + 1.f);
+  return raylen * linz;
+}
+
 void main()
 {
-  const float depth = texture(gbufDepth, surf.texCoord).x;
+  const float depth = max(texture(gbufDepth, surf.texCoord).x, 0.f);
   if (depth <= 0.f)
   {
     out_ao = vec3(1.f, depth, 0.f);
@@ -51,11 +61,13 @@ void main()
   const vec4 rr = constants.ssaoData.ssaoKernelRotations[v4coord];
   const vec2 rot = comp == 0 ? rr.xy : rr.zw;
 
+  const vec2 invaspect = vec2(1.f / viewParams.mProj[0][0], 1.f / viewParams.mProj[1][1]);
+
   // piggy
   const mat4 vpm = calc_adjusted_viewproj_mat(viewParams, viewData);
   const mat4 ivpm = inverse(vpm);
 
-  const vec3 reconstructedPos = depth_and_tc_to_pos_with_mat(max(depth, 0.f), surf.texCoord, ivpm);
+  const vec3 reconstructedPos = depth_and_tc_to_pos_with_mat(depth, surf.texCoord, ivpm);
   const vec3 normal = texture(gbufNormal, surf.texCoord).xyz;
 
   const float fragDepth = length(reconstructedPos - viewParams.viewPos);
@@ -127,8 +139,6 @@ void main()
     }
   }
 
-  // @TODO: optimize
-
   float occ = 0.f;
   for (uint i = firstSample; i < capSample; ++i)
   {
@@ -139,10 +149,10 @@ void main()
     if (sampleTc.x >= 0.f && sampleTc.x <= 1.f && sampleTc.y >= 0.f && sampleTc.y <= 1.f)
     {
       float sampleDepth = texture(gbufDepth, sampleTc).x;
-      vec3 sampleGbufPos = depth_and_tc_to_pos_with_mat(max(sampleDepth, 0.f), sampleTc, ivpm);
 
       float sampleWorldDepth = length(sampleWorldPos - viewParams.viewPos);
-      float sampleGbufDepth = length(sampleGbufPos - viewParams.viewPos);
+      float sampleGbufDepth = recover_view_dist(
+        sampleClipPos.xy, sampleDepth, invaspect, viewParams, viewData);
 
       float rangeCutoff = smoothstep(0.f, 1.f, rad / abs(fragDepth - sampleGbufDepth));
       occ += (sampleWorldDepth >= sampleGbufDepth + constants.ssaoBias ? 1.f : 0.f) * rangeCutoff;
