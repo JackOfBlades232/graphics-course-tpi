@@ -38,3 +38,15 @@ x Try history neighbourhood clamping, if still some merit to it -- too much rein
 x Try velocity diff rejection instead of depth rejection -- a weird mix of ghosting and jittering at the same time, not sure why.
 x Try adding accelerated convergence when valid sample count changes -- couldn't do quickly, maybe the problem is different even. Can't see in final frame anyways.
 v Try extending conservative cache mode, keep oversampling for a bunch of low history sizes, not only the first
+
+AA
+- FXAAv1
+  - Make srgb encode conditional in tonemapping (macro from constants to determine whether this stage should encode)
+  - Create AA render component slot and settings 
+  - Add fxaa v1 as a fullscreen pass
+  - Implement edge algo with linear search (qual 3)
+  - Add subpixel aa via blend with lowpass
+  - Try both srgb blends and linear blends with stgb luma
+- FXAAv3.11
+- TAA
+
