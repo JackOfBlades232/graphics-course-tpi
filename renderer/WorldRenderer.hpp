@@ -5,6 +5,7 @@
 
 #include <render_components/IComponent.hpp>
 #include <render_components/ITonemapper.hpp>
+#include <render_components/IAntialiaser.hpp>
 #include <render_components/DebugDrawer.hpp>
 
 #include <render_utils/PostfxRenderer.hpp>
@@ -187,6 +188,19 @@ private:
   static constexpr std::array<std::string_view, TONEMAPPING_TECHNIQUE_COUNT>
     TONEMAPPING_TECHNIQUE_NAMES = {"Histogram equalization", "Reinhard", "ACES"};
 
+  enum class AATechnique
+  {
+    FXAA = 0,
+    FXAA311,
+    TAA,
+
+    COUNT
+  };
+  static constexpr size_t AA_TECHNIQUE_COUNT = size_t(TonemappingTechnique::COUNT);
+
+  static constexpr std::array<std::string_view, AA_TECHNIQUE_COUNT> AA_TECHNIQUE_NAMES = {
+    "FXAA 1.0", "FXAA 3.11", "TAA"};
+
   static constexpr size_t SHADOW_TECHNIQUE_COUNT = size_t(ShadowTechnique::COUNT);
 
   static constexpr std::array<std::string_view, SHADOW_TECHNIQUE_COUNT> SHADOW_TECHNIQUE_NAMES = {
@@ -238,8 +252,10 @@ private:
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
 
   std::array<ITonemapper*, TONEMAPPING_TECHNIQUE_COUNT> tonemapperComps{};
+  std::array<IAntialiaser*, AA_TECHNIQUE_COUNT> aaComps{};
 
   etna::Image hdrTarget;
+  etna::Image ldrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image gbufTransmission; // @SPEED piggy
   etna::Image mainViewDepth;
@@ -358,6 +374,9 @@ private:
   float ssaoEmaCoeff = 0.1f;
   float ssaoDepthRejectionThreshold = 0.025f;
   bool ssaoConservariveTemporalCaching = false;
+  AATechnique currentAATechnique = AATechnique::FXAA;
+  bool useAA = true;
+  bool fxaaAntialiasInSrgb = true;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 
@@ -395,6 +414,14 @@ private:
     auto tonemapper = std::make_unique<T>();
     tonemapperComps[size_t(technique)] = tonemapper.get();
     rcomponents.emplace_back(std::move(tonemapper));
+  }
+
+  template <std::derived_from<IAntialiaser> T>
+  void registerAntialiaser(AATechnique technique)
+  {
+    auto antialiaser = std::make_unique<T>();
+    aaComps[size_t(technique)] = antialiaser.get();
+    rcomponents.emplace_back(std::move(antialiaser));
   }
 
   void queueClipmapInvalidation()

@@ -13,6 +13,8 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
+#include "tonemap.frag.inc"
+
 layout(location = 0 ) in VS_OUT
 {
   vec2 texCoord;
@@ -42,6 +44,6 @@ void main(void)
   else
     ldrColor = clamp(hdrColor.xyz, 0.f, 1.f);
 
-  out_fragColor = vec4(pow(ldrColor, vec3(1.f/2.2f)), 1.f);
+  out_fragColor = vec4(ENCODE_TONEMAP_RESULT(ldrColor), 1.f);
 }
 

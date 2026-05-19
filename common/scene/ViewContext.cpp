@@ -267,7 +267,7 @@ void ViewContextManager::cullForView(
            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
          .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader |
            vk::PipelineStageFlagBits2::eTessellationEvaluationShader |
-           vk::PipelineStageFlagBits2::eComputeShader,
+           vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader,
          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
          .buffer = ctx.viewDataBuf.get(),
          .size = sizeof(ViewData)}});
@@ -296,7 +296,7 @@ void ViewContextManager::cullForView(
          .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
          .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader |
            vk::PipelineStageFlagBits2::eTessellationEvaluationShader |
-           vk::PipelineStageFlagBits2::eComputeShader,
+           vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader,
          .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
          .buffer = ctx.viewDataBuf.get(),
          .size = sizeof(ViewData)}});

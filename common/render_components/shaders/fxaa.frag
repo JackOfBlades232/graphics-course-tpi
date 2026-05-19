@@ -6,7 +6,7 @@
 
 layout(location = 0) out vec4 out_fragColor;
 
-layout(binding = 0) uniform sampler2D hdrImage;
+layout(binding = 0) uniform sampler2D ldrImage;
 
 layout(binding = 8, set = 0) uniform constants_t
 {
@@ -22,14 +22,11 @@ layout(location = 0 ) in VS_OUT
 
 void main(void)
 {
-  const vec4 hdrColor = textureLod(hdrImage, surf.texCoord, 0.f);
+  const vec3 centerCol = textureLod(ldrImage, surf.texCoord, 0.f).xyz;
 
-  vec3 ldrColor;
+  // @TODO: impl
 
-  if (constants.useTonemapping != 0)
-    ldrColor = hdrColor.xyz / (1.f + hdrColor.xyz);
-  else
-    ldrColor = clamp(hdrColor.xyz, 0.f, 1.f);
-
-  out_fragColor = vec4(ENCODE_TONEMAP_RESULT(ldrColor), 1.f);
+  vec3 finalCol = centerCol;
+  out_fragColor = vec4(ENCODE_AA_RESULT(finalCol), 1.f);
 }
+

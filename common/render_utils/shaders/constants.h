@@ -61,6 +61,8 @@ struct Constants
 
   shader_vec3 ambientLightCoeff;
 
+  // HERE
+
   shader_uint useSsao;
   shader_uint useSkyboxForAmbient;
 
@@ -83,7 +85,9 @@ struct Constants
   shader_uint frameNo;
 
   shader_vec2 mainTargetResolution;
-  float pad0_, pad1_;
+
+  shader_uint gammaEncodeInTonemapping;
+  shader_uint fxaaAntialiasInSrgb;
 
   SsaoConstData ssaoData;
 };

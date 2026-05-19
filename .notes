@@ -41,8 +41,8 @@ v Try extending conservative cache mode, keep oversampling for a bunch of low hi
 
 AA
 - FXAAv1
-  - Make srgb encode conditional in tonemapping (macro from constants to determine whether this stage should encode)
-  - Create AA render component slot and settings 
+  v Make srgb encode conditional in tonemapping (macro from constants to determine whether this stage should encode)
+  v Create AA render component slot and settings 
   - Add fxaa v1 as a fullscreen pass
   - Implement edge algo with linear search (qual 3)
   - Add subpixel aa via blend with lowpass

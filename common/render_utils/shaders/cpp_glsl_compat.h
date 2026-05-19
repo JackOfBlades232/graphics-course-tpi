@@ -44,6 +44,7 @@ using shader_bool = glm::uint;
 #define shader_log glm::log
 #define shader_exp glm::exp
 #define shader_length glm::length
+#define shader_pow glm::pow
 
 #define XZ(v_) (shader_vec2((v_).x, (v_).z))
 
@@ -87,6 +88,7 @@ shader_inline float ordered_uint_to_float(shader_uint i)
 #define shader_log log
 #define shader_exp exp
 #define shader_length length
+#define shader_pow pow
 
 #define XZ(v_) ((v_).xz)
 

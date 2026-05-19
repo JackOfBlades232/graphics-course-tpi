@@ -5,6 +5,9 @@
 #include <render_components/HistogramEqTonemapper.hpp>
 #include <render_components/ReinhardTonemapper.hpp>
 #include <render_components/AcesTonemapper.hpp>
+#include <render_components/FXAAAntialiaser.hpp>
+#include <render_components/FXAA311Antialiaser.hpp>
+#include <render_components/TAAAntialiaser.hpp>
 
 #include <render_utils/PostfxRenderer.hpp>
 #include <render_utils/Common.hpp>
@@ -141,6 +144,10 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   registerTonemapper<HistogramEqTonemapper>(TonemappingTechnique::HISTOGRAM_EQ);
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
   registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
+
+  registerAntialiaser<FXAAAntialiaser>(AATechnique::FXAA);
+  registerAntialiaser<FXAA311Antialiaser>(AATechnique::FXAA311);
+  registerAntialiaser<TAAAntialiaser>(AATechnique::TAA);
 
   generateSsaoKernel(std::span{constantsData.ssaoData.ssaoKernel, ssaoTotalLimitSamples});
   generateSsaoKernelRotations(constantsData.ssaoData.ssaoKernelRotations);
@@ -609,6 +616,15 @@ void WorldRenderer::loadShaders()
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 {
+  // @TODO: not this dumb (problem -- tonemappers can write to either or. Maybe better always ldr?)
+  createManagedImage(
+    ldrTarget,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "ldr_target",
+      .format = swapchain_format,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+
   etna::VertexShaderInputDescription sceneVertexInputDesc{
     .bindings = {etna::VertexShaderInputDescription::Binding{
       .byteStreamDescription = sceneMgr->getVertexFormatDescription(),
@@ -977,6 +993,11 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.ssaoDepthRejectionThreshold = ssaoDepthRejectionThreshold;
 
     constantsData.ssaoConservariveTemporalCaching = ssaoConservariveTemporalCaching;
+
+    constantsData.gammaEncodeInTonemapping = !useAA ||
+      ((currentAATechnique == AATechnique::FXAA || currentAATechnique == AATechnique::FXAA311) &&
+       fxaaAntialiasInSrgb);
+    constantsData.fxaaAntialiasInSrgb = fxaaAntialiasInSrgb;
   }
 
   mainViewParams = view_params_for_cam(
@@ -1775,8 +1796,6 @@ void WorldRenderer::renderWorld(
           .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
           .buffer = vegetation->grassInstancesBuffer.get(),
           .size = vegInstBufferSizeBytes()}});
-
-      // @TODO: sorting, prepass
     }
 
     emit_barriers(
@@ -2259,8 +2278,19 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, tonemapping);
 
+      const auto& target = useAA ? ldrTarget.get() : target_image;
+      const auto& targetView = useAA ? ldrTarget.getView({}) : target_image_view;
+
       tonemapperComps[size_t(currentTonemappingTechnique)]->tonemap(
-        cmd_buf, target_image, target_image_view, hdrTarget, defaultSampler, constants->get());
+        cmd_buf, target, targetView, hdrTarget, defaultSampler, constants->get());
+    }
+
+    if (useAA)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, antialiasing);
+
+      aaComps[size_t(currentAATechnique)]->antialias(
+        cmd_buf, target_image, target_image_view, ldrTarget, defaultSampler, constants->get());
     }
 
     {
@@ -2651,6 +2681,29 @@ void WorldRenderer::drawGui()
         else if (currentTonemappingTechnique == TonemappingTechnique::ACES)
         {
           ImGui::SliderFloat("Hardcoded exposure", &acesExposure, 0.f, 64.f);
+        }
+      }
+
+      ImGui::Checkbox("Use AA", &useAA);
+      if (useAA)
+      {
+        if (ImGui::BeginCombo("Antialiaser", AA_TECHNIQUE_NAMES[size_t(currentAATechnique)].data()))
+        {
+          for (size_t i = 0; i < AA_TECHNIQUE_COUNT; i++)
+          {
+            bool selected = currentAATechnique == AATechnique(i);
+            if (ImGui::Selectable(AA_TECHNIQUE_NAMES[i].data(), selected))
+              currentAATechnique = AATechnique(i);
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::EndCombo();
+        }
+
+        if (currentAATechnique == AATechnique::FXAA || currentAATechnique == AATechnique::FXAA311)
+        {
+          ImGui::Checkbox("Antialias in SRGB space", &fxaaAntialiasInSrgb);
         }
       }
 
@@ -3045,6 +3098,8 @@ void WorldRenderer::loadDebugConfig()
   ssaoEmaCoeff = unwrap(reader.read<float>());
   ssaoDepthRejectionThreshold = unwrap(reader.read<float>());
   ssaoConservariveTemporalCaching = unwrap(reader.read<bool>());
+  currentAATechnique = unwrap(reader.read<AATechnique>());
+  useAA = unwrap(reader.read<bool>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -3136,6 +3191,8 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(ssaoEmaCoeff));
   ETNA_VERIFY(writer.write(ssaoDepthRejectionThreshold));
   ETNA_VERIFY(writer.write(ssaoConservariveTemporalCaching));
+  ETNA_VERIFY(writer.write(currentAATechnique));
+  ETNA_VERIFY(writer.write(useAA));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }
@@ -3160,26 +3217,6 @@ using def_rng = std::linear_congruential_engine<uint64_t, 16807ul, 0ul, 21474836
 
 void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
 {
-#if 0
-  // Uniform with heat
-  std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
-  def_rng generator;
-  for (uint32_t i = 0; i < out_samples.size(); ++i)
-  {
-    glm::vec3 sample(
-      randomFloats(generator) * 2.f - 1.f,
-      randomFloats(generator) * 2.f - 1.f,
-      randomFloats(generator));
-    sample = glm::normalize(sample);
-    sample *= randomFloats(generator);
-    float scale = float(i) / float(out_samples.size());
-    scale = lerp(0.1f, 1.0f, scale * scale);
-    sample *= scale;
-    out_samples[i] = glm::vec4(sample, 0.f);
-  }
-  // Redistribute to break "heat" pattern
-  std::shuffle(out_samples.begin(), out_samples.end(), generator);
-#else
   // Spiral as in SAO, uniform z-angle dist
   std::uniform_real_distribution<float> randomFloats(0.0, 1.f);
   def_rng generator(1);
@@ -3199,7 +3236,6 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
     uint32_t interlacedIndex = (i % 4) * (out_samples.size() / 4) + (i / 4);
     out_samples[interlacedIndex] = r * glm::vec4(x, y, z, 0.f);
   }
-#endif
   if (ssaoKernelHemisphereOnly)
   {
     for (auto& sample : out_samples)
