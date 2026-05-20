@@ -13,12 +13,14 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
-#include "tonemap.frag.inc"
+#include "fxaa_common.frag.inc"
 
 layout(location = 0 ) in VS_OUT
 {
   vec2 texCoord;
 } surf;
+
+
 
 void main(void)
 {
