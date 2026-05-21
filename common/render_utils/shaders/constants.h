@@ -85,9 +85,12 @@ struct Constants
   shader_uint frameNo;
 
   shader_vec2 mainTargetResolution;
+  shader_vec2 mainTargetInverseResolution;
 
   shader_uint gammaEncodeInTonemapping;
   shader_uint fxaaAntialiasInSrgb;
+
+  shader_uint pad0_, pad1_;
 
   SsaoConstData ssaoData;
 };
