@@ -5,15 +5,15 @@
 
 float fxaa_luma(vec3 rgb)
 {
-  if (constants.fxaaAntialiasInSrgb)
+  if (constants.fxaaAntialiasInSrgb != 0)
     return rgb.y * (0.587f / 0.299f) + rgb.x;
   else
-    return sqrt(dot(rgb, vec3(0.299f, 0.587f, 0.114f)))
+    return sqrt(dot(rgb, vec3(0.299f, 0.587f, 0.114f)));
 }
 
 float fxaa_high_pass_filter(float l, float c, float r)
 {
-  return 0.25f * l + 0.5f * c + 0.25f * r;
+  return abs(0.25f * l - 0.5f * c + 0.25f * r);
 }
 
 #endif // FXAA_COMMON_FRAG_H_INCLUDED

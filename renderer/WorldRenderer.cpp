@@ -975,7 +975,7 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.time = packet.currentTime;
     constantsData.frameNo = shader_uint(frame);
     constantsData.mainTargetResolution = resolution;
-    constantsData.mainTargetInverseResolution = 1.f / resolution;
+    constantsData.mainTargetInverseResolution = 1.f / glm::vec2(resolution);
 
     constantsData.useSsao = useSsao;
 
