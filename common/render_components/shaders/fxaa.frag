@@ -24,7 +24,7 @@ const float fxaa_edge_threshold_min = 1.f / 16.f;
 const float fxaa_edge_threshold = 1.f / 8.f;
 const uint fxaa_search_steps = 16;
 const float fxaa_subpixel_trim = 0.5f;
-const float fxaa_subpixel_trim_scale = 0.5f;
+const float fxaa_subpixel_trim_scale = 1.f / (1.f - fxaa_subpixel_trim);
 const float fxaa_subpixel_cap = 0.75f;
 
 #define DEBUG_CUTOFF_PIXELS 0

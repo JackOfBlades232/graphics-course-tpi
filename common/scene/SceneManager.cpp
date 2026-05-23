@@ -39,7 +39,7 @@ SceneManager::SceneManager(const etna::GpuWorkCount& wc)
 
 std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path path)
 {
-  tinygltf::Model model;
+  tinygltf::Model m;
 
   std::string error;
   std::string warning;
@@ -47,9 +47,9 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
 
   auto ext = path.extension();
   if (ext == ".gltf")
-    success = loader.LoadASCIIFromFile(&model, &error, &warning, path.string());
+    success = loader.LoadASCIIFromFile(&m, &error, &warning, path.string());
   else if (ext == ".glb")
-    success = loader.LoadBinaryFromFile(&model, &error, &warning, path.string());
+    success = loader.LoadBinaryFromFile(&m, &error, &warning, path.string());
   else
   {
     spdlog::error("glTF: Unknown glTF file extension: '{}'. Expected .gltf or .glb.", ext);
@@ -81,13 +81,13 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
     spdlog::info("glTF: no extensions supported");
 
   if (
-    !model.extensions.empty() || !model.extensionsRequired.empty() || !model.extensionsUsed.empty())
+    !m.extensions.empty() || !m.extensionsRequired.empty() || !m.extensionsUsed.empty())
   {
-    for (const auto& [mext, _] : model.extensions)
+    for (const auto& [mext, _] : m.extensions)
     {
       if (
-        std::find(model.extensionsUsed.begin(), model.extensionsUsed.end(), mext) ==
-        model.extensionsUsed.end())
+        std::find(m.extensionsUsed.begin(), m.extensionsUsed.end(), mext) ==
+        m.extensionsUsed.end())
       {
         spdlog::error(
           "glTF: inconsistent model, extension \"{}\" is used but not included in extensionsUsed",
@@ -95,7 +95,7 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
         return std::nullopt;
       }
     }
-    for (const auto& rext : model.extensionsRequired)
+    for (const auto& rext : m.extensionsRequired)
     {
 
       if (
@@ -106,7 +106,7 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
         return std::nullopt;
       }
     }
-    for (const auto& uext : model.extensionsUsed)
+    for (const auto& uext : m.extensionsUsed)
     {
       if (
         std::find(SUPPORTED_EXTENSIONS.begin(), SUPPORTED_EXTENSIONS.end(), uext) ==
@@ -118,17 +118,17 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
     }
   }
 
-  return model;
+  return m;
 }
 
 SceneManager::ProcessedInstances SceneManager::processInstances(
-  const tinygltf::Model& model, const SceneMultiplexing& multiplex) const
+  const tinygltf::Model& m, const SceneMultiplexing& multiplex) const
 {
-  std::vector nodeTransforms(model.nodes.size(), glm::identity<glm::mat4x4>());
+  std::vector nodeTransforms(m.nodes.size(), glm::identity<glm::mat4x4>());
 
-  for (size_t nodeIdx = 0; nodeIdx < model.nodes.size(); ++nodeIdx)
+  for (size_t nodeIdx = 0; nodeIdx < m.nodes.size(); ++nodeIdx)
   {
-    const auto& node = model.nodes[nodeIdx];
+    const auto& node = m.nodes[nodeIdx];
     auto& transform = nodeTransforms[nodeIdx];
 
     if (!node.matrix.empty())
@@ -166,7 +166,7 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
   }
 
   std::stack<size_t> vertices;
-  for (auto vert : model.scenes[model.defaultScene].nodes)
+  for (auto vert : m.scenes[m.defaultScene].nodes)
     vertices.push(vert);
 
   while (!vertices.empty())
@@ -174,7 +174,7 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
     auto vert = vertices.top();
     vertices.pop();
 
-    for (auto child : model.nodes[vert].children)
+    for (auto child : m.nodes[vert].children)
     {
       nodeTransforms[child] = nodeTransforms[vert] * nodeTransforms[child];
       vertices.push(child);
@@ -185,9 +185,9 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
 
   size_t totalRelevantNodes = 0;
   {
-    for (size_t i = 0; i < model.nodes.size(); ++i)
+    for (size_t i = 0; i < m.nodes.size(); ++i)
     {
-      if (model.nodes[i].mesh >= 0 || model.nodes[i].light >= 0)
+      if (m.nodes[i].mesh >= 0 || m.nodes[i].light >= 0)
         ++totalRelevantNodes;
     }
     size_t multiplexedNodes =
@@ -198,9 +198,9 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
   }
 
   size_t did = 0;
-  for (size_t i = 0; i < model.nodes.size(); ++i)
+  for (size_t i = 0; i < m.nodes.size(); ++i)
   {
-    if (model.nodes[i].mesh >= 0 || model.nodes[i].light >= 0)
+    if (m.nodes[i].mesh >= 0 || m.nodes[i].light >= 0)
     {
       for (unsigned x = 0; x < multiplex.dims.x; ++x)
         for (unsigned y = 0; y < multiplex.dims.y; ++y)
@@ -225,8 +225,8 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
             result.matrices[dest][3][1] += translation[1];
             result.matrices[dest][3][2] += translation[2];
 
-            result.meshes[dest] = model.nodes[i].mesh;
-            result.lights[dest] = model.nodes[i].light;
+            result.meshes[dest] = m.nodes[i].mesh;
+            result.lights[dest] = m.nodes[i].light;
           }
 
       ++did;
@@ -270,32 +270,32 @@ struct std::hash<RelemIdentifier>
 };
 
 SceneManager::ProcessedMeshes SceneManager::processMeshes(
-  const tinygltf::Model& model, std::span<const MaterialId> material_remapping) const
+  const tinygltf::Model& m, std::span<const MaterialId> material_remapping) const
 {
   ProcessedMeshes result;
 
   result.vertices = {
-    (Vertex*)model.buffers[0].data.data(), model.bufferViews[0].byteLength / sizeof(Vertex)};
+    (Vertex*)m.buffers[0].data.data(), m.bufferViews[0].byteLength / sizeof(Vertex)};
   result.indices = {
     (uint32_t*)(result.vertices.data() + result.vertices.size()),
-    model.bufferViews[1].byteLength / sizeof(uint32_t)};
+    m.bufferViews[1].byteLength / sizeof(uint32_t)};
 
   {
     size_t totalPrimitives = 0;
-    for (const auto& mesh : model.meshes)
+    for (const auto& mesh : m.meshes)
       totalPrimitives += mesh.primitives.size();
     result.relems.reserve(totalPrimitives);
   }
 
-  result.meshes.reserve(model.meshes.size());
+  result.meshes.reserve(m.meshes.size());
 
   std::unordered_map<RelemIdentifier, RelemData> batchedInstances{};
 
   uint32_t totalInstCount = 0;
 
-  for (size_t i = 0; i < model.meshes.size(); ++i)
+  for (size_t i = 0; i < m.meshes.size(); ++i)
   {
-    const auto& mesh = model.meshes[i];
+    const auto& mesh = m.meshes[i];
     result.meshes.push_back(
       Mesh{
         .firstRelem = static_cast<uint32_t>(result.relems.size()),
@@ -320,8 +320,8 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
         continue;
       }
 
-      const tinygltf::Accessor& indAccessor = model.accessors[prim.indices];
-      const tinygltf::Accessor& posAccessor = model.accessors[prim.attributes.at("POSITION")];
+      const tinygltf::Accessor& indAccessor = m.accessors[prim.indices];
+      const tinygltf::Accessor& posAccessor = m.accessors[prim.attributes.at("POSITION")];
 
       result.relems.push_back(
         RenderElement{
@@ -483,7 +483,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 // in the common instance array to be able to pack more lights into the cbuf.
 // Implement random object manipulation while at it
 SceneManager::ProcessedLights SceneManager::processLights(
-  const tinygltf::Model& model,
+  const tinygltf::Model& m,
   std::span<glm::mat4> instances,
   std::span<uint32_t> instance_mapping,
   const SceneShadowsSetup& shadows_setup)
@@ -513,7 +513,7 @@ SceneManager::ProcessedLights SceneManager::processLights(
 
     auto inst = glm::mat4x4(instances[instId]);
 
-    const auto& l = model.lights[lightId];
+    const auto& l = m.lights[lightId];
     const glm::vec3 color = {(float)l.color[0], (float)l.color[1], (float)l.color[2]};
 
     // @TODO: more efficient if need be, direction calc too

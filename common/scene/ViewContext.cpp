@@ -28,38 +28,34 @@ void ViewContextManager::setupPipelines(vk::Format, DebugDrawersRegistry&)
 ViewContext ViewContextManager::alloc(const char* tag)
 {
   return ViewContext{
-    .indirectDrawBuf = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = indirectDrawBufByteSize(),
-        .bufferUsage = vk::BufferUsageFlagBits::eTransferDst |
-          vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = std::string{"indirectDrawBuf-"} + tag,
-      }),
-    .culledInstancesBuf = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = markedInstBufSizeBytes(),
-        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = std::string{"culledInstancesBuf-"} + tag,
-      }),
-    .viewDataBuf = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(ViewData),
-        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = std::string{"viewData-"} + tag,
-      }),
+    .indirectDrawBuf = create_buffer(etna::Buffer::CreateInfo{
+      .size = indirectDrawBufByteSize(),
+      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst |
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = std::string{"indirectDrawBuf-"} + tag,
+    }),
+    .culledInstancesBuf = create_buffer(etna::Buffer::CreateInfo{
+      .size = markedInstBufSizeBytes(),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = std::string{"culledInstancesBuf-"} + tag,
+    }),
+    .viewDataBuf = create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(ViewData),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = std::string{"viewData-"} + tag,
+    }),
     .viewParamsBuf =
       etna::GpuSharedResource<etna::Buffer>{
         workCount,
         [&](size_t) {
-          return create_buffer(
-            etna::Buffer::CreateInfo{
-              .size = sizeof(ViewParams),
-              .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-              .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-              .name = std::string{"viewParams-"} + tag});
+          return create_buffer(etna::Buffer::CreateInfo{
+            .size = sizeof(ViewParams),
+            .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+            .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+            .name = std::string{"viewParams-"} + tag});
         }},
     .prepared = false};
 }
@@ -126,25 +122,27 @@ void ViewContextManager::cullForView(
       .buffer = ctx.viewDataBuf.get(),
       .size = sizeof(ViewData)}});
 
-  auto programInfo = etna::get_shader_program("reset_view_context");
-  auto set = etna::create_descriptor_set(
-    programInfo.getDescriptorLayoutId(0),
-    cmd_buf,
-    {etna::Binding{0, ctx.indirectDrawBuf.genBinding()},
-     etna::Binding{1, ctx.viewDataBuf.genBinding()}});
-  cmd_buf.bindDescriptorSets(
-    vk::PipelineBindPoint::eCompute,
-    resetViewContextPipeline.getVkPipelineLayout(),
-    0,
-    {set.getVkSet()},
-    {});
-  cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, resetViewContextPipeline.getVkPipeline());
+  {
+    auto programInfo = etna::get_shader_program("reset_view_context");
+    auto set = etna::create_descriptor_set(
+      programInfo.getDescriptorLayoutId(0),
+      cmd_buf,
+      {etna::Binding{0, ctx.indirectDrawBuf.genBinding()},
+       etna::Binding{1, ctx.viewDataBuf.genBinding()}});
+    cmd_buf.bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute,
+      resetViewContextPipeline.getVkPipelineLayout(),
+      0,
+      {set.getVkSet()},
+      {});
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, resetViewContextPipeline.getVkPipeline());
 
-  cmd_buf.dispatch(
-    get_linear_wg_count(
-      uint32_t(std::max(sceneMgr.getIndirectCommands().size(), size_t(1))), BASE_WORK_GROUP_SIZE),
-    1,
-    1);
+    cmd_buf.dispatch(
+      get_linear_wg_count(
+        uint32_t(std::max(sceneMgr.getIndirectCommands().size(), size_t(1))), BASE_WORK_GROUP_SIZE),
+      1,
+      1);
+  }
 
   emit_barriers(
     cmd_buf,

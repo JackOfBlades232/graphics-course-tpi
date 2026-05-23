@@ -1006,7 +1006,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
   if (!cfg.disableDirectionalLightsShadowsFeature)
   {
-    auto& lights = sceneMgr->lightsRW();
+    auto& ls = sceneMgr->lightsRW();
     const auto [xNear, yNear, zNear, zFar] = mainViewParams.viewFrustum;
 
     const auto invView = glm::inverse(mainViewParams.mView);
@@ -1047,7 +1047,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
       const float texelSize = (2.f * radWorld) / float(CSM_CASCADE_RESOLUTION);
 
-      for (auto& dirl : std::span{lights.directionalLights, lights.directionalLightsCount})
+      for (auto& dirl : std::span{ls.directionalLights, ls.directionalLightsCount})
       {
         auto& cascade = dirl.shadowmapCascades[i];
 
@@ -1814,7 +1814,7 @@ void WorldRenderer::renderWorld(
 
       DEFER([&cmd_buf] { cmd_buf.setDepthBiasEnable(VK_FALSE); });
 
-      const auto& lights = sceneMgr->getLights();
+      const auto& ls = sceneMgr->getLights();
 
       auto transferMat = [this, &cmd_buf](auto lid, const ViewContext& ctx) {
         auto programInfo = etna::get_shader_program("transfer_light_mats");
@@ -1851,7 +1851,7 @@ void WorldRenderer::renderWorld(
       if (pointLightShadowsSettings.enable)
       {
         for (size_t i = 0;
-             const auto& point : std::span{lights.pointLights, lights.pointLightsCount})
+             const auto& point : std::span{ls.pointLights, ls.pointLightsCount})
         {
           DEFER([&i] { ++i; });
 
@@ -1939,7 +1939,7 @@ void WorldRenderer::renderWorld(
           spotLightShadowsSettings.depthBiasClamp,
           spotLightShadowsSettings.depthBiasSlopeFactor);
 
-        for (size_t i = 0; const auto& spot : std::span{lights.spotLights, lights.spotLightsCount})
+        for (size_t i = 0; const auto& spot : std::span{ls.spotLights, ls.spotLightsCount})
         {
           DEFER([&i] { ++i; });
 
@@ -1969,7 +1969,7 @@ void WorldRenderer::renderWorld(
             ? glm::vec3(0.f, 0.f, 1.f)
             : glm::vec3(0.f, 1.f, 0.f);
           cam.lookAt(spot.position, spot.position + dir, up);
-          cam.fov = spot.outerConeAngle * 180.f / M_PI;
+          cam.fov = spot.outerConeAngle * 180.f / float(M_PI);
           cam.zNear = 0.001f;
           cam.zFar = spot.range + 0.001f;
 
@@ -2014,7 +2014,7 @@ void WorldRenderer::renderWorld(
           directionalLightShadowsSettings.depthBiasSlopeFactor);
 
         for (size_t i = 0;
-             const auto& dirl : std::span{lights.directionalLights, lights.directionalLightsCount})
+             const auto& dirl : std::span{ls.directionalLights, ls.directionalLightsCount})
         {
           // @NOTE: not bothering skipping cascades cuz camera turns
           DEFER([&i] { ++i; });
@@ -3228,13 +3228,13 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
   {
     float alpha = alphaFromI(i);
     float r = alpha * alphaNormalization;
-    float phiFlat = 2.f * M_PI * alpha * spiralRevolutionFactor;
-    float phiVert = 2.f * M_PI * randomFloats(generator);
+    float phiFlat = 2.f * float(M_PI) * alpha * spiralRevolutionFactor;
+    float phiVert = 2.f * float(M_PI) * randomFloats(generator);
     float x = cosf(phiFlat) * cosf(phiVert);
     float y = sinf(phiFlat) * cosf(phiVert);
     float z = sinf(phiVert);
 
-    uint32_t interlacedIndex = (i % 4) * (out_samples.size() / 4) + (i / 4);
+    uint32_t interlacedIndex = (i % 4) * (uint32_t(out_samples.size()) / 4) + (i / 4);
     out_samples[interlacedIndex] = r * glm::vec4(x, y, z, 0.f);
   }
   if (ssaoKernelHemisphereOnly)

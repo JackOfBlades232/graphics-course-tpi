@@ -13,16 +13,16 @@ endif
 
 command! ClangFormat !python3 clang_format_all.py
 
-if has("nvim")
-lua << EOF
-    vim.lsp.config("clangd", {
-        cmd = {
-            "clangd",
-            "--compile-commands-dir=build",
-            "--background-index",
-            "--limit-results=10",
-            "--pch-storage=disk"
-        }
-    })
-EOF
-endif
+"if has("nvim")
+"lua << EOF
+"    vim.lsp.config("clangd", {
+"        cmd = {
+"            "clangd",
+"            "--compile-commands-dir=build",
+"            "--background-index",
+"            "--limit-results=10",
+"            "--pch-storage=disk"
+"        }
+"    })
+"EOF
+"endif

@@ -432,13 +432,14 @@ private:
 
   uint32_t vegChunkBufferSizeBytes() const
   {
-    return 2 * sizeof(int32_t) +
-      VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT * sizeof(shader_vec2);
+    return uint32_t(
+      2 * sizeof(int32_t) + VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT * sizeof(shader_vec2));
   }
   uint32_t vegInstBufferSizeBytes() const
   {
-    return VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT *
-      sceneMgr->getVegetationTemplateData().size() * sizeof(GrassInstance);
+    return uint32_t(
+      VEGETATION_GRID_EXTENT * VEGETATION_GRID_EXTENT *
+      sceneMgr->getVegetationTemplateData().size() * sizeof(GrassInstance));
   }
 
   void generateSsaoKernel(std::span<glm::vec4> out_samples);

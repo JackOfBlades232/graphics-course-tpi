@@ -108,8 +108,11 @@ static std::array<T, N> array_make(F&& make)
   return detail::array_make_impl<T, N>(std::make_index_sequence<N>{}, std::forward<F>(make));
 }
 
+#define PPCAT_IMPL(x, y) x##y
+#define PPCAT(x, y) PPCAT_IMPL(x, y)
+
 #define DEFER(f_)                                                                                  \
-  detail::Defer defer##__COUNTER__                                                                 \
+  detail::Defer PPCAT(defer, __LINE__)                                                             \
   {                                                                                                \
     f_                                                                                             \
   }

@@ -40,14 +40,19 @@ x Try adding accelerated convergence when valid sample count changes -- couldn't
 v Try extending conservative cache mode, keep oversampling for a bunch of low history sizes, not only the first
 
 AA
-- FXAAv1
+v FXAAv1
   v Make srgb encode conditional in tonemapping (macro from constants to determine whether this stage should encode)
   v Create AA render component slot and settings 
   v Add fxaa v1 as a fullscreen pass
   v Implement edge algo with linear search (qual 3)
-  - Add subpixel aa via blend with lowpass
-  - Try both srgb blends and linear blends with stgb luma
-  - Check adequacy on scenes
+  v Add subpixel aa via blend with lowpass
+  v Check adequacy on scenes
+  v Try both srgb blends and linear blends with stgb luma -- i prefer srgb, i guess.
 - FXAAv3.11
+  - Copypasta code over
+  - Implement quality step array for edge detection
+  - Replace lowpass blend with offset modification for subpix
+  - Check github impl to see if there is any more to it
+  - Compare image and perf
 - TAA
 
