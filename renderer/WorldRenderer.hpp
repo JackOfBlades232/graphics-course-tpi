@@ -374,7 +374,7 @@ private:
   float ssaoEmaCoeff = 0.1f;
   float ssaoDepthRejectionThreshold = 0.025f;
   bool ssaoConservariveTemporalCaching = false;
-  AATechnique currentAATechnique = AATechnique::FXAA;
+  AATechnique currentAATechnique = AATechnique::FXAA311;
   bool useAA = true;
   bool fxaaAntialiasInSrgb = true;
 
