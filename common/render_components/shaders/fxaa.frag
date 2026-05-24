@@ -1,6 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_control_flow_attributes : require
+#extension GL_EXT_control_flow_attributes2 : require
 
 #include "constants.h"
 
@@ -15,22 +17,10 @@ layout(binding = 8, set = 0) uniform constants_t
 
 #include "fxaa_common.frag.inc"
 
-layout(location = 0 ) in VS_OUT
+layout(location = 0) in VS_OUT
 {
   vec2 texCoord;
 } surf;
-
-const float fxaa_edge_threshold_min = 1.f / 16.f;
-const float fxaa_edge_threshold = 1.f / 8.f;
-const uint fxaa_search_steps = 16;
-const float fxaa_subpixel_trim = 0.5f;
-const float fxaa_subpixel_trim_scale = 1.f / (1.f - fxaa_subpixel_trim);
-const float fxaa_subpixel_cap = 0.75f;
-
-#define DEBUG_CUTOFF_PIXELS 0
-#define DEBUG_SOLID_COLOR 0
-#define DEBUG_EDGE_DIRECTION 0
-#define DEBUG_SUBPIXEL_W 0
 
 void main(void)
 {
@@ -124,6 +114,7 @@ void main(void)
   vec2 offP = off - stp;
   vec2 offN = off + stp;
 
+  [[unroll]]
   for (uint i = 0; i < fxaa_search_steps; ++i)
   {
     if (!doneP)

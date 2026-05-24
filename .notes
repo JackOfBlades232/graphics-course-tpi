@@ -48,11 +48,11 @@ v FXAAv1
   v Add subpixel aa via blend with lowpass
   v Check adequacy on scenes
   v Try both srgb blends and linear blends with stgb luma -- i prefer srgb, i guess.
-- FXAAv3.11
-  - Copypasta code over
-  - Implement quality step array for edge detection
-  - Replace lowpass blend with offset modification for subpix
-  - Check github impl to see if there is any more to it
-  - Compare image and perf
+v FXAAv3.11
+  v Copypasta code over
+  v Implement quality step array for edge detection
+  v Replace lowpass blend with offset modification for subpix
+  v Check github impl to see if there is any more interesting stuff to it
+  v Compare image and perf -- image is very similar, maybe 311 is a bit blurrier on grass. 380us -> 340us speedup.
 - TAA
 
