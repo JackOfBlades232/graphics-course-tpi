@@ -341,7 +341,7 @@ private:
   bool useSharedMemForTonemapping = false;
   ShadowsSettings pointLightShadowsSettings{};
   ShadowsSettings spotLightShadowsSettings{};
-  ShadowsSettings directionalLightShadowsSettings{};
+  ShadowsSettings directionalLightShadowsSettings{.technique = ShadowTechnique::PCF5X5};
   bool drawCascadesInSolidColor = false;
   // @TODO: graduate to JB_terrain
   float terrainNoiseRelHeightAmp = 0.001f;
@@ -354,7 +354,7 @@ private:
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
   float acesExposure = 2.f;
-  float csmSplitLambda = 0.5f;
+  float csmSplitLambda = 0.9f;
   float csmShadowDist = 400.f;
   float csmBlendingBeltSize = 0.03f;
   TonemappingTechnique currentTonemappingTechnique = TonemappingTechnique::ACES;
