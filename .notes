@@ -1,6 +1,10 @@
 Performance
 - Figure out how to do Release build with spirv-opt. Sometimes it does nothing, sometimes it breaks me shaders.
 
+ScenePipeline
+- Add missing tangent generation via MikkTSpace
+- Add proper threadpool and move bfn and other heavy stuff there
+
 PBR/Bindless
 - Add anisotropic samplers and a setting to use them (maybe as a JB extension?)
 
@@ -85,3 +89,70 @@ v FXAAv3.11
     - Test velocity
     - Test depth
 
+Water
+- Gather task
+- Gather sources
+- Research
+- Plan
+
+Fog
+- Gather task
+- Gather sources
+- Research
+- Plan
+
+RSM
+- Gather task
+- Refresh knowledge from paper
+- Plan
+
+SSSS
+- Gather task
+- Refresh knowledge from sample
+- Plan
+
+RTR+NRD
+- Gather task
+- Gather sources
+- Research
+- Plan
+
+GpuParticles
+- Gather tasks (both)
+- Gather sources
+- Research
+- Plan
+- Adjust TAA to work with particles (separate alpha blend for motion vectors?)
+
+ProjectiveDecals
+- Gather task
+- Gather sources
+- Research
+- Plan
+
+ClusteredLights
+- Gather task
+- Gather sources
+- Research
+- Plan
+
+MieSky
+- Gather task
+- Gather sources
+- Research
+- Plan
+
+Tonemapping
+- Try to put histogram tonemapping to use
+  - Use it to calculate exposure to seed into the main tonemapping algo
+  - Fix all existing instabilities and issues
+
+VisBufferPipeline
+- Gather task
+- Gather sources
+- Research
+- Plan
+
+Fini
+- Scour tasks in repo and collect all missed (bonus) tasks deemed interesting.
+- Prepare screenshots for done tasks (csm and after + bonuses for part 1)
