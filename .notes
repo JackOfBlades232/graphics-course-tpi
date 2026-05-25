@@ -1,4 +1,11 @@
-- Fix buch-o-artifacts on linux -- directional shadows, grass reprojection
+Performance
+- Figure out how to do Release build with spirv-opt. Sometimes it does nothing, sometimes it breaks me shaders.
+
+PBR/Bindless
+- Add anisotropic samplers and a setting to use them (maybe as a JB extension?)
+
+Terrain
+- Fix blurry details: seems like I f-d up and mipped twice (or, maybe, it's just lack of aniso).
 
 CSM
 v Prepare the frustum split
@@ -52,7 +59,29 @@ v FXAAv3.11
   v Copypasta code over
   v Implement quality step array for edge detection
   v Replace lowpass blend with offset modification for subpix
-  v Check github impl to see if there is any more interesting stuff to it
-  v Compare image and perf -- image is very similar, maybe 311 is a bit blurrier on grass. 380us -> 340us speedup.
+  x Check github impl to see if there is any more interesting stuff to it -- nothing of note.
+  v Compare image and perf -- image is very similar. 380us -> 340us speedup. Leaving 311, the perf is slightly better.
 - TAA
+  - Read up on quasi random sequences for jitter (especially look into first N halton seq members)
+  - Set up scaffolding
+    - Main view subpixel jitter parameter
+    - Save prev frame in a target (double buffer)
+    - Extend antialiaser for taa and pass all required data (prev frame, motion vectors, optionally depth. Maybe as binding vec?).
+    - Make taa shader do nothing and execute
+    - Use jitter sequence (simple box for now, from predetermined array like ssao) to just make a tremoring image.
+    - Add simple no-reprojection history read & ema for glorious smear
+  - Add back reprojection with motion vectors
+    - Do the thing
+    - Check if we need to add jitters in gpass calculation specifically (i think matrix should be enough)
+  - Implement neighbourhood clamping
+  - Add disocclusion
+    - Use cur frame lowpass as a backup value (no frame counts)
+    - Test using velocity rejection
+    - If not satisfactory, try depth rejection
+  - Add log weighing to combat flicker from color clamp if visible
+  - Add a catmull rom filter for history to sharpen blur if visible
+  - Add texture UV unjitter for materials and other mapped textures
+  - Test adding edge dilation (if edge aliasing is a problem)
+    - Test velocity
+    - Test depth
 
