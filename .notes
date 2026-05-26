@@ -66,7 +66,7 @@ v FXAAv3.11
   x Check github impl to see if there is any more interesting stuff to it -- nothing of note.
   v Compare image and perf -- image is very similar. 380us -> 340us speedup. Leaving 311, the perf is slightly better.
 - TAA
-  - Read up on quasi random sequences for jitter (especially look into first N halton seq members)
+  v Read up on quasi random sequences for jitter (especially look into first N halton seq members)
   - Set up scaffolding
     - Main view subpixel jitter parameter
     - Save prev frame in a target (double buffer)
@@ -74,6 +74,9 @@ v FXAAv3.11
     - Make taa shader do nothing and execute
     - Use jitter sequence (simple box for now, from predetermined array like ssao) to just make a tremoring image.
     - Add simple no-reprojection history read & ema for glorious smear
+  - Add proper jitter
+    - Try (2, 3)-halton sequence first k numbers (param)
+    - Try R2 sequence first k numbers (param)
   - Add back reprojection with motion vectors
     - Do the thing
     - Check if we need to add jitters in gpass calculation specifically (i think matrix should be enough)
