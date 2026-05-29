@@ -71,9 +71,9 @@ struct ViewParams
   ViewFrustum viewFrustum;
   ViewFrustum prevViewFrustum;
   shader_vec3 viewPos;
-  shader_uint pad0_;
+  float subpixelUvJitterX;
   shader_vec3 prevViewPos;
-  shader_uint pad1_;
+  float subpixelUvJitterY;
   // Workaround for a bug where [1] array is probably flattened
   shader_vec4 csmFrustumSplits[SHADER_MAX((CSM_CASCADE_COUNT - 1) / 4 + 1, 2)];
   ViewType type;
@@ -81,6 +81,11 @@ struct ViewParams
   shader_uint needReverseZ;
   shader_uint pad2_;
 };
+
+shader_inline shader_vec2 get_subpixel_uv_jitter(ViewParams params)
+{
+  return shader_vec2(params.subpixelUvJitterX, params.subpixelUvJitterY);
+}
 
 // Calculated on the GPU
 struct ViewData

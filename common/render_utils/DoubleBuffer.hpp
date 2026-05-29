@@ -36,6 +36,9 @@ public:
   const etna::Image& curBuf() const { return buf[curId()]; }
   const etna::Image& prevBuf() const { return buf[prevId()]; }
 
+  etna::Image& getRawBuf(size_t id) { return buf[id]; }
+  const etna::Image& getRawBuf(size_t id) const { return buf[id]; }
+
 private:
   etna::Image buf[2];
   const etna::GpuWorkCount* wc = nullptr;

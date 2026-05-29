@@ -99,6 +99,7 @@ inline ViewParams view_params_for_cam(
   bool need_depth_bounds,
   bool need_reverse_z,
   const ViewParams* prev_params,
+  glm::vec2 subpixel_uv_jitter = glm::vec2(0.f, 0.f),
   float csm_split_lambda = -1.f,
   float csm_shadow_dist = FLT_MAX)
 {
@@ -109,9 +110,14 @@ inline ViewParams view_params_for_cam(
   if (need_reverse_z)
     std::swap(pcam.zNear, pcam.zFar);
 
+  const bool hasJitter =
+    glm::abs(subpixel_uv_jitter.x) >= FLT_EPSILON || glm::abs(subpixel_uv_jitter.y) >= FLT_EPSILON;
+
   // calc camera matrix
   {
-    const auto proj = pcam.projTm(aspect);
+    auto proj = pcam.projTm(aspect);
+    if (hasJitter) // x2 cuz proj transforms to [-1,1] NDC, and UV is [0,1]
+      proj = glm::translate(proj, 2.f * glm::vec3(subpixel_uv_jitter.x, subpixel_uv_jitter.y, 0.f));
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
     params.mInverseView = glm::inverse(params.mView);
@@ -121,6 +127,11 @@ inline ViewParams view_params_for_cam(
       params.mInverseView[3][3];
   }
 
+  // pass jitter
+  {
+    params.subpixelUvJitterX = subpixel_uv_jitter.x;
+    params.subpixelUvJitterY = subpixel_uv_jitter.y;
+  }
 
   // pass frustum dimensions
   {
@@ -169,14 +180,20 @@ inline ViewParams view_params_for_cam(
   float xext,
   float yext,
   bool need_depth_bounds,
-  const ViewParams* prev_params)
+  const ViewParams* prev_params,
+  glm::vec2 subpixel_uv_jitter = glm::vec2(0.f, 0.f))
 {
   ViewParams params{};
   params.type = ViewType::ORTHO;
 
+  const bool hasJitter =
+    glm::abs(subpixel_uv_jitter.x) >= FLT_EPSILON || glm::abs(subpixel_uv_jitter.y) >= FLT_EPSILON;
+
   // calc camera matrix
   {
-    const auto proj = cam.orthoTm(xext, yext);
+    auto proj = cam.orthoTm(xext, yext);
+    if (hasJitter) // x2 cuz proj transforms to [-1,1] NDC, and UV is [0,1]
+      proj = glm::translate(proj, 2.f * glm::vec3(subpixel_uv_jitter.x, subpixel_uv_jitter.y, 0.f));
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
     params.mInverseView = glm::inverse(params.mView);
@@ -184,6 +201,12 @@ inline ViewParams view_params_for_cam(
     params.viewPos =
       glm::vec3(params.mInverseView[3][0], params.mInverseView[3][1], params.mInverseView[3][2]) /
       params.mInverseView[3][3];
+  }
+
+  // pass jitter
+  {
+    params.subpixelUvJitterX = subpixel_uv_jitter.x;
+    params.subpixelUvJitterY = subpixel_uv_jitter.y;
   }
 
   // pass frustum dimensions

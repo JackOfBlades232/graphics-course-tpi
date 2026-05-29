@@ -68,10 +68,10 @@ v FXAAv3.11
 - TAA
   v Read up on quasi random sequences for jitter (especially look into first N halton seq members)
   - Set up scaffolding
-    - Main view subpixel jitter parameter
-    - Save prev frame in a target (double buffer)
-    - Extend antialiaser for taa and pass all required data (prev frame, motion vectors, optionally depth. Maybe as binding vec?).
-    - Make taa shader do nothing and execute
+    v Main view subpixel jitter parameter
+    v Save prev taa frame in a target (double buffer)
+    v Extend antialiaser for taa and pass all required data (prev frame, motion vectors, optionally depth. Maybe as binding vec?).
+    v Make taa shader do nothing and execute
     - Use jitter sequence (simple box for now, from predetermined array like ssao) to just make a tremoring image.
     - Add simple no-reprojection history read & ema for glorious smear
   - Add proper jitter

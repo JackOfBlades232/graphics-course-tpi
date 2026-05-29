@@ -138,6 +138,7 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   , cfg{config}
   , ssaoBuffer{DoubleBufferedImage::CreateInfo{&wc}}
   , motionVectors{DoubleBufferedImage::CreateInfo{&wc}}
+  , taaTarget{DoubleBufferedImage::CreateInfo{&wc}}
 {
   registerViewContextManager();
 
@@ -147,7 +148,26 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
 
   registerAntialiaser<FXAAAntialiaser>(AATechnique::FXAA);
   registerAntialiaser<FXAA311Antialiaser>(AATechnique::FXAA311);
-  registerAntialiaser<TAAAntialiaser>(AATechnique::TAA);
+  registerAntialiaser<TAAAntialiaser>(
+    AATechnique::TAA,
+    TAAAntialiaser::CreateInfo{
+      .cb = {
+        .prevFrameProvider =
+          [this] {
+            return taaTarget.prevBuf().genBinding(
+              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
+          },
+        .motionVectorsProvider =
+          [this] {
+            return motionVectors.curBuf().genBinding(
+              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
+          },
+        .depthProvider =
+          [this] {
+            return mainViewDepth.genBinding(
+              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
+          },
+      }});
 
   generateSsaoKernel(std::span{constantsData.ssaoData.ssaoKernel, ssaoTotalLimitSamples});
   generateSsaoKernelRotations(constantsData.ssaoData.ssaoKernelRotations);
@@ -209,69 +229,62 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
   createManagedImage(
-    motionVectors.curBuf(),
+    motionVectors.getRawBuf(0),
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "motion_vectors0",
       .format = vk::Format::eR32G32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
   createManagedImage(
-    motionVectors.prevBuf(),
+    motionVectors.getRawBuf(1),
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "motion_vectors1",
       .format = vk::Format::eR32G32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
-  defaultSampler = etna::Sampler(
-    etna::Sampler::CreateInfo{
-      .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
-  defaultMirrorSampler = etna::Sampler(
-    etna::Sampler::CreateInfo{
-      .addressMode = vk::SamplerAddressMode::eMirroredRepeat,
-      .name = "default_mirror_sampler",
-      .minLod = 0.f,
-      .maxLod = VK_LOD_CLAMP_NONE});
+  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
+    .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
+  defaultMirrorSampler = etna::Sampler(etna::Sampler::CreateInfo{
+    .addressMode = vk::SamplerAddressMode::eMirroredRepeat,
+    .name = "default_mirror_sampler",
+    .minLod = 0.f,
+    .maxLod = VK_LOD_CLAMP_NONE});
 
   constants.emplace(wc, [](size_t) {
-    return create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(constantsData),
-        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-        .name = "constants"});
+    return create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(constantsData),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "constants"});
   });
   lights.emplace(wc, [](size_t) {
-    return create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(sceneMgr->getLights()),
-        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-        .name = "lights"});
+    return create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getLights()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "lights"});
   });
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
   prevLights = {};
 
-  lightMatricesBuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = sizeof(LightMatrices),
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "light_matrices"});
+  lightMatricesBuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = sizeof(LightMatrices),
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "light_matrices"});
 
-  stubUniBuffer = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = 16,
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "stub_uniform"});
-  stubStorageBuffer = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = 16,
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "stub_storage"});
+  stubUniBuffer = create_buffer(etna::Buffer::CreateInfo{
+    .size = 16,
+    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .name = "stub_uniform"});
+  stubStorageBuffer = create_buffer(etna::Buffer::CreateInfo{
+    .size = 16,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "stub_storage"});
 
   createManagedImage(
     ssaoBuffer.curBuf(),
@@ -317,9 +330,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     pointLightViews.reserve(sceneMgr->getLights().pointLightsCount);
     for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
     {
-      pointLightViews.emplace_back(array_make<ViewContext, 6>([this, i] {
-        return viewCtxMgr->alloc(fmt::format("point{}", i).c_str());
-      }));
+      pointLightViews.emplace_back(array_make<ViewContext, 6>(
+        [this, i] { return viewCtxMgr->alloc(fmt::format("point{}", i).c_str()); }));
     }
   }
   if (!cfg.disableSpotLightsShadowsFeature)
@@ -335,9 +347,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     directionalLightCascadeViews.reserve(sceneMgr->getLights().directionalLightsCount);
     for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
     {
-      directionalLightCascadeViews.emplace_back(
-        array_make<ViewContext, CSM_CASCADE_COUNT>(
-          [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
+      directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>(
+        [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
     }
   }
 
@@ -348,12 +359,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     terrain.emplace(TerrainRenderingData{});
 
     memcpy(&terrain->sourceData, &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
-    terrain->source = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(sceneMgr->getTerrainData()),
-        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-        .name = "terrain_data"});
+    terrain->source = create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getTerrainData()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "terrain_data"});
 
     memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
 
@@ -390,11 +400,10 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
         .layers = CLIPMAP_LEVEL_COUNT});
 
-    terrain->clipmapSampler = etna::Sampler(
-      etna::Sampler::CreateInfo{
-        .filter = vk::Filter::eLinear,
-        .addressMode = vk::SamplerAddressMode::eRepeat,
-        .name = "terrain_clipmap_sampler"});
+    terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
+      .filter = vk::Filter::eLinear,
+      .addressMode = vk::SamplerAddressMode::eRepeat,
+      .name = "terrain_clipmap_sampler"});
 
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
@@ -448,12 +457,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         uint32_t(i));
     }
 
-    terrain->chunkHeightBoundsBuf = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(ChunkHeightBoundsData),
-        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = "terrain_chunk_height_bounds"});
+    terrain->chunkHeightBoundsBuf = create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(ChunkHeightBoundsData),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "terrain_chunk_height_bounds"});
 
     queueClipmapInvalidation();
   }
@@ -469,25 +477,22 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
     vegetation.emplace(VegetationRenderingData{});
 
-    vegetation->culledChunkBuffer = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = vegChunkBufferSizeBytes(),
-        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = "vegetation_chunk_buffer"});
-    vegetation->indirectDispatchBuffer = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = terrain->sourceData.detailCount * sizeof(IndirectDispatchCommand),
-        .bufferUsage =
-          vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = "vegetation_indirect_dispatch_buffer"});
-    vegetation->grassInstancesBuffer = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = vegInstBufferSizeBytes(),
-        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = "vegetation_instances_buffer"});
+    vegetation->culledChunkBuffer = create_buffer(etna::Buffer::CreateInfo{
+      .size = vegChunkBufferSizeBytes(),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "vegetation_chunk_buffer"});
+    vegetation->indirectDispatchBuffer = create_buffer(etna::Buffer::CreateInfo{
+      .size = terrain->sourceData.detailCount * sizeof(IndirectDispatchCommand),
+      .bufferUsage =
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "vegetation_indirect_dispatch_buffer"});
+    vegetation->grassInstancesBuffer = create_buffer(etna::Buffer::CreateInfo{
+      .size = vegInstBufferSizeBytes(),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "vegetation_instances_buffer"});
   }
   else
   {
@@ -501,12 +506,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     skybox.emplace(SkyboxRenderingData{});
 
     memcpy(&skybox->sourceData, &sceneMgr->getSkyboxData(), sizeof(sceneMgr->getSkyboxData()));
-    skybox->source = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = sizeof(sceneMgr->getSkyboxData()),
-        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-        .name = "skybox_data"});
+    skybox->source = create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getSkyboxData()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "skybox_data"});
 
     memcpy(skybox->source.map(), &skybox->sourceData, sizeof(skybox->sourceData));
   }
@@ -536,9 +540,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     etna::Image::ViewParams vps{};
     if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
       vps.type = vk::ImageViewType::eCube;
-    texBindings.emplace_back(
-      etna::Binding{
-        0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
+    texBindings.emplace_back(etna::Binding{
+      0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
     registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", i, tex.getName()));
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
@@ -616,7 +619,8 @@ void WorldRenderer::loadShaders()
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 {
-  // @TODO: not this dumb (problem -- tonemappers can write to either or. Maybe better always ldr?)
+  // @TODO: not this dumb (problem -- tonemappers can write to either or. Maybe better always
+  // ldr?)
   createManagedImage(
     ldrTarget,
     etna::Image::CreateInfo{
@@ -624,6 +628,22 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
       .name = "ldr_target",
       .format = swapchain_format,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    taaTarget.getRawBuf(0),
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "taa_target0",
+      .format = swapchain_format,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
+        vk::ImageUsageFlagBits::eTransferSrc});
+  createManagedImage(
+    taaTarget.getRawBuf(1),
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "taa_target1",
+      .format = swapchain_format,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
+        vk::ImageUsageFlagBits::eTransferSrc});
 
   etna::VertexShaderInputDescription sceneVertexInputDesc{
     .bindings = {etna::VertexShaderInputDescription::Binding{
@@ -1002,7 +1022,15 @@ void WorldRenderer::update(const FramePacket& packet)
   }
 
   mainViewParams = view_params_for_cam(
-    mainCam, aspect(), false, true, &mainViewParams, csmSplitLambda, csmShadowDist);
+    mainCam,
+    aspect(),
+    false,
+    true,
+    &mainViewParams,
+    (useAA && currentAATechnique == AATechnique::TAA) ? getCurFrameTaaJitter()
+                                                      : glm::vec2(0.f, 0.f),
+    csmSplitLambda,
+    csmShadowDist);
 
   if (!cfg.disableDirectionalLightsShadowsFeature)
   {
@@ -1278,9 +1306,8 @@ void WorldRenderer::renderWorld(
       etna::Image::ViewParams vps{};
       if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
         vps.type = vk::ImageViewType::eCube;
-      newBindings.emplace_back(
-        etna::Binding{
-          0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(tid)});
+      newBindings.emplace_back(etna::Binding{
+        0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(tid)});
       registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", size_t(tid), tex.getName()));
     }
 
@@ -1850,8 +1877,7 @@ void WorldRenderer::renderWorld(
 
       if (pointLightShadowsSettings.enable)
       {
-        for (size_t i = 0;
-             const auto& point : std::span{ls.pointLights, ls.pointLightsCount})
+        for (size_t i = 0; const auto& point : std::span{ls.pointLights, ls.pointLightsCount})
         {
           DEFER([&i] { ++i; });
 
@@ -1904,8 +1930,9 @@ void WorldRenderer::renderWorld(
                  : SceneRenderingPass::SHADOW,
                .flags = SRPO_STATIC | SRPO_TERRAIN,
                .vctx = &pointLightViews[i][j],
-               .vparams = view_params_for_cam(
-                 cam, 1.f, true, false, nullptr), // @TODO: reverse depth is broken on point lights
+               .vparams =
+                 view_params_for_cam(cam, 1.f, true, false, nullptr), // @TODO: reverse depth is
+                                                                      // broken on point lights
                .rtargetInfo =
                  {{{0, 0}, {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION}},
                   {},
@@ -2290,8 +2317,53 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, antialiasing);
 
+      const bool isTaa = currentAATechnique == AATechnique::TAA;
+      const auto& target = isTaa ? taaTarget.curBuf().get() : target_image;
+      const auto& targetView = isTaa ? taaTarget.curBuf().getView({}) : target_image_view;
+
       aaComps[size_t(currentAATechnique)]->antialias(
-        cmd_buf, target_image, target_image_view, ldrTarget, defaultSampler, constants->get());
+        cmd_buf, target, targetView, ldrTarget, defaultSampler, constants->get());
+
+      if (isTaa)
+      {
+        etna::set_state(
+          cmd_buf,
+          taaTarget.curBuf().get(),
+          vk::PipelineStageFlagBits2::eTransfer,
+          vk::AccessFlagBits2::eTransferRead,
+          vk::ImageLayout::eTransferSrcOptimal,
+          vk::ImageAspectFlagBits::eColor);
+        etna::set_state(
+          cmd_buf,
+          target_image,
+          vk::PipelineStageFlagBits2::eTransfer,
+          vk::AccessFlagBits2::eTransferWrite,
+          vk::ImageLayout::eTransferDstOptimal,
+          vk::ImageAspectFlagBits::eColor);
+        etna::flush_barriers(cmd_buf);
+
+        vk::ImageCopy copy{
+          .srcSubresource =
+            {.aspectMask = vk::ImageAspectFlagBits::eColor,
+             .mipLevel = 0,
+             .baseArrayLayer = 0,
+             .layerCount = 1},
+          .srcOffset = {},
+          .dstSubresource =
+            {.aspectMask = vk::ImageAspectFlagBits::eColor,
+             .mipLevel = 0,
+             .baseArrayLayer = 0,
+             .layerCount = 1},
+          .dstOffset = {},
+          .extent = vk::Extent3D{resolution.x, resolution.y, 1}};
+
+        cmd_buf.copyImage(
+          taaTarget.curBuf().get(),
+          vk::ImageLayout::eTransferSrcOptimal,
+          target_image,
+          vk::ImageLayout::eTransferDstOptimal,
+          {copy});
+      }
     }
 
     {
@@ -3257,4 +3329,10 @@ void WorldRenderer::generateSsaoKernelRotations(std::span<glm::vec4> out_rotatio
       randomFloats(generator) * 2.f - 1.f);
     out_rotations[i] = rotvPair;
   }
+}
+
+glm::vec2 WorldRenderer::getCurFrameTaaJitter() const
+{
+  // @TODO: impl
+  return glm::vec2(0.f, 0.f);
 }

@@ -29,13 +29,18 @@ void TAAAntialiaser::antialias(
 {
   ETNA_PROFILE_GPU(cmd_buf, taa);
 
-  // @TODO: impl
+  auto set = etna::create_descriptor_set(
+    aa->shaderProgramInfo().getDescriptorLayoutId(0),
+    cmd_buf,
+    {etna::Binding{
+       0, aliased_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+     etna::Binding{1, resourceCb.prevFrameProvider()},
+     etna::Binding{2, resourceCb.motionVectorsProvider()},
+     etna::Binding{3, resourceCb.depthProvider()},
+     etna::Binding{8, constants.genBinding()}});
 
-  (void)target_image;
-  (void)target_image_view;
-  (void)aliased_image;
-  (void)sampler;
-  (void)constants;
-  ETNA_ASSERT(0);
+  cmd_buf.bindDescriptorSets(
+    vk::PipelineBindPoint::eGraphics, aa->pipelineLayout(), 0, {set.getVkSet()}, {});
+
+  aa->render(cmd_buf, target_image, target_image_view);
 }
-

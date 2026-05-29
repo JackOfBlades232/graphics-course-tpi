@@ -8,6 +8,10 @@ layout(location = 0) out vec4 out_fragColor;
 
 layout(binding = 0) uniform sampler2D ldrImage;
 
+layout(binding = 1) uniform sampler2D prevFrame;
+layout(binding = 2) uniform sampler2D motionVectors;
+layout(binding = 3) uniform sampler2D gbufDepth;
+
 layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;

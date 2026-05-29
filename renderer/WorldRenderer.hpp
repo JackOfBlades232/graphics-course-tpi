@@ -254,8 +254,8 @@ private:
   std::array<ITonemapper*, TONEMAPPING_TECHNIQUE_COUNT> tonemapperComps{};
   std::array<IAntialiaser*, AA_TECHNIQUE_COUNT> aaComps{};
 
-  etna::Image hdrTarget;
   etna::Image ldrTarget;
+  etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image gbufTransmission; // @SPEED piggy
   etna::Image mainViewDepth;
@@ -313,6 +313,7 @@ private:
   std::unique_ptr<PostfxRenderer> ssaoBlur{};
 
   DoubleBufferedImage motionVectors;
+  DoubleBufferedImage taaTarget;
 
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};
@@ -408,18 +409,18 @@ private:
     rcomponents.emplace_back(std::move(mgr));
   }
 
-  template <std::derived_from<ITonemapper> T>
-  void registerTonemapper(TonemappingTechnique technique)
+  template <std::derived_from<ITonemapper> T, class... TArgs>
+  void registerTonemapper(TonemappingTechnique technique, TArgs&&... args)
   {
-    auto tonemapper = std::make_unique<T>();
+    auto tonemapper = std::make_unique<T>(std::forward<TArgs>(args)...);
     tonemapperComps[size_t(technique)] = tonemapper.get();
     rcomponents.emplace_back(std::move(tonemapper));
   }
 
-  template <std::derived_from<IAntialiaser> T>
-  void registerAntialiaser(AATechnique technique)
+  template <std::derived_from<IAntialiaser> T, class... TArgs>
+  void registerAntialiaser(AATechnique technique, TArgs&&... args)
   {
-    auto antialiaser = std::make_unique<T>();
+    auto antialiaser = std::make_unique<T>(std::forward<TArgs>(args)...);
     aaComps[size_t(technique)] = antialiaser.get();
     rcomponents.emplace_back(std::move(antialiaser));
   }
@@ -444,4 +445,6 @@ private:
 
   void generateSsaoKernel(std::span<glm::vec4> out_samples);
   void generateSsaoKernelRotations(std::span<glm::vec4> out_rotations);
+
+  glm::vec2 getCurFrameTaaJitter() const;
 };
