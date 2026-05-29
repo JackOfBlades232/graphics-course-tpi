@@ -117,7 +117,10 @@ inline ViewParams view_params_for_cam(
   {
     auto proj = pcam.projTm(aspect);
     if (hasJitter) // x2 cuz proj transforms to [-1,1] NDC, and UV is [0,1]
-      proj = glm::translate(proj, 2.f * glm::vec3(subpixel_uv_jitter.x, subpixel_uv_jitter.y, 0.f));
+      proj = translate(
+               glm::identity<glm::mat4>(),
+               2.f * glm::vec3(subpixel_uv_jitter.x, subpixel_uv_jitter.y, 0.f)) *
+        proj;
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
     params.mInverseView = glm::inverse(params.mView);
@@ -193,7 +196,10 @@ inline ViewParams view_params_for_cam(
   {
     auto proj = cam.orthoTm(xext, yext);
     if (hasJitter) // x2 cuz proj transforms to [-1,1] NDC, and UV is [0,1]
-      proj = glm::translate(proj, 2.f * glm::vec3(subpixel_uv_jitter.x, subpixel_uv_jitter.y, 0.f));
+      proj = translate(
+               glm::identity<glm::mat4>(),
+               2.f * glm::vec3(subpixel_uv_jitter.x, subpixel_uv_jitter.y, 0.f)) *
+        proj;
     params.mView = cam.viewTm();
     params.mProjView = proj * params.mView;
     params.mInverseView = glm::inverse(params.mView);

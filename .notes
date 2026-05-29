@@ -72,7 +72,8 @@ v FXAAv3.11
     v Save prev taa frame in a target (double buffer)
     v Extend antialiaser for taa and pass all required data (prev frame, motion vectors, optionally depth. Maybe as binding vec?).
     v Make taa shader do nothing and execute
-    - Use jitter sequence (simple box for now, from predetermined array like ssao) to just make a tremoring image.
+    v Use jitter sequence (simple box for now, from predetermined array like ssao) to just make a tremoring image.
+    v Visualise the jitter pattern in imgui
     - Add simple no-reprojection history read & ema for glorious smear
   - Add proper jitter
     - Try (2, 3)-halton sequence first k numbers (param)

@@ -32,6 +32,9 @@
 #include <memory>
 #include <vector>
 #include <random>
+#include <ranges>
+
+using def_rng = std::linear_congruential_engine<uint64_t, 16807ul, 0ul, 2147483647ul>;
 
 WorldRenderer::MeshPipeline::MeshPipeline(
   etna::PipelineManager& pipeman,
@@ -171,6 +174,7 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
 
   generateSsaoKernel(std::span{constantsData.ssaoData.ssaoKernel, ssaoTotalLimitSamples});
   generateSsaoKernelRotations(constantsData.ssaoData.ssaoKernelRotations);
+  generateTaaJitterSequence(taaJitterSequence);
 
   if (cfg.useDebugConfig)
     loadDebugConfig();
@@ -1027,7 +1031,7 @@ void WorldRenderer::update(const FramePacket& packet)
     false,
     true,
     &mainViewParams,
-    (useAA && currentAATechnique == AATechnique::TAA) ? getCurFrameTaaJitter()
+    (useAA && currentAATechnique == AATechnique::TAA) ? getCurFrameTaaUvJitter()
                                                       : glm::vec2(0.f, 0.f),
     csmSplitLambda,
     csmShadowDist);
@@ -2778,6 +2782,31 @@ void WorldRenderer::drawGui()
         {
           ImGui::Checkbox("Antialias in SRGB space", &fxaaAntialiasInSrgb);
         }
+        else if (currentAATechnique == AATechnique::TAA)
+        {
+          constexpr const char* TAA_TA_NAMES[] = {"2", "4", "8", "16"};
+          constexpr uint32_t TAA_TA_VALUES[] = {2, 4, 8, 16};
+          size_t curTaId = size_t(
+            std::find(std::begin(TAA_TA_VALUES), std::end(TAA_TA_VALUES), taaTemporalAccumBacklog) -
+            std::begin(TAA_TA_VALUES));
+          if (ImGui::BeginCombo("TAA temporal accum backlog depth", TAA_TA_NAMES[curTaId]))
+          {
+            for (size_t i = 0; i < ARRCNT(TAA_TA_NAMES); i++)
+            {
+              bool selected = curTaId == i;
+              if (ImGui::Selectable(TAA_TA_NAMES[i], selected))
+              {
+                curTaId = i;
+                taaTemporalAccumBacklog = TAA_TA_VALUES[i];
+              }
+              if (selected)
+                ImGui::SetItemDefaultFocus();
+            }
+
+            ImGui::EndCombo();
+          }
+          ImGui::Checkbox("TAA show debug", &showTaaPatternDebug);
+        }
       }
 
       auto shadowsSettingsDropdown = [&](const char* name, ShadowsSettings& settings, bool& dirty) {
@@ -2915,7 +2944,6 @@ void WorldRenderer::drawGui()
       auto positions = data.subspan(veg.templateBufferOffset, veg.templateBufferSize);
 
       ImVec2 size = ImGui::GetContentRegionAvail();
-
       glm::vec2 sizeRatio = {size.x / VEGETATION_CHUNK_SIZE, size.y / VEGETATION_CHUNK_SIZE};
 
       for (const auto& pos : positions)
@@ -3008,6 +3036,25 @@ void WorldRenderer::drawGui()
       200, [](glm::vec3 v) { return v.x; }, [](glm::vec3 v) { return v.z; }, "xz");
     drawSsaoKernelSlice(
       200, [](glm::vec3 v) { return v.y; }, [](glm::vec3 v) { return v.z; }, "yz");
+  }
+
+  if (showTaaPatternDebug)
+  {
+    ImGui::SetNextWindowSize(ImVec2{200, 200}, ImGuiCond_Always);
+    ImGui::Begin("TAA subpixel jitter pattern");
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImVec2 size = ImGui::GetContentRegionAvail();
+    ImVec2 center = origin + size * 0.5f;
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    for (uint32_t i = 0; i < taaTemporalAccumBacklog; ++i)
+    {
+      const glm::vec2 uv = taaJitterSequence[i];
+      draw->AddCircleFilled(
+        ImVec2{center.x + uv.x * size.x, center.y + uv.y * size.y},
+        0.02f * size.x,
+        IM_COL32(150, 0, 0, 255));
+    }
+    ImGui::End();
   }
 }
 
@@ -3173,6 +3220,8 @@ void WorldRenderer::loadDebugConfig()
   ssaoConservariveTemporalCaching = unwrap(reader.read<bool>());
   currentAATechnique = unwrap(reader.read<AATechnique>());
   useAA = unwrap(reader.read<bool>());
+  taaTemporalAccumBacklog = unwrap(reader.read<uint32_t>());
+  showTaaPatternDebug = unwrap(reader.read<bool>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -3266,6 +3315,8 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(ssaoConservariveTemporalCaching));
   ETNA_VERIFY(writer.write(currentAATechnique));
   ETNA_VERIFY(writer.write(useAA));
+  ETNA_VERIFY(writer.write(taaTemporalAccumBacklog));
+  ETNA_VERIFY(writer.write(showTaaPatternDebug));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }
@@ -3286,9 +3337,7 @@ void WorldRenderer::setAllSpotLightsIntensity(float val)
     sceneMgr->lightsRW().spotLights[i].intensity = val;
 }
 
-using def_rng = std::linear_congruential_engine<uint64_t, 16807ul, 0ul, 2147483647ul>;
-
-void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
+void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples) const
 {
   // Spiral as in SAO, uniform z-angle dist
   std::uniform_real_distribution<float> randomFloats(0.0, 1.f);
@@ -3316,7 +3365,7 @@ void WorldRenderer::generateSsaoKernel(std::span<glm::vec4> out_samples)
   }
 }
 
-void WorldRenderer::generateSsaoKernelRotations(std::span<glm::vec4> out_rotations)
+void WorldRenderer::generateSsaoKernelRotations(std::span<glm::vec4> out_rotations) const
 {
   std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
   def_rng generator(1);
@@ -3331,8 +3380,21 @@ void WorldRenderer::generateSsaoKernelRotations(std::span<glm::vec4> out_rotatio
   }
 }
 
-glm::vec2 WorldRenderer::getCurFrameTaaJitter() const
+void WorldRenderer::generateTaaJitterSequence(std::span<glm::vec2> out_jitters) const
 {
-  // @TODO: impl
-  return glm::vec2(0.f, 0.f);
+  // @TODO: proper, this is a test (do quasi random, not random)
+  std::uniform_real_distribution<float> randomFloats(-0.5, 0.5);
+  def_rng generator(42);
+  std::ranges::copy(
+    std::views::iota(0) //
+      | std::views::transform([&](auto) {
+          return glm::vec2{randomFloats(generator), randomFloats(generator)};
+        }) //
+      | std::views::take(out_jitters.size()),
+    out_jitters.begin());
+}
+
+glm::vec2 WorldRenderer::getCurFrameTaaUvJitter() const
+{
+  return taaJitterSequence[wc.batchIndex() % taaTemporalAccumBacklog] / glm::vec2(resolution);
 }

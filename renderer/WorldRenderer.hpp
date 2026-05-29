@@ -28,6 +28,7 @@
 #include <skybox.h>
 #include <dispatch.h>
 #include <ssao.h>
+#include <taa.h>
 
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
@@ -315,6 +316,8 @@ private:
   DoubleBufferedImage motionVectors;
   DoubleBufferedImage taaTarget;
 
+  glm::vec2 taaJitterSequence[TAA_MAX_SAMPLES]{};
+
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};
   std::unique_ptr<QuadRenderer> quadRenderer{};
@@ -375,9 +378,11 @@ private:
   float ssaoEmaCoeff = 0.1f;
   float ssaoDepthRejectionThreshold = 0.025f;
   bool ssaoConservariveTemporalCaching = false;
-  AATechnique currentAATechnique = AATechnique::FXAA311;
+  AATechnique currentAATechnique = AATechnique::TAA;
   bool useAA = true;
   bool fxaaAntialiasInSrgb = true;
+  uint32_t taaTemporalAccumBacklog = 8;
+  bool showTaaPatternDebug = false;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 
@@ -443,8 +448,10 @@ private:
       sceneMgr->getVegetationTemplateData().size() * sizeof(GrassInstance));
   }
 
-  void generateSsaoKernel(std::span<glm::vec4> out_samples);
-  void generateSsaoKernelRotations(std::span<glm::vec4> out_rotations);
+  void generateSsaoKernel(std::span<glm::vec4> out_samples) const;
+  void generateSsaoKernelRotations(std::span<glm::vec4> out_rotations) const;
 
-  glm::vec2 getCurFrameTaaJitter() const;
+  void generateTaaJitterSequence(std::span<glm::vec2> out_jitters) const;
+
+  glm::vec2 getCurFrameTaaUvJitter() const;
 };
