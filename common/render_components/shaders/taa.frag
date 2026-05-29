@@ -17,8 +17,6 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
-// @TODO: proper bindings
-
 #include "tonemap.frag.inc"
 
 layout(location = 0 ) in VS_OUT
@@ -30,9 +28,11 @@ void main(void)
 {
   const vec3 currentCol = textureLod(ldrImage, surf.texCoord, 0.f).xyz;
 
-  // @TODO: impl
+  // @TEST iter 1: let there be smear!
+  const vec3 prevCol = textureLod(prevFrame, surf.texCoord, 0.f).xyz;
+  const vec3 finalCol = mix(prevCol, currentCol, constants.taaEmaCoeff);
 
-  vec3 finalCol = currentCol;
-  out_fragColor = vec4(ENCODE_AA_RESULT(finalCol), 1.f);
+  // No gamma encoding here -- we need linear for history
+  out_fragColor = vec4(finalCol, 1.f);
 }
 

@@ -90,7 +90,8 @@ struct Constants
   shader_uint gammaEncodeInTonemapping;
   shader_uint fxaaAntialiasInSrgb;
 
-  shader_uint pad0_, pad1_;
+  float taaEmaCoeff;
+  float pad1_;
 
   SsaoConstData ssaoData;
 };

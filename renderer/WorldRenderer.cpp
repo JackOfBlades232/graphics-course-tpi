@@ -144,6 +144,7 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   , taaTarget{DoubleBufferedImage::CreateInfo{&wc}}
 {
   registerViewContextManager();
+  registerSrgbEncoder();
 
   registerTonemapper<HistogramEqTonemapper>(TonemappingTechnique::HISTOGRAM_EQ);
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
@@ -310,6 +311,21 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "ssao_blurred_buffer",
       .format = vk::Format::eR32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+
+  createManagedImage(
+    taaTarget.getRawBuf(0),
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "taa_target0",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+  createManagedImage(
+    taaTarget.getRawBuf(1),
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "taa_target1",
+      .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
   for (auto& component : rcomponents)
@@ -632,22 +648,6 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
       .name = "ldr_target",
       .format = swapchain_format,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
-  createManagedImage(
-    taaTarget.getRawBuf(0),
-    etna::Image::CreateInfo{
-      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-      .name = "taa_target0",
-      .format = swapchain_format,
-      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
-        vk::ImageUsageFlagBits::eTransferSrc});
-  createManagedImage(
-    taaTarget.getRawBuf(1),
-    etna::Image::CreateInfo{
-      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-      .name = "taa_target1",
-      .format = swapchain_format,
-      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
-        vk::ImageUsageFlagBits::eTransferSrc});
 
   etna::VertexShaderInputDescription sceneVertexInputDesc{
     .bindings = {etna::VertexShaderInputDescription::Binding{
@@ -1023,6 +1023,8 @@ void WorldRenderer::update(const FramePacket& packet)
       ((currentAATechnique == AATechnique::FXAA || currentAATechnique == AATechnique::FXAA311) &&
        fxaaAntialiasInSrgb);
     constantsData.fxaaAntialiasInSrgb = fxaaAntialiasInSrgb;
+
+    constantsData.taaEmaCoeff = taaEmaCoeff;
   }
 
   mainViewParams = view_params_for_cam(
@@ -2330,43 +2332,8 @@ void WorldRenderer::renderWorld(
 
       if (isTaa)
       {
-        etna::set_state(
-          cmd_buf,
-          taaTarget.curBuf().get(),
-          vk::PipelineStageFlagBits2::eTransfer,
-          vk::AccessFlagBits2::eTransferRead,
-          vk::ImageLayout::eTransferSrcOptimal,
-          vk::ImageAspectFlagBits::eColor);
-        etna::set_state(
-          cmd_buf,
-          target_image,
-          vk::PipelineStageFlagBits2::eTransfer,
-          vk::AccessFlagBits2::eTransferWrite,
-          vk::ImageLayout::eTransferDstOptimal,
-          vk::ImageAspectFlagBits::eColor);
-        etna::flush_barriers(cmd_buf);
-
-        vk::ImageCopy copy{
-          .srcSubresource =
-            {.aspectMask = vk::ImageAspectFlagBits::eColor,
-             .mipLevel = 0,
-             .baseArrayLayer = 0,
-             .layerCount = 1},
-          .srcOffset = {},
-          .dstSubresource =
-            {.aspectMask = vk::ImageAspectFlagBits::eColor,
-             .mipLevel = 0,
-             .baseArrayLayer = 0,
-             .layerCount = 1},
-          .dstOffset = {},
-          .extent = vk::Extent3D{resolution.x, resolution.y, 1}};
-
-        cmd_buf.copyImage(
-          taaTarget.curBuf().get(),
-          vk::ImageLayout::eTransferSrcOptimal,
-          target_image,
-          vk::ImageLayout::eTransferDstOptimal,
-          {copy});
+        srgbEncoder->encode(
+          cmd_buf, target_image, target_image_view, taaTarget.curBuf(), defaultSampler);
       }
     }
 
@@ -2805,6 +2772,7 @@ void WorldRenderer::drawGui()
 
             ImGui::EndCombo();
           }
+          ImGui::SliderFloat("TAA ema coeff", &taaEmaCoeff, 0.f, 1.f);
           ImGui::Checkbox("TAA show debug", &showTaaPatternDebug);
         }
       }
@@ -3222,6 +3190,7 @@ void WorldRenderer::loadDebugConfig()
   useAA = unwrap(reader.read<bool>());
   taaTemporalAccumBacklog = unwrap(reader.read<uint32_t>());
   showTaaPatternDebug = unwrap(reader.read<bool>());
+  taaEmaCoeff = unwrap(reader.read<float>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -3317,6 +3286,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(useAA));
   ETNA_VERIFY(writer.write(taaTemporalAccumBacklog));
   ETNA_VERIFY(writer.write(showTaaPatternDebug));
+  ETNA_VERIFY(writer.write(taaEmaCoeff));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

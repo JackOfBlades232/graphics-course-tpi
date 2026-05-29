@@ -6,6 +6,7 @@
 #include <render_components/IComponent.hpp>
 #include <render_components/ITonemapper.hpp>
 #include <render_components/IAntialiaser.hpp>
+#include <render_components/SrgbEncoder.hpp>
 #include <render_components/DebugDrawer.hpp>
 
 #include <render_utils/PostfxRenderer.hpp>
@@ -255,6 +256,8 @@ private:
   std::array<ITonemapper*, TONEMAPPING_TECHNIQUE_COUNT> tonemapperComps{};
   std::array<IAntialiaser*, AA_TECHNIQUE_COUNT> aaComps{};
 
+  SrgbEncoder *srgbEncoder = nullptr;
+
   etna::Image ldrTarget;
   etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
@@ -383,6 +386,7 @@ private:
   bool fxaaAntialiasInSrgb = true;
   uint32_t taaTemporalAccumBacklog = 8;
   bool showTaaPatternDebug = false;
+  float taaEmaCoeff = 0.1f;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 
@@ -412,6 +416,13 @@ private:
     auto mgr = std::make_unique<ViewContextManager>(wc, *sceneMgr);
     viewCtxMgr = mgr.get();
     rcomponents.emplace_back(std::move(mgr));
+  }
+
+  void registerSrgbEncoder()
+  {
+    auto enc = std::make_unique<SrgbEncoder>();
+    srgbEncoder = enc.get();
+    rcomponents.emplace_back(std::move(enc));
   }
 
   template <std::derived_from<ITonemapper> T, class... TArgs>

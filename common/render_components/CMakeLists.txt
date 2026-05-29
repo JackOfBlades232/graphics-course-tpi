@@ -6,6 +6,7 @@ add_library(render_components
   FXAAAntialiaser.cpp
   FXAA311Antialiaser.cpp
   TAAAntialiaser.cpp
+  SrgbEncoder.cpp
 )
 
 target_include_directories(render_components PUBLIC ..)
@@ -30,5 +31,6 @@ target_add_shaders(render_components
   shaders/fxaa.frag
   shaders/fxaa311.frag
   shaders/taa.frag
+  shaders/srgb_encode.frag
 )
 
