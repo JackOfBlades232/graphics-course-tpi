@@ -35,7 +35,22 @@ void main(void)
     vec2 uv = surf.texCoord - motion;
     if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
-      const vec3 prevCol = textureLod(prevFrame, uv, 0).xyz;
+      vec3 prevCol = textureLod(prevFrame, uv, 0).xyz;
+
+      vec3 minNeiCol = vec3(9999.f);
+      vec3 maxNeiCol = vec3(-9999.f);
+      for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+        {
+          vec2 neiUv = surf.texCoord + vec2(x, y) * constants.mainTargetInverseResolution;
+          neiUv = clamp(neiUv, 0.f, 1.f);
+          vec3 nc = textureLod(ldrImage, neiUv, 0).xyz;
+          minNeiCol = min(minNeiCol, nc);
+          maxNeiCol = max(maxNeiCol, nc);
+        }
+
+      prevCol = clamp(prevCol, minNeiCol, maxNeiCol);
+
       col = mix(prevCol, col, constants.taaEmaCoeff);
     }
   }

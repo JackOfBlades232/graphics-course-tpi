@@ -82,7 +82,7 @@ v FXAAv3.11
   v Add back reprojection with motion vectors
     v Do the thing
     v Check if we need to add jitters in gpass calculation specifically (i think matrix should be enough) -- had to unjitter for motion vectors
-  - Implement neighbourhood clamping
+  v Implement neighbourhood clamping
   - Add disocclusion
     - Use cur frame lowpass as a backup value (no frame counts)
     - Test using velocity rejection
@@ -90,6 +90,7 @@ v FXAAv3.11
   - Add log weighing to combat flicker from color clamp if visible
   - Add a catmull rom filter for history to sharpen blur if visible
   - Add texture UV unjitter for materials and other mapped textures
+  - Check if we have precision problems on far terrain -- weird green, which also flickers with nclamp
   - Test adding edge dilation (if edge aliasing is a problem)
     - Test velocity
     - Test depth
