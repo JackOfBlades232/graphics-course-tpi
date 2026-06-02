@@ -15,7 +15,7 @@ class TAAAntialiaser final : public IAntialiaser
   {
     image_bind_provider_t prevFrameProvider;
     image_bind_provider_t motionVectorsProvider;
-    image_bind_provider_t depthProvider;
+    image_bind_provider_t prevMotionVectorsProvider;
   };
 
 public:

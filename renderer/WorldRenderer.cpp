@@ -166,9 +166,9 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
             return motionVectors.curBuf().genBinding(
               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
           },
-        .depthProvider =
+        .prevMotionVectorsProvider =
           [this] {
-            return mainViewDepth.genBinding(
+            return motionVectors.prevBuf().genBinding(
               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
           },
       }});
