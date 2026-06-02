@@ -2751,8 +2751,8 @@ void WorldRenderer::drawGui()
         }
         else if (currentAATechnique == AATechnique::TAA)
         {
-          constexpr const char* TAA_TA_NAMES[] = {"2", "4", "8", "16"};
-          constexpr uint32_t TAA_TA_VALUES[] = {2, 4, 8, 16};
+          constexpr const char* TAA_TA_NAMES[] = {"4", "8", "16"};
+          constexpr uint32_t TAA_TA_VALUES[] = {4, 8, 16};
           size_t curTaId = size_t(
             std::find(std::begin(TAA_TA_VALUES), std::end(TAA_TA_VALUES), taaTemporalAccumBacklog) -
             std::begin(TAA_TA_VALUES));
@@ -3350,9 +3350,8 @@ void WorldRenderer::generateSsaoKernelRotations(std::span<glm::vec4> out_rotatio
   }
 }
 
-void WorldRenderer::generateTaaJitterSequence(std::span<glm::vec2> out_jitters) const
+static void generate_random_trash(std::span<glm::vec2> out_samples)
 {
-  // @TODO: proper, this is a test (do quasi random, not random)
   std::uniform_real_distribution<float> randomFloats(-0.5, 0.5);
   def_rng generator(42);
   std::ranges::copy(
@@ -3360,8 +3359,68 @@ void WorldRenderer::generateTaaJitterSequence(std::span<glm::vec2> out_jitters) 
       | std::views::transform([&](auto) {
           return glm::vec2{randomFloats(generator), randomFloats(generator)};
         }) //
-      | std::views::take(out_jitters.size()),
-    out_jitters.begin());
+      | std::views::take(out_samples.size()),
+    out_samples.begin());
+}
+
+static void generate_halton(std::span<glm::vec2> out_samples, const int basex, const int basey)
+{
+  std::ranges::copy(
+    std::views::iota(0) //
+      | std::views::transform([&, nx = 0, dx = 1, ny = 0, dy = 1](auto) mutable {
+          auto apply = [](int& n, int& d, int base) {
+            int x = d - n;
+            if (x == 1)
+            {
+              n = 1;
+              d *= base;
+            }
+            else
+            {
+              int y = d / base;
+              while (x <= y)
+                y /= base;
+              n = (base + 1) * y - x;
+            }
+            return float(n) / float(d);
+          };
+          return glm::vec2(apply(nx, dx, basex), apply(ny, dy, basey)) - 0.5f;
+        }) //
+      | std::views::take(out_samples.size()),
+    out_samples.begin());
+}
+
+static void generate_r2(std::span<glm::vec2> out_samples, const float g)
+{
+  float a1 = 1.f / g;
+  float a2 = 1.f / (g * g);
+  std::ranges::copy(
+    std::views::iota(0) //
+      | std::views::transform([&](auto i) {
+          float n = float(i + 1);
+          float sink;
+          return glm::vec2(modff(0.5f + a1 * n, &sink), modff(0.5f + a2 * n, &sink)) - 0.5f;
+        }) //
+      | std::views::take(out_samples.size()),
+    out_samples.begin());
+}
+
+static void debias_sequence(std::span<glm::vec2> inout_samples)
+{
+  glm::vec2 center(0.f, 0.f);
+  for (const auto &sample : inout_samples)
+    center += sample;
+  center /= float(inout_samples.size());
+  for (auto &sample : inout_samples)
+    sample -= center;
+}
+
+void WorldRenderer::generateTaaJitterSequence(std::span<glm::vec2> out_jitters) const
+{
+  generate_r2(out_jitters, 1.32471795724474602596f);
+  (void)&generate_halton;
+  (void)&generate_random_trash;
+  debias_sequence(out_jitters);
 }
 
 glm::vec2 WorldRenderer::getCurFrameTaaUvJitter() const

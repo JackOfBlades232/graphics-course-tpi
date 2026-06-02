@@ -26,13 +26,21 @@ layout(location = 0 ) in VS_OUT
 
 void main(void)
 {
-  const vec3 currentCol = textureLod(ldrImage, surf.texCoord, 0.f).xyz;
+  vec3 col = textureLod(ldrImage, surf.texCoord, 0.f).xyz;
 
-  // @TEST iter 1: let there be smear!
-  const vec3 prevCol = textureLod(prevFrame, surf.texCoord, 0.f).xyz;
-  const vec3 finalCol = mix(prevCol, currentCol, constants.taaEmaCoeff);
+  // @TEST iter 2: reproject but dont reject
+  if (constants.frameNo > 0)
+  {
+    vec2 motion = textureLod(motionVectors, surf.texCoord, 0).xy;
+    vec2 uv = surf.texCoord - motion;
+    if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
+    {
+      const vec3 prevCol = textureLod(prevFrame, uv, 0).xyz;
+      col = mix(prevCol, col, constants.taaEmaCoeff);
+    }
+  }
 
   // No gamma encoding here -- we need linear for history
-  out_fragColor = vec4(finalCol, 1.f);
+  out_fragColor = vec4(col, 1.f);
 }
 

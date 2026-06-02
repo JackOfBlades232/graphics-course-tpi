@@ -69,7 +69,11 @@ void main(void)
   vec2 prevNdcXy = prevNdc.xy / prevNdc.w;
 
   get_static_pixel_motion_vector(
-    gl_FragCoord.xy, constants.mainTargetResolution, prevNdcXy,
+    gl_FragCoord.xy,
+    constants.mainTargetResolution,
+    prevNdcXy,
+    get_subpixel_uv_jitter(viewParams),
+    viewParams.prevSubpixelUvJitter,
     out_motionVector);
 #endif
 }

@@ -152,6 +152,7 @@ inline ViewParams view_params_for_cam(
     params.mPrevView = prev_params->mView;
     params.prevViewFrustum = prev_params->viewFrustum;
     params.prevViewPos = prev_params->viewPos;
+    params.prevSubpixelUvJitter = get_subpixel_uv_jitter(*prev_params);
   }
 
   // Frustum split for cascade maps
@@ -231,6 +232,7 @@ inline ViewParams view_params_for_cam(
     params.mPrevView = prev_params->mView;
     params.prevViewFrustum = prev_params->viewFrustum;
     params.prevViewPos = prev_params->viewPos;
+    params.prevSubpixelUvJitter = get_subpixel_uv_jitter(*prev_params);
   }
 
   params.needDepthBounds = shader_uint(need_depth_bounds);

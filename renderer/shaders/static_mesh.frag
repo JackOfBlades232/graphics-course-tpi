@@ -46,6 +46,10 @@ void main(void)
     matId, surf.wNorm, surf.wTangent, surf.texCoord,
     out_fragAlbedo, out_fragMaterial, out_fragNormal, out_fragTransmission);
   get_static_pixel_motion_vector(
-    gl_FragCoord.xy, constants.mainTargetResolution, prevNdcXy,
+    gl_FragCoord.xy,
+    constants.mainTargetResolution,
+    prevNdcXy,
+    get_subpixel_uv_jitter(viewParams),
+    viewParams.prevSubpixelUvJitter,
     out_motionVector);
 }

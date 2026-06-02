@@ -384,7 +384,7 @@ private:
   AATechnique currentAATechnique = AATechnique::TAA;
   bool useAA = true;
   bool fxaaAntialiasInSrgb = true;
-  uint32_t taaTemporalAccumBacklog = 8;
+  uint32_t taaTemporalAccumBacklog = 16;
   bool showTaaPatternDebug = false;
   float taaEmaCoeff = 0.1f;
 

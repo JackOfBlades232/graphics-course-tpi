@@ -80,6 +80,8 @@ struct ViewParams
   shader_uint needDepthBounds;
   shader_uint needReverseZ;
   shader_uint pad2_;
+  shader_vec2 prevSubpixelUvJitter;
+  shader_vec2 pad3_;
 };
 
 shader_inline shader_vec2 get_subpixel_uv_jitter(ViewParams params)

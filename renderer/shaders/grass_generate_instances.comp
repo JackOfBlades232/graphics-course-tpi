@@ -147,6 +147,7 @@ void main(void)
     culledInstances[instId].pos = grassPos;
     culledInstances[instId].idAndSf = (vegTypeId << GRASS_SF_BITS) | (floatBitsToUint(shrinkFactor) >> (GRASS_ID_BITS - 1));
     culledInstances[instId].windOffset = vec3(0.f);
+    culledInstances[instId].prevWindOffset = vec3(0.f);
     culledInstances[instId].dirQuantized = ((rotDirQ.x & 0xFFFF) << 16) | (rotDirQ.y & 0xFFFF);
 
     if (constants.windStrength >= 0.001f)

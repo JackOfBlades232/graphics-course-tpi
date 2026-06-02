@@ -76,12 +76,12 @@ v FXAAv3.11
     v Visualise the jitter pattern in imgui
     v Add simple no-reprojection history read & ema for glorious smear
     v Fix weird lightening of the image, seems like we stop accumulating history for some reason. Turned out to be rgba8 lack of precision, fixed by rgba32.
-  - Add proper jitter
-    - Try (2, 3)-halton sequence first k numbers (param)
-    - Try R2 sequence first k numbers (param)
-  - Add back reprojection with motion vectors
-    - Do the thing
-    - Check if we need to add jitters in gpass calculation specifically (i think matrix should be enough)
+  v Add proper jitter
+    v Try (2, 3)-halton sequence first k numbers (param)
+    v Try R2 sequence first k numbers (param)
+  v Add back reprojection with motion vectors
+    v Do the thing
+    v Check if we need to add jitters in gpass calculation specifically (i think matrix should be enough) -- had to unjitter for motion vectors
   - Implement neighbourhood clamping
   - Add disocclusion
     - Use cur frame lowpass as a backup value (no frame counts)
