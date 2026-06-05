@@ -96,8 +96,10 @@ bool closest_depth_compare(float closest, float new, in ViewParams params)
 
 struct NeighbourhoodData
 {
-  vec3 minCol;
-  vec3 maxCol;
+  vec3 clipBoxMin;
+  vec3 clipBoxMax;
+  vec3 clampBoxMin;
+  vec3 clampBoxMax;
   vec2 dilatedMotionVector;
   float closestDepth;
 };
@@ -107,8 +109,8 @@ NeighbourhoodData sample_neighbourhood(vec2 uv, in ViewParams params)
   NeighbourhoodData nd;
   vec3 minCol = vec3(9999.f);
   vec3 maxCol = vec3(-9999.f);
-  vec3 minColCross4 = vec3(9999.f);
-  vec3 maxColCross4 = vec3(-9999.f);
+  vec3 m1 = vec3(0.f);
+  vec3 m2 = vec3(0.f);
   nd.closestDepth = closest_depth_init(params);
   vec2 closestDepthUv = uv;
   for (int x = -1; x <= 1; ++x)
@@ -119,11 +121,8 @@ NeighbourhoodData sample_neighbourhood(vec2 uv, in ViewParams params)
       vec3 nc = textureLod(ldrImage, neiUv, 0).xyz;
       minCol = min(minCol, nc);
       maxCol = max(maxCol, nc);
-      if (abs(x) + abs(y) <= 1)
-      {
-        minColCross4 = min(minColCross4, nc);
-        maxColCross4 = max(maxColCross4, nc);
-      }
+      m1 += nc;
+      m2 += nc * nc;
       float d = textureLod(gbufDepth, neiUv, 0).x;
       if (closest_depth_compare(nd.closestDepth, d, params))
       {
@@ -131,15 +130,40 @@ NeighbourhoodData sample_neighbourhood(vec2 uv, in ViewParams params)
         closestDepthUv = neiUv;
       }
     }
+  vec3 mu = m1 / 9.f;
+  vec3 sigma = sqrt(abs((m2 / 9.f) - (mu * mu)));
+  const float gamma = 1.f;
   nd.dilatedMotionVector = textureLod(motionVectors, closestDepthUv, 0).xy;
-  nd.minCol = 0.5f * (minCol + minColCross4);
-  nd.maxCol = 0.5f * (maxCol + maxColCross4);
+  nd.clampBoxMin = minCol;
+  nd.clampBoxMax = maxCol;
+  nd.clipBoxMin = mu - gamma * sigma;
+  nd.clipBoxMax = mu + gamma * sigma;
   return nd;
+}
+
+vec3 clip_to_aabb_center(vec3 pnt, vec3 bbmin, vec3 bbmax)
+{
+  vec3 center = 0.5f * (bbmax + bbmin);
+  vec3 extent = 0.5f * (bbmax - bbmin);
+  vec3 v = pnt - center;
+  vec3 vn = v / extent;
+  vec3 avn = abs(vn);
+  float maxNormOff = max(avn.x, max(avn.y, avn.z));
+  if (maxNormOff > 1.f)
+    return center + v / maxNormOff;
+  else
+    return pnt; // inside
+}
+
+float ldr_luminance(vec3 col)
+{
+  return dot(col, vec3(0.2127f, 0.7152f, 0.0722f));
 }
 
 void main(void)
 {
-  vec3 col = textureLod(ldrImage, surf.texCoord, 0.f).xyz;
+  vec3 curCol = textureLod(ldrImage, surf.texCoord, 0.f).xyz;
+  vec3 finalCol = curCol;
 
   if (constants.frameNo > 0)
   {
@@ -148,12 +172,16 @@ void main(void)
     if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
       vec3 prevCol = sample_tex_catmull_rom_9tap(prevFrame, uv, textureSize(prevFrame, 0)).xyz;
-      prevCol = clamp(prevCol, neiData.minCol, neiData.maxCol);
-      vec3 accum = mix(prevCol, col, constants.taaEmaCoeff);
-      col = accum;
+      prevCol = clamp(prevCol, neiData.clampBoxMin, neiData.clampBoxMax);
+      prevCol = clip_to_aabb_center(prevCol, neiData.clipBoxMin, neiData.clipBoxMax);
+      float sourceW = constants.taaEmaCoeff;
+      float histW = 1.f - sourceW;
+      sourceW /= ldr_luminance(curCol) + 1.f;
+      histW /= ldr_luminance(prevCol) + 1.f;
+      finalCol = (curCol * sourceW + prevCol * histW) / max(sourceW + histW, 0.0001f);
     }
   }
 
   // No gamma encoding here -- we need linear for history
-  out_fragColor = vec4(col, 1.f);
+  out_fragColor = vec4(finalCol, 1.f);
 }

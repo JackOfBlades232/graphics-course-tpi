@@ -92,12 +92,11 @@ v FXAAv3.11
     x Fix motion vectors -- on camera movement velocity rejection jumps to crazy, but looks like that is it
   v Test adding edge dilation for motion vectors -- choose one from nei with closest depth
   v Add a catmull rom filter for history to sharpen blur -- works ever so slightly
-  - Improve nei-clamp to clipping
+  v Improve nei-clamp to clipping
     v Test rounded 4-cross and 3x3 minimax for clamping -- alerady better
-    - Test center-clipping instead of clamping (intersect with aabb)
-    - Test current-clipping instead of clamping (intersect with aabb)
-    - Test variance clipping (after clamping)
-  - Add luma weighing to combat flicker from color clamp
+    v Test center-clipping instead of clamping (intersect with aabb) -- movement in sharper now
+    v Test variance clipping (after clamping) -- looks the best imo
+  v Add luma weighing to combat flicker from color clamp
   - Test adjusting cur-sample
     - Sample bilinearly at unjittered UV
     - Sample with a mitchell filter from neighbourhood
