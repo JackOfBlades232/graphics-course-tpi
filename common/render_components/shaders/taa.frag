@@ -160,9 +160,14 @@ float ldr_luminance(vec3 col)
   return dot(col, vec3(0.2127f, 0.7152f, 0.0722f));
 }
 
+vec2 unjitter_screen_uv(vec2 suv, in ViewParams params)
+{
+  return clamp(suv - get_subpixel_uv_jitter(params) * constants.mainTargetInverseResolution, 0.f, 1.f);
+}
+
 void main(void)
 {
-  vec3 curCol = textureLod(ldrImage, surf.texCoord, 0.f).xyz;
+  vec3 curCol = textureLod(ldrImage, unjitter_screen_uv(surf.texCoord, viewParams), 0.f).xyz;
   vec3 finalCol = curCol;
 
   if (constants.frameNo > 0)

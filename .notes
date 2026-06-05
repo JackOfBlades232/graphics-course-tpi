@@ -97,9 +97,8 @@ v FXAAv3.11
     v Test center-clipping instead of clamping (intersect with aabb) -- movement in sharper now
     v Test variance clipping (after clamping) -- looks the best imo
   v Add luma weighing to combat flicker from color clamp
-  - Test adjusting cur-sample
-    - Sample bilinearly at unjittered UV
-    - Sample with a mitchell filter from neighbourhood
+  v Test adjusting cur-sample
+    v Sample bilinearly at unjittered UV
   - Add texture UV unjitter for materials and other mapped textures
   - Check for visual issues
   - Check that SSAO complies (no exagerrated ghosting)
