@@ -36,8 +36,9 @@ void TAAAntialiaser::antialias(
        0, aliased_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
      etna::Binding{1, resourceCb.prevFrameProvider()},
      etna::Binding{2, resourceCb.motionVectorsProvider()},
-     etna::Binding{3, resourceCb.prevMotionVectorsProvider()},
-     etna::Binding{8, constants.genBinding()}});
+     etna::Binding{3, resourceCb.depthProvider()},
+     etna::Binding{8, constants.genBinding()},
+     etna::Binding{9, resourceCb.viewParamsProvider()}});
 
   cmd_buf.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics, aa->pipelineLayout(), 0, {set.getVkSet()}, {});

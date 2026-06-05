@@ -28,7 +28,7 @@ void AcesTonemapper::tonemap(
   const etna::Sampler& sampler,
   const etna::Buffer& constants)
 {
-  ETNA_PROFILE_GPU(cmd_buf, reinhard_tonemapping_apply);
+  ETNA_PROFILE_GPU(cmd_buf, aces_tonemapping_apply);
 
   auto set = etna::create_descriptor_set(
     tonemapper->shaderProgramInfo().getDescriptorLayoutId(0),

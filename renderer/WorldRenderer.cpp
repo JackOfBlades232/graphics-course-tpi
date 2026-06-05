@@ -166,11 +166,12 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
             return motionVectors.curBuf().genBinding(
               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
           },
-        .prevMotionVectorsProvider =
+        .depthProvider =
           [this] {
-            return motionVectors.prevBuf().genBinding(
+            return mainViewDepth.genBinding(
               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
           },
+        .viewParamsProvider = [this] { return mainViewContext->viewParamsBuf.get().genBinding(); },
       }});
 
   generateSsaoKernel(std::span{constantsData.ssaoData.ssaoKernel, ssaoTotalLimitSamples});
@@ -3408,16 +3409,18 @@ static void generate_r2(std::span<glm::vec2> out_samples, const float g)
 static void debias_sequence(std::span<glm::vec2> inout_samples)
 {
   glm::vec2 center(0.f, 0.f);
-  for (const auto &sample : inout_samples)
+  for (const auto& sample : inout_samples)
     center += sample;
   center /= float(inout_samples.size());
-  for (auto &sample : inout_samples)
+  for (auto& sample : inout_samples)
     sample -= center;
 }
 
 void WorldRenderer::generateTaaJitterSequence(std::span<glm::vec2> out_jitters) const
 {
-  generate_r2(out_jitters, 1.32471795724474602596f);
+  generate_halton(out_jitters, 2, 3);
+  //generate_r2(out_jitters, 1.32471795724474602596f);
+  (void)&generate_r2;
   (void)&generate_halton;
   (void)&generate_random_trash;
   debias_sequence(out_jitters);

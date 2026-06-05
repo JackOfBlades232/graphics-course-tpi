@@ -6,16 +6,21 @@
 #include <render_utils/PostfxRenderer.hpp>
 
 #include <etna/GraphicsPipeline.hpp>
+#include <etna/Image.hpp>
+#include <etna/Buffer.hpp>
+
 #include <function2/function2.hpp>
 
 class TAAAntialiaser final : public IAntialiaser
 {
   using image_bind_provider_t = fu2::unique_function<etna::ImageBinding()>;
+  using buffer_bind_provider_t = fu2::unique_function<etna::BufferBinding()>;
   struct ResourceProviderCallbacks
   {
     image_bind_provider_t prevFrameProvider;
     image_bind_provider_t motionVectorsProvider;
-    image_bind_provider_t prevMotionVectorsProvider;
+    image_bind_provider_t depthProvider;
+    buffer_bind_provider_t viewParamsProvider;
   };
 
 public:
