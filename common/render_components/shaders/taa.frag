@@ -177,12 +177,19 @@ void main(void)
     if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
       vec3 prevCol = sample_tex_catmull_rom_9tap(prevFrame, uv, textureSize(prevFrame, 0)).xyz;
+
       prevCol = clamp(prevCol, neiData.clampBoxMin, neiData.clampBoxMax);
       prevCol = clip_to_aabb_center(prevCol, neiData.clipBoxMin, neiData.clipBoxMax);
+
       float sourceW = constants.taaEmaCoeff;
       float histW = 1.f - sourceW;
-      sourceW /= ldr_luminance(curCol) + 1.f;
-      histW /= ldr_luminance(prevCol) + 1.f;
+      vec3 curCompressed = curCol / (max(curCol.x, max(curCol.y, curCol.z)) + 1.f);
+      vec3 prevCompressed = prevCol / (max(prevCol.x, max(prevCol.y, prevCol.z)) + 1.f);
+      float curLuminance = ldr_luminance(curCompressed);
+      float prevLuminance = ldr_luminance(prevCompressed);
+      sourceW /= curLuminance + 1.f;
+      histW /= prevLuminance + 1.f;
+
       finalCol = (curCol * sourceW + prevCol * histW) / max(sourceW + histW, 0.0001f);
     }
   }

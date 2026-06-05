@@ -34,6 +34,7 @@ layout(location = 0) in VS_OUT
 
 #include "material_mesh.glsl.inc"
 #include "motion_vectors.glsl.inc"
+#include "temporal_helpers.frag.inc"
 
 void main(void)
 {
@@ -42,8 +43,10 @@ void main(void)
   vec4 prevNdc = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(surf.wPos, 1.f);
   vec2 prevNdcXy = prevNdc.xy / prevNdc.w;
 
+  vec2 tc = unjitter_surface_texcoord(surf.texCoord, viewParams);
+
   get_pixel_gbuf_info(
-    matId, surf.wNorm, surf.wTangent, surf.texCoord,
+    matId, surf.wNorm, surf.wTangent, tc,
     out_fragAlbedo, out_fragMaterial, out_fragNormal, out_fragTransmission);
   get_static_pixel_motion_vector(
     gl_FragCoord.xy,

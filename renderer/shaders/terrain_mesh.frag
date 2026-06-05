@@ -30,6 +30,7 @@ layout(binding = 10, set = 0) readonly buffer view_data_t
 
 #include "terrain_mesh.glsl.inc"
 #include "motion_vectors.glsl.inc"
+#include "temporal_helpers.frag.inc"
 
 layout(location = 0) in TE_OUT
 {
@@ -43,12 +44,13 @@ void main(void)
   vec3 materialData;
   vec3 normal;
 
-  vec2 tcDdx = dFdx(surf.texCoord);
-  vec2 tcDdy = dFdy(surf.texCoord);
+  vec2 tc = unjitter_surface_texcoord(surf.texCoord, viewParams);
+  vec2 tcDdx = dFdx(tc);
+  vec2 tcDdy = dFdy(tc);
 
-  surfaceColor = sample_albedo_clipmap(surf.texCoord, tcDdx, tcDdy);
-  materialData = sample_matdata_clipmap(surf.texCoord, tcDdx, tcDdy).xyz;
-  normal = sample_normal_clipmap(surf.texCoord, tcDdx, tcDdy);
+  surfaceColor = sample_albedo_clipmap(tc, tcDdx, tcDdy);
+  materialData = sample_matdata_clipmap(tc, tcDdx, tcDdy).xyz;
+  normal = sample_normal_clipmap(tc, tcDdx, tcDdy);
 
   out_fragAlbedo = surfaceColor;
   out_fragMaterial = materialData;

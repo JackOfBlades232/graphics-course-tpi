@@ -37,11 +37,12 @@ layout(location = 0) in VS_OUT
 
 #include "material_mesh.glsl.inc"
 #include "motion_vectors.glsl.inc"
+#include "temporal_helpers.frag.inc"
 
 void main(void)
 {
   const uint matId = uint(surf.matId);
-  vec2 tc = surf.texCoord;
+  vec2 tc = unjitter_surface_texcoord(surf.texCoord, viewParams);
 
 #if !GBUF_PASS || GBUF_NO_PREPASS
   // @TODO: rid of redundant sampling
