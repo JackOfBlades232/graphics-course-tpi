@@ -102,7 +102,7 @@ v FXAAv3.11
   v Add texture UV unjitter for materials and other mapped textures
   v Check for visual issues
   - Fix SSAO with TAA on low_poly_dark_town -- seems worst on far terrain + screen edges
-    - Research ways of unjittering the effect. One issue is jitter -- with addition to sampling jitter we get intense aliasing. When I lower TAA backlog -- more jitter.
+    v Research ways of unjittering the effect. One issue is jitter -- with addition to sampling jitter we get intense aliasing. When I lower TAA backlog -- more jitter. Fixed by constraining screenspace kern size.
     - Test ways of combating screen edge ghosts. Another issue is visual screen edge ghosting brought to life with taa.
   - Address visible flicker on highlights (lovely town, low poly dark town)
     - Try log weighing

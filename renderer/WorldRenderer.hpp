@@ -334,7 +334,7 @@ private:
   bool currentDebugTexShowR = true;
   bool currentDebugTexShowG = true;
   bool currentDebugTexShowB = true;
-  bool currentDebugTexShowA = true;
+  bool currentDebugTexShowA = false;
   bool settingsGuiEnabled = false;
   bool drawBboxes = false;
   bool wireframe = false;

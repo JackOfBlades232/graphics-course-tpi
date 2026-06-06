@@ -27,5 +27,5 @@ void main()
     (params.mask & 1) == 1 ? base.x : 0.f,
     (params.mask & 2) == 2 ? base.y : 0.f,
     (params.mask & 4) == 4 ? base.z : 0.f,
-    (params.mask & 8) == 8 ? base.w : 0.f);
+    (params.mask & 8) == 8 ? base.w : 1.f);
 }
