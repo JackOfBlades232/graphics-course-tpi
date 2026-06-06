@@ -73,8 +73,10 @@ void main()
   const float fragDepth = length(reconstructedPos - viewParams.viewPos);
 
   const float maxKernToFovy = 0.75f;
-  const float kernelScalingFactor =
-    min(fragDepth * maxKernToFovy / abs(viewParams.mProj[1][1]), 1.f);
+  const float minKernToFovy = 0.02f;
+  const float closeKernelScalingFactor = fragDepth * maxKernToFovy / abs(viewParams.mProj[1][1]);
+  const float farKernelScalingFactor = fragDepth * minKernToFovy / abs(viewParams.mProj[1][1]);
+  const float kernelScalingFactor = min(closeKernelScalingFactor, 1.f) * max(farKernelScalingFactor, 1.f);
   const float rad = kernelScalingFactor * constants.ssaoRadius;
 
   vec3 baseVec = vec3(rot, 0.f);
