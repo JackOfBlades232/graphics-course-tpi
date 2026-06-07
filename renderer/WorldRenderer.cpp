@@ -156,6 +156,11 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
     AATechnique::TAA,
     TAAAntialiaser::CreateInfo{
       .cb = {
+        .curFrameProvider =
+          [this] {
+            const auto& tgt = taaTarget.curBuf();
+            return std::make_pair(tgt.get(), tgt.getView({}));
+          },
         .prevFrameProvider =
           [this] {
             return taaTarget.prevBuf().genBinding(
@@ -2324,18 +2329,8 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, antialiasing);
 
-      const bool isTaa = currentAATechnique == AATechnique::TAA;
-      const auto& target = isTaa ? taaTarget.curBuf().get() : target_image;
-      const auto& targetView = isTaa ? taaTarget.curBuf().getView({}) : target_image_view;
-
       aaComps[size_t(currentAATechnique)]->antialias(
-        cmd_buf, target, targetView, ldrTarget, defaultSampler, constants->get());
-
-      if (isTaa)
-      {
-        srgbEncoder->encode(
-          cmd_buf, target_image, target_image_view, taaTarget.curBuf(), defaultSampler);
-      }
+        cmd_buf, target_image, target_image_view, ldrTarget, defaultSampler, constants->get());
     }
 
     {
@@ -3419,7 +3414,7 @@ static void debias_sequence(std::span<glm::vec2> inout_samples)
 void WorldRenderer::generateTaaJitterSequence(std::span<glm::vec2> out_jitters) const
 {
   generate_halton(out_jitters, 2, 3);
-  //generate_r2(out_jitters, 1.32471795724474602596f);
+  // generate_r2(out_jitters, 1.32471795724474602596f);
   (void)&generate_r2;
   (void)&generate_halton;
   (void)&generate_random_trash;

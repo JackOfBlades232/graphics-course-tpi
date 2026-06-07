@@ -13,10 +13,12 @@
 
 class TAAAntialiaser final : public IAntialiaser
 {
+  using rt_provider_t = fu2::unique_function<std::pair<vk::Image, vk::ImageView>()>;
   using image_bind_provider_t = fu2::unique_function<etna::ImageBinding()>;
   using buffer_bind_provider_t = fu2::unique_function<etna::BufferBinding()>;
   struct ResourceProviderCallbacks
   {
+    rt_provider_t curFrameProvider;
     image_bind_provider_t prevFrameProvider;
     image_bind_provider_t motionVectorsProvider;
     image_bind_provider_t depthProvider;

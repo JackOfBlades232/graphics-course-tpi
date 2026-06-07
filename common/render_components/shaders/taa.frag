@@ -5,6 +5,7 @@
 #include "constants.h"
 
 layout(location = 0) out vec4 out_fragColor;
+layout(location = 1) out vec4 out_linearColor;
 
 layout(binding = 0) uniform sampler2D ldrImage;
 
@@ -199,6 +200,6 @@ void main(void)
     }
   }
 
-  // No gamma encoding here -- we need linear for history
-  out_fragColor = vec4(finalCol, 1.f);
+  out_linearColor = vec4(finalCol, 1.f);
+  out_fragColor = vec4(ENCODE_AA_RESULT(finalCol), 1.f);
 }

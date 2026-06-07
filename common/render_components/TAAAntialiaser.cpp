@@ -16,7 +16,8 @@ void TAAAntialiaser::setupPipelines(vk::Format swapchain_format, DebugDrawersReg
     "taa",
     RENDER_COMPONENTS_SHADERS_ROOT "taa.frag.spv",
     swapchain_format,
-    {targetResolution.x, targetResolution.y}});
+    {targetResolution.x, targetResolution.y},
+    {vk::Format::eR32G32B32A32Sfloat}});
 }
 
 void TAAAntialiaser::antialias(
@@ -43,5 +44,6 @@ void TAAAntialiaser::antialias(
   cmd_buf.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics, aa->pipelineLayout(), 0, {set.getVkSet()}, {});
 
-  aa->render(cmd_buf, target_image, target_image_view);
+  auto [curFrameTarget, curFrameTargetView] = resourceCb.curFrameProvider();
+  aa->render(cmd_buf, {target_image, curFrameTarget}, {target_image_view, curFrameTargetView});
 }
