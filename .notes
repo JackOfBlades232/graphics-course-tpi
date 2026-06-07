@@ -78,7 +78,7 @@ v FXAAv3.11
   v Replace lowpass blend with offset modification for subpix
   x Check github impl to see if there is any more interesting stuff to it -- nothing of note.
   v Compare image and perf -- image is very similar. 380us -> 340us speedup. Leaving 311, the perf is slightly better.
-- TAA
+v TAA
   v Read up on quasi random sequences for jitter (especially look into first N halton seq members)
   v Set up scaffolding
     v Main view subpixel jitter parameter
