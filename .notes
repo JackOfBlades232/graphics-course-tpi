@@ -114,12 +114,12 @@ v FXAAv3.11
   v Address visible flicker on highlights (lovely town, low poly dark town) -- not entirely gone, but I am gonna leave it at that.
     x Try moving all neighbourhood operations to weighed (check Ue4 and grail) -- log looks worse at antialiasing, final looks blurry and grey, luminance -- don't get how to use with nei.
     v Try mitchell filter for current signal
-  - Fix SSAO with TAA on low_poly_dark_town -- seems worst on far terrain + screen edges
+  v Fix SSAO with TAA on low_poly_dark_town -- seems worst on far terrain + screen edges
     v Research ways of unjittering the effect. One issue is jitter -- with addition to sampling jitter we get intense aliasing. When I lower TAA backlog -- more jitter. Fixed by constraining screenspace kern size.
     v Test ways of combating screen edge ghosts. Another issue is visual screen edge ghosting brought to life with taa.
       v Tested dynamic tests for pixels moving from screen edge inward. It doesn't seem to have been the issue.
       v Enabled conservative caching and it is now hidden from the final frame. This is still a bug in my implementation and I don't quite understand it's origin, but for now this mitigation will be enough.
-  - Measure and improve perf
+  v Measure and improve perf
 
 Water
 - Gather task

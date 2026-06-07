@@ -34,7 +34,6 @@ surf;
 // Thanks https://gist.github.com/TheRealMJP/bc503b0b87b643d3505d41eab8b332ae
 // @TODO: study
 // @TODO: replace all with this
-// @TODO: 5 taps
 vec4 sample_tex_catmull_rom_9tap(in sampler2D texSmp, in vec2 uv, in vec2 texSize)
 {
   vec2 samplePos = uv * texSize;
@@ -82,6 +81,40 @@ vec4 sample_tex_catmull_rom_9tap(in sampler2D texSmp, in vec2 uv, in vec2 texSiz
   return result;
 }
 
+// from https://advances.realtimerendering.com/s2016/Filmic%20SMAA%20v7.pptx , p 92
+// @TODO same as with 9tap
+vec4 sample_tex_catmull_rom_5tap(in sampler2D texSmp, in vec2 uv, in vec2 texSize)
+{
+  vec4 rtMetrics = vec4(1.0 / texSize.xy, texSize.xy);
+
+  vec2 position = rtMetrics.zw * uv;
+  vec2 centerPosition = floor(position - 0.5) + 0.5;
+  vec2 f = position - centerPosition;
+  vec2 f2 = f * f;
+  vec2 f3 = f * f2;
+
+
+  const float c = 0.4; // note: [0;1] ( SMAA_FILMIC_REPROJECTION_SHARPNESS / 100.0 )
+  vec2 w0 = -c * f3 + 2.0 * c * f2 - c * f;
+  vec2 w1 = (2.0 - c) * f3 - (3.0 - c) * f2 + 1.0;
+  vec2 w2 = -(2.0 - c) * f3 + (3.0 - 2.0 * c) * f2 + c * f;
+  vec2 w3 = c * f3 - c * f2;
+
+  vec2 w12 = w1 + w2;
+  vec2 tc12 = rtMetrics.xy * (centerPosition + w2 / w12);
+  vec3 centerColor = textureLod(texSmp, vec2(tc12.x, tc12.y), 0).rgb;
+
+  vec2 tc0 = rtMetrics.xy * (centerPosition - 1.0);
+  vec2 tc3 = rtMetrics.xy * (centerPosition + 2.0);
+  vec4 color =
+    vec4(textureLod(texSmp, vec2(tc12.x, tc0.y), 0).rgb, 1.0) * (w12.x * w0.y) +
+    vec4(textureLod(texSmp, vec2(tc0.x, tc12.y), 0).rgb, 1.0) * (w0.x * w12.y) +
+    vec4(centerColor, 1.0) * (w12.x * w12.y) +
+    vec4(textureLod(texSmp, vec2(tc3.x, tc12.y), 0).rgb, 1.0) * (w3.x * w12.y) +
+    vec4(textureLod(texSmp, vec2(tc12.x, tc3.y), 0).rgb, 1.0) * (w12.x * w3.y);
+  return vec4(color.rgb / color.a, 1.0);
+}
+
 float closest_depth_init(in ViewParams params)
 {
   if (params.needReverseZ != 0)
@@ -96,10 +129,15 @@ bool closest_depth_compare(float closest, float new, in ViewParams params)
 }
 
 const mat3 MITCHELL_3X3 = mat3(
-  0.00308642, 0.04938272, 0.00308642,
-  0.04938272, 0.79012346, 0.04938272,
-  0.00308642, 0.04938272, 0.00308642
-);
+  0.00308642,
+  0.04938272,
+  0.00308642,
+  0.04938272,
+  0.79012346,
+  0.04938272,
+  0.00308642,
+  0.04938272,
+  0.00308642);
 
 struct NeighbourhoodData
 {
@@ -182,7 +220,7 @@ void main(void)
     vec2 uv = surf.texCoord - neiData.dilatedMotionVector;
     if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
-      vec3 prevCol = sample_tex_catmull_rom_9tap(prevFrame, uv, textureSize(prevFrame, 0)).xyz;
+      vec3 prevCol = sample_tex_catmull_rom_5tap(prevFrame, uv, textureSize(prevFrame, 0)).xyz;
 
       prevCol = clamp(prevCol, neiData.clampBoxMin, neiData.clampBoxMax);
       prevCol = clip_to_aabb_center(prevCol, neiData.clipBoxMin, neiData.clipBoxMax);
