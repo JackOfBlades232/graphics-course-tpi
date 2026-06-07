@@ -6,7 +6,7 @@
 #include "geometry.h"
 #include "constants.h"
 
-layout(location = 0) out vec3 out_ao;
+layout(location = 0) out vec4 out_ao;
 
 layout(binding = 0, set = 0) uniform sampler2D gbufNormal;
 layout(binding = 1, set = 0) uniform sampler2D gbufDepth;
@@ -48,7 +48,7 @@ void main()
   const float depth = max(texture(gbufDepth, surf.texCoord).x, 0.f);
   if (depth <= 0.f)
   {
-    out_ao = vec3(1.f, depth, 0.f);
+    out_ao = vec4(1.f, depth, 0.f, 0.f);
     return;
   }
 
@@ -72,12 +72,21 @@ void main()
 
   const float fragDepth = length(reconstructedPos - viewParams.viewPos);
 
+  const float fovYW = fragDepth / abs(viewParams.mProj[1][1]);
+
   const float maxKernToFovy = 0.75f;
-  const float minKernToFovy = 0.02f;
-  const float closeKernelScalingFactor = fragDepth * maxKernToFovy / abs(viewParams.mProj[1][1]);
-  const float farKernelScalingFactor = fragDepth * minKernToFovy / abs(viewParams.mProj[1][1]);
+  const float minKernToFovy = 0.05f;
+  const float closeKernelScalingFactor = maxKernToFovy * fovYW;
+  const float farKernelScalingFactor = minKernToFovy * fovYW;
   const float kernelScalingFactor = min(closeKernelScalingFactor, 1.f) * max(farKernelScalingFactor, 1.f);
   const float rad = kernelScalingFactor * constants.ssaoRadius;
+
+  const float ssradY = rad / fovYW;
+  const float ssradX = ssradY * abs(viewParams.mProj[0][0]) / abs(viewParams.mProj[1][1]);
+
+  const vec2 dte = min(surf.texCoord, 1.f - surf.texCoord);
+  const vec2 kernelCull = clamp(vec2(dte.x / ssradX, dte.y / ssradY), 0.f, 1.f);
+  const float normalizedKernelCull = min(kernelCull.x, kernelCull.y);
 
   vec3 baseVec = vec3(rot, 0.f);
   vec3 tangent = normalize(baseVec - normal * dot(baseVec, normal));
@@ -95,6 +104,8 @@ void main()
 
   uint validHistoryLength = 1;
 
+  float kcd = 0.f;
+
   float prevOcc = 0.f;
   float prevOccW = 0.f;
   if (constants.ssaoDoTemporalAccum != 0 && constants.ssaoForceDropHistory == 0 && constants.frameNo > 0)
@@ -103,16 +114,19 @@ void main()
     vec2 uv = surf.texCoord - motion;
     if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
-      vec3 prevAoDepthHl = texture(prevFrameAo, uv).xyz;
+      vec4 prevAoDepthHlKc = texture(prevFrameAo, uv);
 
       float ppViewDepth = length(reconstructedPos - viewParams.prevViewPos);
 
-      float disocclusionParam = abs(1.f - ppViewDepth / prevAoDepthHl.y);
+      float disocclusionParam = abs(1.f - ppViewDepth / prevAoDepthHlKc.y);
+      float kernelCullDisocclusion = max(normalizedKernelCull - prevAoDepthHlKc.w, 0.f);
 
-      if (disocclusionParam < constants.ssaoDepthRejectionThreshold)
+      kcd = kernelCullDisocclusion;
+
+      if (disocclusionParam < constants.ssaoDepthRejectionThreshold && kernelCullDisocclusion < 0.01f)
       {
-        prevOcc = prevAoDepthHl.x;
-        validHistoryLength = uint(prevAoDepthHl.z) + 1;
+        prevOcc = prevAoDepthHlKc.x;
+        validHistoryLength = uint(prevAoDepthHlKc.z) + 1;
         prevOccW = 1.f - max(constants.ssaoEmaCoeff, 1.f / float(validHistoryLength));
       }
     }
@@ -163,5 +177,6 @@ void main()
 
   occ = 1.f - occ / float(capSample - firstSample);
   occ = occ * (1.f - prevOccW) + prevOcc * prevOccW;
-  out_ao = vec3(occ, fragDepth, float(validHistoryLength));
+  out_ao = vec4(occ, fragDepth, float(validHistoryLength), normalizedKernelCull);
+  //out_ao = vec4(normalizedKernelCull, fragDepth, float(validHistoryLength), normalizedKernelCull);
 }

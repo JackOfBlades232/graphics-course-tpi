@@ -380,7 +380,7 @@ private:
   uint32_t ssaoTemporalAccumBacklog = 4;
   float ssaoEmaCoeff = 0.1f;
   float ssaoDepthRejectionThreshold = 0.025f;
-  bool ssaoConservariveTemporalCaching = false;
+  bool ssaoConservariveTemporalCaching = true; // @TODO: this is due to issues with screen edge disocclusion in TAA+SSAO combo
   AATechnique currentAATechnique = AATechnique::TAA;
   bool useAA = true;
   bool fxaaAntialiasInSrgb = true;
