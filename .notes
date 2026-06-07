@@ -101,14 +101,12 @@ v FXAAv3.11
     v Sample bilinearly at unjittered UV
   v Add texture UV unjitter for materials and other mapped textures
   v Check for visual issues
+  v Address visible flicker on highlights (lovely town, low poly dark town) -- not entirely gone, but I am gonna leave it at that.
+    x Try moving all neighbourhood operations to weighed (check Ue4 and grail) -- log looks worse at antialiasing, final looks blurry and grey, luminance -- don't get how to use with nei.
+    v Try mitchell filter for current signal
   - Fix SSAO with TAA on low_poly_dark_town -- seems worst on far terrain + screen edges
     v Research ways of unjittering the effect. One issue is jitter -- with addition to sampling jitter we get intense aliasing. When I lower TAA backlog -- more jitter. Fixed by constraining screenspace kern size.
     - Test ways of combating screen edge ghosts. Another issue is visual screen edge ghosting brought to life with taa.
-  - Address visible flicker on highlights (lovely town, low poly dark town)
-    - Try log weighing
-    - Try mitchell filter for current signal
-    - Try moving all neighbourhood operations to weighed (check Ue4 and grail)
-    - Research other ways of removing high contrast flicker
   - Measure and improve perf
 
 Water

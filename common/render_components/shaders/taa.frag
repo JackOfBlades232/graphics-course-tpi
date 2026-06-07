@@ -94,8 +94,15 @@ bool closest_depth_compare(float closest, float new, in ViewParams params)
   return params.needReverseZ != 0 ? new > closest : new < closest;
 }
 
+const mat3 MITCHELL_3X3 = mat3(
+  0.00308642, 0.04938272, 0.00308642,
+  0.04938272, 0.79012346, 0.04938272,
+  0.00308642, 0.04938272, 0.00308642
+);
+
 struct NeighbourhoodData
 {
+  vec3 sourceSample;
   vec3 clipBoxMin;
   vec3 clipBoxMax;
   vec3 clampBoxMin;
@@ -112,6 +119,7 @@ NeighbourhoodData sample_neighbourhood(vec2 uv, in ViewParams params)
   vec3 m1 = vec3(0.f);
   vec3 m2 = vec3(0.f);
   nd.closestDepth = closest_depth_init(params);
+  nd.sourceSample = vec3(0.f);
   vec2 closestDepthUv = uv;
   for (int x = -1; x <= 1; ++x)
     for (int y = -1; y <= 1; ++y)
@@ -123,6 +131,8 @@ NeighbourhoodData sample_neighbourhood(vec2 uv, in ViewParams params)
       maxCol = max(maxCol, nc);
       m1 += nc;
       m2 += nc * nc;
+      float w = MITCHELL_3X3[x + 1][y + 1];
+      nd.sourceSample += nc * w;
       float d = textureLod(gbufDepth, neiUv, 0).x;
       if (closest_depth_compare(nd.closestDepth, d, params))
       {
@@ -160,19 +170,14 @@ float ldr_luminance(vec3 col)
   return dot(col, vec3(0.2127f, 0.7152f, 0.0722f));
 }
 
-vec2 unjitter_screen_uv(vec2 suv, in ViewParams params)
-{
-  return clamp(suv - get_subpixel_uv_jitter(params) * constants.mainTargetInverseResolution, 0.f, 1.f);
-}
-
 void main(void)
 {
-  vec3 curCol = textureLod(ldrImage, unjitter_screen_uv(surf.texCoord, viewParams), 0.f).xyz;
+  NeighbourhoodData neiData = sample_neighbourhood(surf.texCoord, viewParams);
+  vec3 curCol = neiData.sourceSample;
   vec3 finalCol = curCol;
 
   if (constants.frameNo > 0)
   {
-    NeighbourhoodData neiData = sample_neighbourhood(surf.texCoord, viewParams);
     vec2 uv = surf.texCoord - neiData.dilatedMotionVector;
     if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
