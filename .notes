@@ -122,10 +122,31 @@ v TAA
   v Measure and improve perf
 
 Water
-- Gather task
-- Gather sources
+v Gather task
+v Gather sources
 - Research
-- Plan
+  v Read through dissertation
+  - Read through base water-sim paper
+  - Read through fft wiki page
+  - Read up a little bit of Zorich to fill in holes in matan
+  - Read some blog-posty stuff
+- Prep asset format
+  - Add artificial island setting (hmap falloff in some radius of some point)
+  - Adjust lpdt terrain so that it' an island and the scene is an island at water level
+  - Devise asset format for water (definitely need water level)
+- Plan geometric implementation
+  - How we do clips and wave gen
+  - How we render it (transparent pass right away?)
+  - How we generate normals
+- Plan lighting implementation
+  - Specular and diff components
+  - Sky reflection
+  - Bottom refraction(or distortion?)
+  - Caustics
+  - Foam
+- Plan shore interaction implementation
+  - How we create the shore outline data
+  - How we factor it in
 
 Fog
 - Gather task
