@@ -27,7 +27,7 @@ PostfxRenderer::PostfxRenderer(CreateInfo info)
   for (auto fmt : info.secondaryAttachmentFormats)
     attachmentFormats.push_back(fmt);
   attachments.reserve(rtCount);
-  for (int i = 0; i < rtCount; ++i)
+  for (size_t i = 0; i < rtCount; ++i)
   {
     attachments.push_back(vk::PipelineColorBlendAttachmentState{
       .blendEnable = vk::False,
@@ -40,7 +40,7 @@ PostfxRenderer::PostfxRenderer(CreateInfo info)
   pipeline = pipelineManager.createGraphicsPipeline(
     info.shaderProgramName.c_str(),
     etna::GraphicsPipeline::CreateInfo{
-      .blendingConfig = {.attachments = std::move(attachments)},
+      .blendingConfig = {.attachments = std::move(attachments), .logicOp = vk::LogicOp::eSet},
       .fragmentShaderOutput = {
         .colorAttachmentFormats = std::move(attachmentFormats),
       }});
@@ -71,7 +71,7 @@ void PostfxRenderer::render(
 
   std::vector<etna::RenderTargetState::AttachmentParams> attachments;
   attachments.reserve(target_image.size());
-  for (int i = 0; i < target_image.size(); ++i)
+  for (size_t i = 0; i < target_image.size(); ++i)
   {
     attachments.push_back(etna::RenderTargetState::AttachmentParams{
       .image = *(target_image.begin() + i),
