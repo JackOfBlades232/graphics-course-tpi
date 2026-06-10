@@ -124,20 +124,31 @@ v TAA
 Water
 v Gather task
 v Gather sources
-- Research
+v Research
   v Read through dissertation
   v Read through base water-sim paper
   v Read through fft wiki page
-  - Read up a little bit of Zorich to fill in holes in matan
-  - Read some blog-posty stuff
+  v Read up a little bit of Zorich to fill in holes in matan
+  v Read some blog-posty stuff
 - Prep asset format
   - Add artificial island setting (hmap falloff in some radius of some point)
   - Adjust lpdt terrain so that it' an island and the scene is an island at water level
   - Devise asset format for water (definitely need water level)
-- Plan geometric implementation
-  - How we do clips and wave gen
-  - How we render it (transparent pass right away?)
-  - How we generate normals
+  - Add main planar wind and make veg wind additional (fft will take planar)
+v Plan geometric implementation
+  v How we do clips and wave gen
+  v How we render it (transparent pass right away?)
+  v How we generate normals -- fft gives em
+- Geometry 
+  - Set up boilerplate, buffers tex's, shaders, params from blog
+  - Initial specter gen shader from blog 
+  - Temporal specter gen shader from blog
+  - IFFT shader -- 3d disp and normals.
+  - Copypasta terrain render (all geom cascades) and render single fft cascade with cook-torrance, for now opaque after gbuf resolve
+  - Add golden ratio seeded fft clips and sample all
+  - Disable hires cascades at distance
+  - Add planar wind influence to fft (idea -- the higher the amp of a cascade, the less it reacts to wind)
+  - Consider moving to transparent pass -- how is it done and what to render under?
 - Plan lighting implementation
   - Specular and diff components
   - Sky reflection
@@ -147,7 +158,6 @@ v Gather sources
 - Plan shore interaction implementation
   - How we create the shore outline data
   - How we factor it in
-
 Fog
 - Gather task
 - Gather sources
