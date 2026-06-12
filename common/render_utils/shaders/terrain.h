@@ -39,13 +39,20 @@ struct TerrainSourceData
 
   shader_uint noiseSeed;
 
-  shader_uint pad1_;
+  shader_uint continentType;
 
   shader_vec3 rangeMin;
   shader_uint detailCount;
 
   shader_vec3 rangeMax;
   shader_uint vegetationTypeCount;
+
+  shader_vec2 continentCircleCenter;
+  shader_vec2 continentCircleInnerOuterRad;
+
+  float continentOceanBottom;
+
+  float pad1_, pad2_, pad3_;
 
   TerrainDetailRule details[TERRAIN_MAX_DETAILS];
   TerrainVegetationRule vegetationTypes[TERRAIN_MAX_VEGETATION_TYPES];

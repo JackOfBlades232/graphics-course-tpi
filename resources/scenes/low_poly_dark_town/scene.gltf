@@ -4050,21 +4050,28 @@
         "index" : 19
       },
       "range" : [
-        -512.0, 512.0,
-        -22.0, 35.0,
+        -502.0, 522.0,
+        -12.0, 50.0,
         -512.0, 512.0
       ],
+      "continent": {
+        "type": "circle",
+        "center": [1650.0, 0.0],
+        "innerRadius": 1500.0,
+        "outerRadius": 3000.0,
+        "oceanBottom": -350.0
+      },
       "details" : [
         {
           "name": "grass",
-          "relHeightRange": [0.30, 1.0],
+          "relHeightRange": [0.30, 10000.0],
           "material": 19,
           "scale": [25.0, 25.0],
           "vegetation": 0
         },
         {
           "name": "sand",
-          "relHeightRange": [0.0, 0.30],
+          "relHeightRange": [-10000.0, 0.30],
           "material": 20,
           "scale": [25.0, 25.0]
         },

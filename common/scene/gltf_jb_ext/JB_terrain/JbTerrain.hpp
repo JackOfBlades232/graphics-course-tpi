@@ -32,6 +32,23 @@ struct JbTerrainExtVegetationData
   int material{-1};
 };
 
+enum class JbTerrainContinentType
+{
+  CIRCLE = 1
+};
+
+struct JbTerrainContinentData
+{
+  JbTerrainContinentType type;
+  float oceanBottom = 0.f;
+  struct
+  {
+    glm::vec2 center{};
+    float innerRad = 0.f;
+    float outerRad = 0.f;
+  } circle;
+};
+
 struct JbTerrainExtData
 {
   int heightmap{-1};
@@ -39,6 +56,8 @@ struct JbTerrainExtData
   glm::vec3 rangeMin{-1.f, 0.f, -1.f}, rangeMax{1.f, 1.f, 1.f};
 
   int noiseSeed{0};
+
+  std::optional<JbTerrainContinentData> continent;
 
   std::vector<JbTerrainExtDetailData> details{};
   std::vector<JbTerrainExtVegetationData> vegetations{};

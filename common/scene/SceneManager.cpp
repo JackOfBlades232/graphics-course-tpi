@@ -80,14 +80,12 @@ std::optional<tinygltf::Model> SceneManager::loadModel(std::filesystem::path pat
   else
     spdlog::info("glTF: no extensions supported");
 
-  if (
-    !m.extensions.empty() || !m.extensionsRequired.empty() || !m.extensionsUsed.empty())
+  if (!m.extensions.empty() || !m.extensionsRequired.empty() || !m.extensionsUsed.empty())
   {
     for (const auto& [mext, _] : m.extensions)
     {
       if (
-        std::find(m.extensionsUsed.begin(), m.extensionsUsed.end(), mext) ==
-        m.extensionsUsed.end())
+        std::find(m.extensionsUsed.begin(), m.extensionsUsed.end(), mext) == m.extensionsUsed.end())
       {
         spdlog::error(
           "glTF: inconsistent model, extension \"{}\" is used but not included in extensionsUsed",
@@ -148,12 +146,11 @@ SceneManager::ProcessedInstances SceneManager::processInstances(
             static_cast<float>(node.scale[2])));
 
       if (!node.rotation.empty())
-        transform *= mat4_cast(
-          glm::quat(
-            static_cast<float>(node.rotation[3]),
-            static_cast<float>(node.rotation[0]),
-            static_cast<float>(node.rotation[1]),
-            static_cast<float>(node.rotation[2])));
+        transform *= mat4_cast(glm::quat(
+          static_cast<float>(node.rotation[3]),
+          static_cast<float>(node.rotation[0]),
+          static_cast<float>(node.rotation[1]),
+          static_cast<float>(node.rotation[2])));
 
       if (!node.translation.empty())
         transform = translate(
@@ -296,11 +293,10 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
   for (size_t i = 0; i < m.meshes.size(); ++i)
   {
     const auto& mesh = m.meshes[i];
-    result.meshes.push_back(
-      Mesh{
-        .firstRelem = static_cast<uint32_t>(result.relems.size()),
-        .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
-      });
+    result.meshes.push_back(Mesh{
+      .firstRelem = static_cast<uint32_t>(result.relems.size()),
+      .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
+    });
 
     std::vector<uint32_t> matrixIds{};
 
@@ -323,13 +319,12 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       const tinygltf::Accessor& indAccessor = m.accessors[prim.indices];
       const tinygltf::Accessor& posAccessor = m.accessors[prim.attributes.at("POSITION")];
 
-      result.relems.push_back(
-        RenderElement{
-          .vertexOffset = static_cast<uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
-          .indexOffset = static_cast<uint32_t>(indAccessor.byteOffset / sizeof(uint32_t)),
-          .indexCount = static_cast<uint32_t>(indAccessor.count),
-          .materialId =
-            prim.material == -1 ? MaterialId::INVALID : material_remapping[prim.material]});
+      result.relems.push_back(RenderElement{
+        .vertexOffset = static_cast<uint32_t>(posAccessor.byteOffset / sizeof(Vertex)),
+        .indexOffset = static_cast<uint32_t>(indAccessor.byteOffset / sizeof(uint32_t)),
+        .indexCount = static_cast<uint32_t>(indAccessor.count),
+        .materialId =
+          prim.material == -1 ? MaterialId::INVALID : material_remapping[prim.material]});
 
       const auto& relem = result.relems.back();
 
@@ -339,9 +334,8 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 
       for (size_t matrixId : matrixIds)
       {
-        data.instances.push_back(
-          DrawableInstance{
-            shader_uint(matrixId), shader_uint(relem.materialId), 0, 0, FLT_MAX, -FLT_MAX, 0, 0});
+        data.instances.push_back(DrawableInstance{
+          shader_uint(matrixId), shader_uint(relem.materialId), 0, 0, FLT_MAX, -FLT_MAX, 0, 0});
       }
 
       totalInstCount += uint32_t(matrixIds.size());
@@ -381,9 +375,8 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
     auto instances = std::move(data.instances);
     for (DrawableInstance inst : instances)
     {
-      result.allInstances.push_back(
-        CullableInstance{
-          inst.instId, inst.materialId, shader_uint(result.sceneDrawCommands.size() - 1), 0});
+      result.allInstances.push_back(CullableInstance{
+        inst.instId, inst.materialId, shader_uint(result.sceneDrawCommands.size() - 1), 0});
     }
   }
 
@@ -409,12 +402,11 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 
     for (size_t i = 0; i < totalChunkCount; ++i)
     {
-      result.allInstances.push_back(
-        CullableInstance{
-          shader_uint(i + commandId),
-          shader_uint(MaterialId::INVALID), // @TODO set in scene
-          shader_uint(commandId),
-          TERRAIN_CHUNK_INSTANCE_FLAG});
+      result.allInstances.push_back(CullableInstance{
+        shader_uint(i + commandId),
+        shader_uint(MaterialId::INVALID), // @TODO set in scene
+        shader_uint(commandId),
+        TERRAIN_CHUNK_INSTANCE_FLAG});
 
       glm::vec3 chunkCoord = {};
       glm::vec3 chunkExtent = {};
@@ -623,12 +615,11 @@ SceneManager::ProcessedLights SceneManager::processLights(
     directionalLights.size() * sizeof(directionalLights[0]));
 
   const SmpId shadowSamplerId = SmpId(samplers.size());
-  samplers.emplace_back(
-    etna::Sampler::CreateInfo{
-      .filter = vk::Filter::eLinear,
-      .addressMode = vk::SamplerAddressMode::eClampToBorder,
-      .name = "<shadowmap_sampler>",
-      .compareEnable = true});
+  samplers.emplace_back(etna::Sampler::CreateInfo{
+    .filter = vk::Filter::eLinear,
+    .addressMode = vk::SamplerAddressMode::eClampToBorder,
+    .name = "<shadowmap_sampler>",
+    .compareEnable = true});
 
   auto nextShadowTexSmpId = [&, this] {
     ETNA_ASSERT(textures.size() <= 65535);
@@ -641,15 +632,14 @@ SceneManager::ProcessedLights SceneManager::processLights(
     for (uint32_t i = 0; i < lights->pointLightsCount; ++i)
     {
       lights->pointLights[i].shadowmap = nextShadowTexSmpId();
-      textures.emplace_back(create_image(
-        etna::Image::CreateInfo{
-          .extent = {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION, 1},
-          .name = fmt::format("pointlight_shadowmap{}", i),
-          .format = vk::Format::eD16Unorm,
-          .imageUsage =
-            vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment,
-          .layers = 6,
-          .flags = vk::ImageCreateFlagBits::eCubeCompatible}));
+      textures.emplace_back(create_image(etna::Image::CreateInfo{
+        .extent = {POINT_SM_RESOLUTION, POINT_SM_RESOLUTION, 1},
+        .name = fmt::format("pointlight_shadowmap{}", i),
+        .format = vk::Format::eD16Unorm,
+        .imageUsage =
+          vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment,
+        .layers = 6,
+        .flags = vk::ImageCreateFlagBits::eCubeCompatible}));
     }
     pointLightShadowmaps = {textures.end() - lights->pointLightsCount, textures.end()};
   }
@@ -660,13 +650,12 @@ SceneManager::ProcessedLights SceneManager::processLights(
     for (uint32_t i = 0; i < lights->spotLightsCount; ++i)
     {
       lights->spotLights[i].shadowmap = nextShadowTexSmpId();
-      textures.emplace_back(create_image(
-        etna::Image::CreateInfo{
-          .extent = {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION, 1},
-          .name = fmt::format("spotlight_shadowmap{}", i),
-          .format = vk::Format::eD16Unorm,
-          .imageUsage =
-            vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
+      textures.emplace_back(create_image(etna::Image::CreateInfo{
+        .extent = {SPOT_SM_RESOLUTION, SPOT_SM_RESOLUTION, 1},
+        .name = fmt::format("spotlight_shadowmap{}", i),
+        .format = vk::Format::eD16Unorm,
+        .imageUsage =
+          vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
     }
     spotLightShadowmaps = {textures.end() - lights->spotLightsCount, textures.end()};
   }
@@ -680,13 +669,12 @@ SceneManager::ProcessedLights SceneManager::processLights(
       for (uint32_t j = 0; j < CSM_CASCADE_COUNT; ++j)
       {
         lights->directionalLights[i].shadowmapCascades[j].map = nextShadowTexSmpId();
-        textures.emplace_back(create_image(
-          etna::Image::CreateInfo{
-            .extent = {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION, 1},
-            .name = fmt::format("directional{}_csm_shadowmap[{}]", i, j),
-            .format = vk::Format::eD16Unorm,
-            .imageUsage =
-              vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
+        textures.emplace_back(create_image(etna::Image::CreateInfo{
+          .extent = {CSM_CASCADE_RESOLUTION, CSM_CASCADE_RESOLUTION, 1},
+          .name = fmt::format("directional{}_csm_shadowmap[{}]", i, j),
+          .format = vk::Format::eD16Unorm,
+          .imageUsage =
+            vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment}));
       }
     }
     // @NOTE ub
@@ -708,67 +696,56 @@ void SceneManager::startDataUpload(
   std::span<const Material> material_params,
   std::span<const IndirectCommand> vegetation_draw_commands)
 {
-  unifiedVbuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = vertices.size_bytes(),
-      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "unifiedVbuf",
-    });
+  unifiedVbuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = vertices.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "unifiedVbuf",
+  });
 
-  unifiedIbuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = indices.size_bytes(),
-      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "unifiedIbuf",
-    });
+  unifiedIbuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = indices.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "unifiedIbuf",
+  });
 
-  matricesBuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = instance_matrices.size_bytes(),
-      .bufferUsage =
-        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "matricesBuf",
-    });
+  matricesBuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = instance_matrices.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "matricesBuf",
+  });
 
-  indirectDrawBuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = draw_commands.size_bytes(),
-      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc |
-        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "indirectDrawBuf",
-    }),
+  indirectDrawBuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = draw_commands.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc |
+      vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "indirectDrawBuf",
+  }),
 
-  bboxesBuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = boxes.size_bytes(),
-      .bufferUsage =
-        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "bboxesBuf",
-    });
+  bboxesBuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = boxes.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "bboxesBuf",
+  });
 
-  instancesBuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = instances.size_bytes(),
-      .bufferUsage =
-        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "instancesBuf",
-    });
+  instancesBuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = instances.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "instancesBuf",
+  });
 
   // @TODO: it isn't big, maybe make uniform?
-  materialParamsBuf = create_buffer(
-    etna::Buffer::CreateInfo{
-      .size = material_params.size_bytes(),
-      .bufferUsage =
-        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "materialParamsBuf",
-    });
+  materialParamsBuf = create_buffer(etna::Buffer::CreateInfo{
+    .size = material_params.size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "materialParamsBuf",
+  });
 
   sceneDataUpload.unifiedVbufGpuUpload =
     streamer.initUploadBufferAsync<Vertex>(unifiedVbuf, 0, vertices);
@@ -786,22 +763,20 @@ void SceneManager::startDataUpload(
 
   if (!vegetationTemplateBufferData.empty())
   {
-    vegetationTemplateBuffer = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = std::span{vegetationTemplateBufferData}.size_bytes(),
-        .bufferUsage =
-          vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = "vegetationTemplateBuffer",
-      });
-    vegetationIndirectDrawBuffer = create_buffer(
-      etna::Buffer::CreateInfo{
-        .size = vegetation_draw_commands.size_bytes(),
-        .bufferUsage = vk::BufferUsageFlagBits::eTransferDst |
-          vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = "vegetationIndirectDrawBuffer",
-      });
+    vegetationTemplateBuffer = create_buffer(etna::Buffer::CreateInfo{
+      .size = std::span{vegetationTemplateBufferData}.size_bytes(),
+      .bufferUsage =
+        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "vegetationTemplateBuffer",
+    });
+    vegetationIndirectDrawBuffer = create_buffer(etna::Buffer::CreateInfo{
+      .size = vegetation_draw_commands.size_bytes(),
+      .bufferUsage = vk::BufferUsageFlagBits::eTransferDst |
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "vegetationIndirectDrawBuffer",
+    });
     sceneDataUpload.vegetationTemplateBufferGpuUpload = streamer.initUploadBufferAsync<glm::vec2>(
       vegetationTemplateBuffer, 0, vegetationTemplateBufferData);
     sceneDataUpload.vegetationIndirectDrawBufferGpuUpload =
@@ -831,13 +806,12 @@ void SceneManager::selectScene(
   // @TODO: Maybe bake all this shit into bindata? Instances, everything. How fast it would be?
   std::vector<size_t> samplerRemapping{};
   {
-    samplers.emplace_back(
-      etna::Sampler::CreateInfo{
-        .filter = vk::Filter::eNearest,
-        .addressMode = vk::SamplerAddressMode::eRepeat,
-        .name = "<default_sampler>",
-        .minLod = 0.f,
-        .maxLod = VK_LOD_CLAMP_NONE});
+    samplers.emplace_back(etna::Sampler::CreateInfo{
+      .filter = vk::Filter::eNearest,
+      .addressMode = vk::SamplerAddressMode::eRepeat,
+      .name = "<default_sampler>",
+      .minLod = 0.f,
+      .maxLod = VK_LOD_CLAMP_NONE});
 
     auto hashGltfSampler = [](const tinygltf::Sampler& smp) {
       auto hasher = std::hash<int>{};
@@ -873,13 +847,12 @@ void SceneManager::selectScene(
                ? vk::SamplerAddressMode::eMirroredRepeat
                : vk::SamplerAddressMode::eClampToEdge);
 
-        samplers.emplace_back(
-          etna::Sampler::CreateInfo{
-            .filter = filterMode,
-            .addressMode = addressMode,
-            .name = loadedSampler.name,
-            .minLod = 0.f,
-            .maxLod = VK_LOD_CLAMP_NONE});
+        samplers.emplace_back(etna::Sampler::CreateInfo{
+          .filter = filterMode,
+          .addressMode = addressMode,
+          .name = loadedSampler.name,
+          .minLod = 0.f,
+          .maxLod = VK_LOD_CLAMP_NONE});
       }
     }
   }
@@ -1188,24 +1161,22 @@ void SceneManager::selectScene(
     }
 
     {
-      planarTexStub = create_image(
-        etna::Image::CreateInfo{
-          .extent = {1, 1, 1},
-          .name = "<planar tex stub>",
-          .format = vk::Format::eR8G8B8A8Unorm,
-          .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-            vk::ImageUsageFlagBits::eTransferDst,
-          .mipLevels = 1});
-      cubeTexStub = create_image(
-        etna::Image::CreateInfo{
-          .extent = {1, 1, 1},
-          .name = "<cube tex stub>",
-          .format = vk::Format::eR8G8B8A8Unorm,
-          .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
-            vk::ImageUsageFlagBits::eTransferDst,
-          .layers = 6,
-          .mipLevels = 1,
-          .flags = vk::ImageCreateFlagBits::eCubeCompatible});
+      planarTexStub = create_image(etna::Image::CreateInfo{
+        .extent = {1, 1, 1},
+        .name = "<planar tex stub>",
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+          vk::ImageUsageFlagBits::eTransferDst,
+        .mipLevels = 1});
+      cubeTexStub = create_image(etna::Image::CreateInfo{
+        .extent = {1, 1, 1},
+        .name = "<cube tex stub>",
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+          vk::ImageUsageFlagBits::eTransferDst,
+        .layers = 6,
+        .mipLevels = 1,
+        .flags = vk::ImageCreateFlagBits::eCubeCompatible});
 
       samplerStub = etna::Sampler{etna::Sampler::CreateInfo{
         .filter = vk::Filter::eNearest,
@@ -1236,6 +1207,19 @@ void SceneManager::selectScene(
     ETNA_ASSERT(terrainExt->vegetations.size() <= TERRAIN_MAX_VEGETATION_TYPES);
     data.detailCount = uint32_t(terrainExt->details.size());
     data.vegetationTypeCount = uint32_t(terrainExt->vegetations.size());
+
+    if (terrainExt->continent)
+    {
+      data.continentType = uint32_t(terrainExt->continent->type);
+      data.continentCircleCenter = terrainExt->continent->circle.center;
+      data.continentCircleInnerOuterRad =
+        glm::vec2(terrainExt->continent->circle.innerRad, terrainExt->continent->circle.outerRad);
+      data.continentOceanBottom = terrainExt->continent->oceanBottom;
+    }
+    else
+    {
+      data.continentType = 0;
+    }
 
     // @TODO: do I need to make sure it's one material here as well?
     int vid = 0;
@@ -1467,17 +1451,16 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
           uint32_t w = st.isCube ? st.as.cube.side : st.as.planar.w;
           uint32_t h = st.isCube ? st.as.cube.side : st.as.planar.h;
 
-          img = create_image(
-            etna::Image::CreateInfo{
-              .extent = {w, h, 1},
-              .name = st.uri,
-              .format = st.format,
-              .imageUsage = vk::ImageUsageFlagBits::eSampled |
-                vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
-              .layers = st.isCube ? 6u : 1u,
-              .mipLevels = mip_count_for_dims(w, h),
-              .flags =
-                st.isCube ? vk::ImageCreateFlagBits::eCubeCompatible : vk::ImageCreateFlags{}});
+          img = create_image(etna::Image::CreateInfo{
+            .extent = {w, h, 1},
+            .name = st.uri,
+            .format = st.format,
+            .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc |
+              vk::ImageUsageFlagBits::eTransferDst,
+            .layers = st.isCube ? 6u : 1u,
+            .mipLevels = mip_count_for_dims(w, h),
+            .flags =
+              st.isCube ? vk::ImageCreateFlagBits::eCubeCompatible : vk::ImageCreateFlags{}});
 
           if (st.isCube)
           {

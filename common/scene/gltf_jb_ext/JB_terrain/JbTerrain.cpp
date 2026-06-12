@@ -84,6 +84,70 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
     data.noiseSeed = seed.GetNumberAsInt();
   }
 
+  if (desc.Has("continent"))
+  {
+    const auto& cont = desc.Get("continent");
+    VERIFY(cont.IsObject(), "invalid format: \"continent\" must be an object");
+    VERIFY(cont.Has("type"), "invalid format: \"continent\" must have a \"type\"");
+    auto& dst = data.continent.emplace();
+    if (cont.Has("oceanBottom"))
+    {
+      const auto& ob = cont.Get("oceanBottom");
+      VERIFY(ob.IsNumber(), "invalid format: \"continent\"/\"oceanBottom\" must be a number");
+      dst.oceanBottom = float(ob.GetNumberAsDouble());
+      VERIFY(
+        dst.oceanBottom <= data.rangeMin.y,
+        "invalid format: \"continent\"/\"oceanBottom\" must not be greater than regular range "
+        "minimum");
+    }
+    else
+    {
+      dst.oceanBottom = data.rangeMin.y;
+    }
+    const auto& tp = cont.Get("type");
+    VERIFY(tp.IsString(), "invalid format: \"continent\"/\"type\" must be a string");
+    std::string typeName = tp.Get<std::string>();
+    if (typeName == "circle")
+    {
+      dst.type = JbTerrainContinentType::CIRCLE;
+      VERIFY(
+        cont.Has("center"), "invalid format: \"continent\" of center type must have a \"center\"");
+      VERIFY(
+        cont.Has("innerRadius"),
+        "invalid format: \"continent\" of center type must have a \"innerRadius\"");
+      VERIFY(
+        cont.Has("outerRadius"),
+        "invalid format: \"continent\" of center type must have a \"outerRadius\"");
+      const auto& c = cont.Get("center");
+      const auto& inr = cont.Get("innerRadius");
+      const auto& our = cont.Get("outerRadius");
+      VERIFY(c.IsArray(), "invalid format: \"center\" must be a vector");
+      VERIFY(c.ArrayLen() == 2, "invalid format: \"center\" must be a 2d vector");
+      const auto& cx = c.Get(0);
+      const auto& cy = c.Get(1);
+      VERIFY(cx.IsNumber(), "invalid format: \"center\"[0] must be a number");
+      VERIFY(cy.IsNumber(), "invalid format: \"center\"[1] must be a number");
+      dst.circle.center = glm::vec2(float(cx.GetNumberAsDouble()), float(cy.GetNumberAsDouble()));
+      VERIFY(inr.IsNumber(), "invalid format: \"continent\"/\"innerRadius\" must be a number");
+      VERIFY(our.IsNumber(), "invalid format: \"continent\"/\"outerRadius\" must be a number");
+      dst.circle.innerRad = float(inr.GetNumberAsDouble());
+      dst.circle.outerRad = float(our.GetNumberAsDouble());
+      VERIFY(
+        dst.circle.innerRad > 0.f,
+        "invalid format: \"continent\"/\"innerRadius\" must be positive");
+      VERIFY(
+        dst.circle.outerRad > 0.f,
+        "invalid format: \"continent\"/\"outerRadius\" must be positive");
+      VERIFY(
+        dst.circle.outerRad > dst.circle.innerRad,
+        "invalid format: \"continent\"/\"outerRadius\" must be greater than \"innerRadius\"");
+    }
+    else
+    {
+      VERIFY(0, "invalid format: \"continent\"/\"type\" is unknown");
+    }
+  }
+
   if (desc.Has("details"))
   {
     const auto& dets = desc.Get("details");
@@ -134,8 +198,7 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
       if (elem.Has("relHeightRange"))
       {
 #define REL_H_RNG_FORMAT_ERR                                                                       \
-  "invalid format: detail \"relHeightRange\" must be a 2-element double array, with [0] < [1] "    \
-  "and both in [0, 1] range"
+  "invalid format: detail \"relHeightRange\" must be a 2-element double array, with [0] < [1] "
         const auto& rng = elem.Get("relHeightRange");
         VERIFY(rng.IsArray() && rng.ArrayLen() == 2, REL_H_RNG_FORMAT_ERR);
 
@@ -145,8 +208,7 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
 
         const double xv = x.GetNumberAsDouble();
         const double yv = y.GetNumberAsDouble();
-        VERIFY(
-          (xv >= 0.0 && xv <= 1.0) && (yv >= 0.0 && yv <= 1.0) && xv < yv, REL_H_RNG_FORMAT_ERR);
+        VERIFY(xv < yv, REL_H_RNG_FORMAT_ERR);
 
         dst.relHeightRange = {xv, yv};
         dst.useRelHeightRange = true;

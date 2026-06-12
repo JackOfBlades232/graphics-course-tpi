@@ -140,6 +140,7 @@ v Plan geometric implementation
   v How we render it (transparent pass right away?)
   v How we generate normals -- fft gives em
 - Geometry 
+  v Set up terrain to fall off into the ocean with scene params
   - Set up boilerplate, buffers tex's, shaders, params from blog
   - Initial specter gen shader from blog 
   - Temporal specter gen shader from blog

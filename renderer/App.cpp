@@ -81,10 +81,14 @@ void App::processInput(float dt)
   if (mainWindow->keyboard[KeyboardKey::kEscape] == ButtonState::Falling)
     mainWindow->askToClose();
 
+  camMoveSpeed = 1;
+
   if (is_held_down(mainWindow->keyboard[KeyboardKey::kLeftShift]))
-    camMoveSpeed = 10;
-  else
-    camMoveSpeed = 1;
+  {
+    camMoveSpeed *= 10;
+    if (is_held_down(mainWindow->keyboard[KeyboardKey::kLeftControl]))
+      camMoveSpeed *= 10;
+  }
 
   if (mainWindow->mouse[MouseButton::mbRight] == ButtonState::Rising)
     mainWindow->captureMouse = !mainWindow->captureMouse;
