@@ -34,7 +34,7 @@ SceneManager::SceneManager(const etna::GpuWorkCount& wc)
   : oneShotCommands{etna::get_context().createOneShotCmdMgr()}
   , streamer{etna::PerFrameTransferHelper::CreateInfo{
       .totalStagingSize = 4096 * 4096 * 4, .wc = &wc}}
-  , streamingThread{[this] { streamingLoop(); }}
+  , streamingThread{[this](std::stop_token stop) { streamingLoop(stop); }}
 {
 }
 
@@ -1315,7 +1315,6 @@ void SceneManager::selectScene(
   }
 
   sceneInited.test_and_set(std::memory_order_release);
-  sceneInited.notify_one();
 }
 
 etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription()
@@ -1548,10 +1547,20 @@ std::vector<TexId> SceneManager::tickTransfer(vk::CommandBuffer cmd_buf)
 }
 
 // @TODO: cancellation on premature shutdown
-void SceneManager::streamingLoop()
+void SceneManager::streamingLoop(std::stop_token stop)
 {
   while (!sceneInited.test(std::memory_order_acquire))
-    sceneInited.wait(false, std::memory_order_relaxed);
+  {
+    if (stop.stop_requested())
+      return;
+
+    // @NOTE: not atomic wait! I want to be able to check cancellation token, and atomic.wait does
+    // not expose a timeout from the underlying futex/WaitOnAddress.
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+
+  if (stop.stop_requested())
+    return;
 
   auto sceneRoot = scenePath.parent_path();
 
@@ -1566,11 +1575,17 @@ void SceneManager::streamingLoop()
     if (realPath.extension() != ".png")
       ETNA_PANIC("Invalid texture \"{}\", only allowed .png files", texPath);
 
+    if (stop.stop_requested())
+      return;
+
     int texW, texH, texChannels;
     unsigned char* texData =
       stbi_load(to_char_str(realPath.string()).c_str(), &texW, &texH, &texChannels, 4);
     ETNA_VERIFY(texData);
     ETNA_VERIFY(texChannels == 4);
+
+    if (stop.stop_requested())
+      return;
 
     if (st.isCube)
     {
@@ -1590,6 +1605,9 @@ void SceneManager::streamingLoop()
       // @TODO: faster, by line, good to measure first
       for (size_t j = 0; j < 6; ++j)
       {
+        if (stop.stop_requested())
+          return;
+
         auto& data = imageDatas[j];
         const auto& base = bases[j];
 
@@ -1619,10 +1637,16 @@ void SceneManager::streamingLoop()
       st.as.planar.content = std::move(imageData);
     }
 
+    if (stop.stop_requested())
+      return;
+
     st.uploadStage().store(
       SceneTextureUploadStage::DONE_LOADING_FROM_DISK, std::memory_order_release);
 
     // @SPEED: can be avoided for planar, and for cube with offline repack
     stbi_image_free(texData);
+
+    if (stop.stop_requested())
+      return;
   }
 }

@@ -61,6 +61,7 @@ enum class SceneTextureUploadStage
   DONE_LOADING_FROM_DISK,
   UPLOADING_TO_GPU,
   DONE,
+
   FAILED
 };
 
@@ -361,7 +362,7 @@ private:
     std::span<const Material> material_params,
     std::span<const IndirectCommand> vegetation_draw_commands);
 
-  void streamingLoop();
+  void streamingLoop(std::stop_token stop);
 
 private:
   tinygltf::TinyGLTF loader;
