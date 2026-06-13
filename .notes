@@ -130,18 +130,19 @@ v Research
   v Read through fft wiki page
   v Read up a little bit of Zorich to fill in holes in matan
   v Read some blog-posty stuff
-- Prep asset format
-  - Add artificial island setting (hmap falloff in some radius of some point)
-  - Adjust lpdt terrain so that it' an island and the scene is an island at water level
-  - Devise asset format for water (definitely need water level)
-  - Add main planar wind and make veg wind additional (fft will take planar)
+v Prep asset format
+  v Add artificial island setting (hmap falloff in some radius of some point)
+  v Adjust lpdt terrain so that it' an island and the scene is an island at water level
+  v Devise asset format for water (definitely need water level)
+  v Add main planar wind
 v Plan geometric implementation
   v How we do clips and wave gen
   v How we render it (transparent pass right away?)
   v How we generate normals -- fft gives em
 - Geometry 
   v Set up terrain to fall off into the ocean with scene params
-  - Set up boilerplate, buffers tex's, shaders, params from blog
+  v Set up boilerplate, buffers tex's, params from blog
+  - Support ext tex load, prep a blue noise tex
   - Initial specter gen shader from blog 
   - Temporal specter gen shader from blog
   - IFFT shader -- 3d disp and normals.

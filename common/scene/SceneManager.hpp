@@ -25,6 +25,7 @@
 #include <draw.h>
 #include <terrain.h>
 #include <skybox.h>
+#include <water.h>
 
 struct RenderElement
 {
@@ -235,6 +236,13 @@ public:
     return *terrainData;
   }
 
+  bool hasWater() const { return waterData.has_value(); }
+  const WaterSourceData& getWaterData() const
+  {
+    ETNA_ASSERT(hasWater());
+    return *waterData;
+  }
+
   bool isTerrainTexture(TexId tid) const
   {
     if (!hasTerrain())
@@ -382,6 +390,7 @@ private:
 
   std::optional<TerrainSourceData> terrainData{};
   std::optional<SkyboxSourceData> skyboxData{};
+  std::optional<WaterSourceData> waterData{};
 
   // @TODO: do we support reentrability in selectScene?
   std::vector<etna::Image> textures{};

@@ -3,7 +3,8 @@ add_library(scene
   SceneManager.cpp
   ViewContext.cpp
   gltf_jb_ext/JB_terrain/JbTerrain.cpp
-  gltf_jb_ext/JB_skybox/JbSkybox.cpp)
+  gltf_jb_ext/JB_skybox/JbSkybox.cpp
+  gltf_jb_ext/JB_water/JbWater.cpp)
 
 target_compile_definitions(tinygltf PUBLIC TINYGLTF_NO_EXTERNAL_IMAGE)
 

@@ -3383,6 +3383,7 @@
     "KHR_materials_diffuse_transmission",
     "KHR_lights_punctual",
     "JB_terrain",
+    "JB_water",
     "JB_skybox"
   ],
   "images": [
@@ -4042,6 +4043,9 @@
         }
       ]
     },
+    "JB_water" : {
+      "level": 10.0
+    },
     "JB_terrain" : {
       "heightmap" : {
         "index" : 7
@@ -4078,6 +4082,7 @@
         {
           "name": "road",
           "splattingComp": 0,
+          "relHeightRange": [0.0, 10000.0],
           "material": 22,
           "scale": [10.0, 5.0]
         }

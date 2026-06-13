@@ -545,6 +545,65 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     spdlog::info("JB_skybox: skybox not present");
   }
 
+  if (sceneMgr->hasWater())
+  {
+    spdlog::info("JB_water: water loaded!");
+
+    water.emplace(WaterRenderingData{});
+
+    memcpy(&water->sourceData, &sceneMgr->getWaterData(), sizeof(sceneMgr->getWaterData()));
+    water->source = create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(sceneMgr->getWaterData()),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "water_data"});
+    memcpy(water->source.map(), &water->sourceData, sizeof(water->sourceData));
+
+    for (size_t i = 0; auto& cascade : water->cascades)
+    {
+      createManagedImage(
+        cascade.wavevectorFrequencyTex,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("wavevector_freq_{}", i),
+          .format = vk::Format::eR32G32B32A32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      createManagedImage(
+        cascade.timeIndepSpectraTex,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("TI_spectra_{}", i),
+          .format = vk::Format::eR32G32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      createManagedImage(
+        cascade.timeDepSpectraTex,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("TD_spectra_{}", i),
+          .format = vk::Format::eR32G32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      createManagedImage(
+        cascade.spatialDisplacementTex,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("wave_disp_{}", i),
+          .format = vk::Format::eR32G32B32A32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      createManagedImage(
+        cascade.spatialDisplacementTex,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("wave_disp_derivatives_{}", i),
+          .format = vk::Format::eR32G32B32A32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      ++i;
+    }
+  }
+  else
+  {
+    spdlog::info("JB_skybox: skybox not present");
+  }
+
   auto fragProgInfo = etna::get_shader_program("static_mesh");
   auto compProgInfo = etna::get_shader_program("clipmap_gen");
 
@@ -893,6 +952,7 @@ void WorldRenderer::onShadersReloaded()
   pointLightsSettingsDirty = true;
   spotLightsSettingsDirty = true;
   directionalLightsSettingsDirty = true;
+  waterSettingsDirty = true;
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -987,7 +1047,7 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.vegetationRenderingDistance = vegetationRenderingDistance;
     constantsData.vegetationRenderingDropoffDistance = vegetationRenderingDropoffDistance;
 
-    constantsData.windOrigin = windOrigin;
+    constantsData.windDirection = windDirection;
     constantsData.windStrength = windStrength;
 
     constantsData.useTonemapping = doTonemapping;
@@ -1031,6 +1091,14 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.fxaaAntialiasInSrgb = fxaaAntialiasInSrgb;
 
     constantsData.taaEmaCoeff = taaEmaCoeff;
+
+    constantsData.waterF = waterSettings.f;
+    constantsData.waterH = waterSettings.h;
+    constantsData.waterG = waterSettings.g;
+    constantsData.waterRho = waterSettings.rho;
+    constantsData.waterSurfaceTension = waterSettings.surfaceTension;
+    constantsData.waterWindUnitsToMps = waterSettings.windUnitsToMps;
+    constantsData.waterEnabled = waterSettings.enable;
   }
 
   mainViewParams = view_params_for_cam(
@@ -2588,7 +2656,8 @@ void WorldRenderer::drawGui()
           vegetationRenderingDistance);
       }
       ImGui::Checkbox("Show vegetation debug", &showGrassChunkDebug);
-      ImGui::SliderFloat2("Wind origin", (float*)&windOrigin, -5000.f, 5000.f);
+      ImGui::SliderFloat2("Wind direction", (float*)&windDirection, -1.f, 1.f);
+      windDirection = glm::normalize(windDirection);
       ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 1.f);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Perform Z Prepass", &zPrepass);
@@ -2601,6 +2670,17 @@ void WorldRenderer::drawGui()
         "Ambient light coeff",
         (float*)&ambientCoeff,
         ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+      auto prevWaterSettings = waterSettings;
+      ImGui::Checkbox("Draw water", &waterSettings.enable);
+      if (waterSettings.enable)
+      {
+        ImGui::SliderFloat("Fetch", &waterSettings.f, 0.f, 500.f);
+        ImGui::SliderFloat("Average depth", &waterSettings.h, 0.f, 10000.f);
+        ImGui::SliderFloat("Density", &waterSettings.rho, 800.f, 1200.f);
+        ImGui::SliderFloat("Surface tension", &waterSettings.surfaceTension, 0.f, 0.5f);
+        ImGui::SliderFloat("Window mps per app unit", &waterSettings.windUnitsToMps, 0.f, 100.f);
+      }
+      waterSettingsDirty |= waterSettings != prevWaterSettings;
       ImGui::Checkbox("Use SSAO", &useSsao);
       if (useSsao)
       {
@@ -2847,6 +2927,8 @@ void WorldRenderer::drawGui()
         drawTerrain = false;
       if (!vegetation)
         drawVegetation = false;
+      if (!water)
+        waterSettings.enable = false;
 
       if (ImGui::BeginCombo(
             "Debug texture view", currentDebugDrawer ? currentDebugDrawer->c_str() : "none"))
@@ -3155,7 +3237,7 @@ void WorldRenderer::loadDebugConfig()
   terrainNoisePeriod = unwrap(reader.read<float>());
   vegetationRenderingDistance = unwrap(reader.read<float>());
   vegetationRenderingDropoffDistance = unwrap(reader.read<float>());
-  windOrigin = unwrap(reader.read<glm::vec2>());
+  windDirection = unwrap(reader.read<glm::vec2>());
   windStrength = unwrap(reader.read<float>());
   histEqTonemappingRegW = unwrap(reader.read<float>());
   histEqTonemappingRefinedW = unwrap(reader.read<float>());
@@ -3187,6 +3269,7 @@ void WorldRenderer::loadDebugConfig()
   taaTemporalAccumBacklog = unwrap(reader.read<uint32_t>());
   showTaaPatternDebug = unwrap(reader.read<bool>());
   taaEmaCoeff = unwrap(reader.read<float>());
+  waterSettings = unwrap(reader.read<WaterSettings>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -3201,6 +3284,7 @@ void WorldRenderer::loadDebugConfig()
   pointLightsSettingsDirty = true;
   spotLightsSettingsDirty = true;
   directionalLightsSettingsDirty = true;
+  waterSettingsDirty = true;
 
   spdlog::info("Loaded debug config from {}", cfg.debugConfigFile.c_str());
 }
@@ -3251,7 +3335,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(terrainNoisePeriod));
   ETNA_VERIFY(writer.write(vegetationRenderingDistance));
   ETNA_VERIFY(writer.write(vegetationRenderingDropoffDistance));
-  ETNA_VERIFY(writer.write(windOrigin));
+  ETNA_VERIFY(writer.write(windDirection));
   ETNA_VERIFY(writer.write(windStrength));
   ETNA_VERIFY(writer.write(histEqTonemappingRegW));
   ETNA_VERIFY(writer.write(histEqTonemappingRefinedW));
@@ -3283,6 +3367,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(taaTemporalAccumBacklog));
   ETNA_VERIFY(writer.write(showTaaPatternDebug));
   ETNA_VERIFY(writer.write(taaEmaCoeff));
+  ETNA_VERIFY(writer.write(waterSettings));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

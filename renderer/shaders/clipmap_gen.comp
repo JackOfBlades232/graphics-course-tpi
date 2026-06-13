@@ -68,6 +68,7 @@ ContinentHeightAdjustment get_height_adjustment_from_continent(vec2 worldPos)
       (source.rangeMax.y - source.rangeMin.y);
     adj.relHeightContractionCoeff -= st;
     adj.relHeightContractionCoeff *= adj.relHeightContractionCoeff;
+    adj.relHeightContractionCoeff = 0.15f + 0.85f * adj.relHeightContractionCoeff;
   }
   return adj;
 }
@@ -265,11 +266,11 @@ void main(void)
       const vec2 scale = source.details[i].uvScale; 
       const vec2 uv = worldCoord / scale; 
 
-      float w = 0.f; 
-
+      float splatW = 1.f; 
+      float rangeW = 1.f; 
       if ((source.details[i].flags & TERRAIN_DETAIL_USE_MASK_FLAG) != 0)
       {
-        w += get_v4_component(splatmask, source.details[i].splattingCompId);
+        splatW = get_v4_component(splatmask, source.details[i].splattingCompId);
       }
       if ((source.details[i].flags & TERRAIN_DETAIL_USE_RH_RANGE_FLAG) != 0)
       {
@@ -281,9 +282,10 @@ void main(void)
         float lw = 1.f - min(ld / TERRAIN_DETAIL_LEVEL_FALLOFF, 1.f);
         float hw = 1.f - min(hd / TERRAIN_DETAIL_LEVEL_FALLOFF, 1.f);
 
-        w += sstep(min(lw, hw));
+        rangeW = sstep(min(lw, hw));
       }
-      w = min(w, 1.f);
+
+      float w = min(splatW * rangeW, 1.f);
 
       if (w > SHADER_EPSILON)
       {

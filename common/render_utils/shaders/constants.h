@@ -54,7 +54,7 @@ struct Constants
 
   float windStrength;
 
-  shader_vec2 windOrigin;
+  shader_vec2 windDirection;
 
   float time;
   float dt;
@@ -91,7 +91,16 @@ struct Constants
   shader_uint fxaaAntialiasInSrgb;
 
   float taaEmaCoeff;
-  float pad1_;
+
+  float waterF;
+  float waterH;
+  float waterG;
+  float waterRho;
+  float waterSurfaceTension;
+  float waterWindUnitsToMps;
+  shader_uint waterEnabled;
+
+  float pad1_, pad2_;
 
   SsaoConstData ssaoData;
 };

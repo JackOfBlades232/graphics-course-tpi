@@ -6,11 +6,6 @@
 #include <vector>
 #include <optional>
 
-// @TODO: proper asset
-// @TODO: some other way to get color -- diffuse is dumb
-
-// @TODO: implement splatting mask
-
 struct JbTerrainExtDetailData
 {
   std::string name;
@@ -32,14 +27,14 @@ struct JbTerrainExtVegetationData
   int material{-1};
 };
 
-enum class JbTerrainContinentType
+enum class JbTerrainExtContinentType
 {
   CIRCLE = 1
 };
 
-struct JbTerrainContinentData
+struct JbTerrainExtContinentData
 {
-  JbTerrainContinentType type;
+  JbTerrainExtContinentType type;
   float oceanBottom = 0.f;
   struct
   {
@@ -57,7 +52,7 @@ struct JbTerrainExtData
 
   int noiseSeed{0};
 
-  std::optional<JbTerrainContinentData> continent;
+  std::optional<JbTerrainExtContinentData> continent;
 
   std::vector<JbTerrainExtDetailData> details{};
   std::vector<JbTerrainExtVegetationData> vegetations{};

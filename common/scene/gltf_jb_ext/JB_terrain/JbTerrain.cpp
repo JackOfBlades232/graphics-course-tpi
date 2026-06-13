@@ -109,7 +109,7 @@ std::optional<JbTerrainExtData> jb_terrain_parse_desc(const tinygltf::Model& mod
     std::string typeName = tp.Get<std::string>();
     if (typeName == "circle")
     {
-      dst.type = JbTerrainContinentType::CIRCLE;
+      dst.type = JbTerrainExtContinentType::CIRCLE;
       VERIFY(
         cont.Has("center"), "invalid format: \"continent\" of center type must have a \"center\"");
       VERIFY(

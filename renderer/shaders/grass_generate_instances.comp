@@ -152,9 +152,9 @@ void main(void)
 
     if (constants.windStrength >= 0.001f)
     {
-      vec2 windVec = grassPos.xz - constants.windOrigin;
-      float dist = length(windVec);
-      vec2 wvn = windVec / dist;
+      vec2 wvn = constants.windDirection;
+      float tAlongDir = dot(wvn, grassPos.xz);
+      float dist = abs(tAlongDir);
 
       // @TODO: settable
       const float lambda = 0.5f;

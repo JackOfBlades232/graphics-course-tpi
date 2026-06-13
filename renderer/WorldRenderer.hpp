@@ -177,6 +177,36 @@ private:
     SkyboxSourceData sourceData{};
   };
 
+  struct WaterRenderingData
+  {
+    struct Cascade
+    {
+      etna::Image wavevectorFrequencyTex;
+      etna::Image timeIndepSpectraTex;
+      etna::Image timeDepSpectraTex;
+      etna::Image spatialDisplacementTex;
+      etna::Image spatialDisplacementDerivativesTex;
+      // @TODO: cascade L and other params
+    } cascades[WATER_CASCADE_COUNT]{};
+    etna::Buffer source{};
+    WaterSourceData sourceData{};
+  };
+
+  struct WaterSettings
+  {
+    bool enable = true;
+    uint8_t pad1_ = 0, pad2_ = 0, pad3_ = 0;
+    float f = 25.f;
+    float h = 2000.f; // Not the same as ocean bed depth, for wave sim
+    float g = 9.81f;
+    float rho = 1000.f;
+    float surfaceTension = 0.072f;
+    float windUnitsToMps = 20.f;
+
+    friend bool operator==(const WaterSettings& s1, const WaterSettings& s2) = default;
+    friend bool operator!=(const WaterSettings& s1, const WaterSettings& s2) = default;
+  };
+
   enum class TonemappingTechnique
   {
     HISTOGRAM_EQ = 0,
@@ -256,7 +286,7 @@ private:
   std::array<ITonemapper*, TONEMAPPING_TECHNIQUE_COUNT> tonemapperComps{};
   std::array<IAntialiaser*, AA_TECHNIQUE_COUNT> aaComps{};
 
-  SrgbEncoder *srgbEncoder = nullptr;
+  SrgbEncoder* srgbEncoder = nullptr;
 
   etna::Image ldrTarget;
   etna::Image hdrTarget;
@@ -311,6 +341,9 @@ private:
   glm::uvec2 resolution;
   const Config& cfg;
 
+  // @TODO: more than one?
+  etna::Image gaussianNoiseTex;
+
   DoubleBufferedImage ssaoBuffer;
   etna::Image ssaoBlurredBuffer;
   std::unique_ptr<PostfxRenderer> ssaoGen{};
@@ -320,6 +353,9 @@ private:
   DoubleBufferedImage taaTarget;
 
   glm::vec2 taaJitterSequence[TAA_MAX_SAMPLES]{};
+
+  std::optional<WaterRenderingData> water;
+  bool waterSettingsDirty = true;
 
   // @DEBUG
   std::unique_ptr<BboxRenderer> bboxRenderer{};
@@ -355,7 +391,7 @@ private:
   float terrainNoisePeriod = 0.25f;
   float vegetationRenderingDistance = 100.f;
   float vegetationRenderingDropoffDistance = 80.f;
-  glm::vec2 windOrigin = {0.f, 0.f};
+  glm::vec2 windDirection = {1.f, 0.f};
   float windStrength = 0.35f;
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
@@ -380,13 +416,15 @@ private:
   uint32_t ssaoTemporalAccumBacklog = 4;
   float ssaoEmaCoeff = 0.1f;
   float ssaoDepthRejectionThreshold = 0.025f;
-  bool ssaoConservariveTemporalCaching = true; // @TODO: this is due to issues with screen edge disocclusion in TAA+SSAO combo
+  bool ssaoConservariveTemporalCaching =
+    true; // @TODO: this is due to issues with screen edge disocclusion in TAA+SSAO combo
   AATechnique currentAATechnique = AATechnique::TAA;
   bool useAA = true;
   bool fxaaAntialiasInSrgb = true;
   uint32_t taaTemporalAccumBacklog = 8;
   bool showTaaPatternDebug = false;
   float taaEmaCoeff = 0.1f;
+  WaterSettings waterSettings{};
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

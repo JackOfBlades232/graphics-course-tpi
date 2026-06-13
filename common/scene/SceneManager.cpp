@@ -5,6 +5,7 @@
 
 #include <JB_terrain/JbTerrain.hpp>
 #include <JB_skybox/JbSkybox.hpp>
+#include <JB_water/JbWater.hpp>
 
 #include <render_utils/Common.hpp>
 #include <render_utils/GrassUtils.hpp>
@@ -1191,6 +1192,12 @@ void SceneManager::selectScene(
         sceneDataUpload.cubeStubGpuUpload[j] =
           streamer.initUploadImageAsync(cubeTexStub, 0, j, STUB_COLOR);
     }
+  }
+
+  if (auto waterExt = jb_water_parse_desc(model))
+  {
+    auto& data = waterData.emplace();
+    data.waterLevel = waterExt->waterLevel;
   }
 
   // @TODO: make terrain also use a material?
