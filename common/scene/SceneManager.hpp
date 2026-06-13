@@ -54,25 +54,12 @@ struct SceneShadowsSetup
   bool allocateDirectionalShadowTextures = true;
 };
 
-enum class SceneTextureUploadStage
-{
-  INIT,
-  LOADING_FROM_DISK,
-  DONE_LOADING_FROM_DISK,
-  UPLOADING_TO_GPU,
-  DONE,
-
-  FAILED
-};
-
 struct SceneTextureDesc
 {
   TexId tid{TexId::INVALID};
   std::string uri{};
   vk::Format format{vk::Format::eUndefined};
-  alignas(SceneTextureUploadStage) uint8_t uploadStageStorage[sizeof(SceneTextureUploadStage)]{};
   bool isCube = false;
-  bool inited = false;
   struct As
   {
     struct Planar
@@ -89,23 +76,6 @@ struct SceneTextureDesc
     } cube;
   } as;
 
-  SceneTextureDesc() = default;
-  SceneTextureDesc(const SceneTextureDesc&) = default;
-  SceneTextureDesc(SceneTextureDesc&&) = default;
-  SceneTextureDesc& operator=(const SceneTextureDesc&) = default;
-  SceneTextureDesc& operator=(SceneTextureDesc&&) = default;
-
-  auto& uploadStage() { return *(std::atomic<SceneTextureUploadStage>*)uploadStageStorage; }
-  const auto& uploadStage() const
-  {
-    return *(const std::atomic<SceneTextureUploadStage>*)uploadStageStorage;
-  }
-
-  bool acqReady() const
-  {
-    return uploadStage().load(std::memory_order_acquire) == SceneTextureUploadStage::DONE;
-  }
-
   void cleanup()
   {
     if (isCube)
@@ -113,11 +83,46 @@ struct SceneTextureDesc
     else
       as.planar.content = {};
   }
+};
 
-  ~SceneTextureDesc()
+class SceneTexQ
+{
+  std::vector<SceneTextureDesc*> q;
+  std::mutex m;
+  std::condition_variable cv;
+
+public:
+  SceneTexQ() = default;
+  SceneTexQ(const SceneTexQ&) = delete;
+  SceneTexQ(SceneTexQ&&) = delete;
+  SceneTexQ& operator=(const SceneTexQ&) = delete;
+  SceneTexQ& operator=(SceneTexQ&&) = delete;
+
+  auto takeIfAny()
   {
-    if (inited)
-      std::destroy_at(&uploadStage());
+    std::lock_guard lock{m};
+    auto elems = std::move(q);
+    return elems;
+  }
+
+  auto take()
+  {
+    std::unique_lock lock{m};
+    cv.wait(lock, [this] { return !q.empty(); });
+    auto elems = std::move(q);
+    return elems;
+  }
+
+  void push(SceneTextureDesc* d)
+  {
+    std::lock_guard lock{m};
+    q.push_back(d);
+    cv.notify_one();
+  }
+
+  void signalShutdown()
+  {
+    push(nullptr);
   }
 };
 
@@ -127,6 +132,11 @@ class SceneManager
 {
 public:
   explicit SceneManager(const etna::GpuWorkCount& wc);
+  ~SceneManager()
+  {
+    streamingThread.request_stop();
+    streamingReqQ.signalShutdown();
+  }
 
   void selectScene(
     std::filesystem::path path,
@@ -134,7 +144,6 @@ public:
     const SceneMultiplexing& multiplex = {});
 
   bool canRender() const { return sceneDataUpload.done; }
-  bool sceneFullyReady() const { return canRender() && texturesUploaded >= sceneTextures.size(); }
 
   // @TODO: restore data getters if needed
   std::span<const IndirectCommand> getIndirectCommands() const { return sceneDrawCommands; }
@@ -401,13 +410,15 @@ private:
   std::span<const etna::Image> directionalLightCsmCascades{}; // @TODO: should be an mdspan
 
   std::vector<SceneTextureDesc> sceneTextures{};
-  size_t texturesUploaded = 0;
+  std::deque<SceneTextureDesc> externallyRequestedTextures{};
   etna::Image planarTexStub;
   etna::Image cubeTexStub;
   etna::Sampler samplerStub;
 
   std::jthread streamingThread;
-  std::atomic_flag sceneInited{};
+  SceneTexQ streamingReqQ{};
+  SceneTexQ streamingReadyQ{};
+  std::vector<SceneTextureDesc*> uploadSyncQ{};
 
   etna::Buffer unifiedVbuf;
   etna::Buffer unifiedIbuf;

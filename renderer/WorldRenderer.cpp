@@ -1376,8 +1376,7 @@ void WorldRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(cmd_buf, renderWorld);
 
-  auto readyTids = sceneMgr->tickTransfer(cmd_buf);
-  if (!readyTids.empty())
+  if (auto readyTids = sceneMgr->tickTransfer(cmd_buf); !readyTids.empty())
   {
     std::vector<etna::Binding> newBindings;
     for (TexId tid : readyTids)
