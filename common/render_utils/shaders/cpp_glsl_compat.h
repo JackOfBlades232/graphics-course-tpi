@@ -123,6 +123,7 @@ float ordered_uint_to_float(shader_uint i)
 #define SHADER_UINT_MAX 4294967295
 #define SHADER_FLT_MAX 3.402823466e+38
 #define SHADER_PI 3.1415927f
+#define SHADER_TWO_PI (2.f * 3.1415927f)
 
 #define SHADER_MIN(a_, b_) ((a_) < (b_) ? (a_) : (b_))
 #define SHADER_MAX(a_, b_) ((a_) > (b_) ? (a_) : (b_))

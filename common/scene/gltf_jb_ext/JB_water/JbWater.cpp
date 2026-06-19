@@ -31,5 +31,15 @@ std::optional<JbWaterExtData> jb_water_parse_desc(const tinygltf::Model& model)
   VERIFY(wl.IsNumber(), "invalid format: \"level\" must be a number");
   data.waterLevel = float(wl.GetNumberAsDouble());
 
+  VERIFY(desc.Has("cascades"), "invalid format: must have \"cascades\"");
+  const auto& cs = desc.Get("cascades");
+  VERIFY(cs.IsArray(), "invalid format: \"cascades\" must be an array of sizes");
+  for (size_t i = 0; i < cs.ArrayLen(); ++i)
+  {
+    const auto& elem = cs.Get(i);
+    VERIFY(elem.IsNumber(), "invalid format: \"cascades\" must be an array of number sizes");
+    data.cascades.push_back(float(elem.GetNumberAsDouble()));
+  }
+
   return data;
 }

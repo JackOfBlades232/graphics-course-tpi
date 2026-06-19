@@ -4,6 +4,7 @@
 #include "cpp_glsl_compat.h"
 #include "geometry.h"
 #include "lights.h"
+#include "materials.h"
 #include "ssao.h"
 
 #define BIG_EPSILON 0.001f
@@ -100,7 +101,9 @@ struct Constants
   float waterWindUnitsToMps;
   shader_uint waterEnabled;
 
-  float pad1_, pad2_;
+  TexSmpIdPair blueNoiseTexSmp;
+
+  float pad1_;
 
   SsaoConstData ssaoData;
 };

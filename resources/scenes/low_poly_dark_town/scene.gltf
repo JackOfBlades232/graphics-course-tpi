@@ -3384,7 +3384,8 @@
     "KHR_lights_punctual",
     "JB_terrain",
     "JB_water",
-    "JB_skybox"
+    "JB_skybox",
+    "JB_noise"
   ],
   "images": [
     {
@@ -3458,6 +3459,9 @@
     },
     {
       "uri": "textures/terrain/road/PavingStones150_2K-PNG_Displacement.png"
+    },
+    {
+      "uri": "../../textures/BlueNoise256x256.png"
     }
   ],
   "materials": [
@@ -4043,8 +4047,16 @@
         }
       ]
     },
+    "JB_noise" : {
+      "blue": {
+        "tex": {
+          "index": 24
+        }
+      }
+    },
     "JB_water" : {
-      "level": 10.0
+      "level": 10.0,
+      "cascades": [5.0, 27.0, 100.0]
     },
     "JB_terrain" : {
       "heightmap" : {
@@ -6537,6 +6549,12 @@
       "minFilter": 9987,
       "wrapS": 33071,
       "wrapT": 33071
+    },
+    {
+      "magFilter": 9728,
+      "minFilter": 9984,
+      "wrapS": 10497,
+      "wrapT": 10497
     }
   ],
   "scene": 0,
@@ -6644,6 +6662,10 @@
     {
       "sampler": 0,
       "source": 23
+    },
+    {
+      "sampler": 3,
+      "source": 24
     }
   ]
 }

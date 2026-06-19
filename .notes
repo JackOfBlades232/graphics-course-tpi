@@ -142,7 +142,7 @@ v Plan geometric implementation
 - Geometry 
   v Set up terrain to fall off into the ocean with scene params
   v Set up boilerplate, buffers tex's, params from blog
-  - Support ext tex load, prep a blue noise tex
+  v Prep a blue noise tex
   - Initial specter gen shader from blog 
   - Temporal specter gen shader from blog
   - IFFT shader -- 3d disp and normals.

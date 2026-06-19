@@ -1101,6 +1101,10 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.waterEnabled = waterSettings.enable;
   }
 
+  {
+    constantsData.blueNoiseTexSmp = sceneMgr->getBlueNoiseTexSmp();
+  }
+
   mainViewParams = view_params_for_cam(
     mainCam,
     aspect(),

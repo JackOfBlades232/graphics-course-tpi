@@ -285,16 +285,21 @@ public:
     return *skyboxData;
   }
 
+  bool hasBlueNoise() const { return blueNoiseTexSmp != TexSmpIdPair::INVALID; }
+  TexSmpIdPair getBlueNoiseTexSmp() const { return blueNoiseTexSmp; }
+
   // For imgui, kinda hacky
   UniformLights& lightsRW() { return *lightsData; }
 
-  static constexpr std::array<std::string_view, 6> SUPPORTED_EXTENSIONS = {
+  static constexpr std::array<std::string_view, 8> SUPPORTED_EXTENSIONS = {
     "KHR_lights_punctual",
     "KHR_materials_pbrSpecularGlossiness",
     "KHR_materials_diffuse_transmission",
     "KHR_mesh_quantization",
     "JB_terrain",
-    "JB_skybox"};
+    "JB_skybox",
+    "JB_water",
+    "JB_noise"};
 
   std::vector<TexId> tickTransfer(vk::CommandBuffer cmd_buf);
 
@@ -423,6 +428,8 @@ private:
   etna::Buffer vegetationIndirectDrawBuffer;
   std::vector<glm::vec2> vegetationTemplateBufferData{};
   IndirectCommand vegetationDrawCommand;
+
+  TexSmpIdPair blueNoiseTexSmp = TexSmpIdPair::INVALID;
 
   struct SceneDataUpload
   {

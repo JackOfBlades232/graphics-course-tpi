@@ -7,6 +7,7 @@
 struct JbWaterExtData
 {
   float waterLevel = 0.f;
+  std::vector<float> cascades{};
 };
 
 std::optional<JbWaterExtData> jb_water_parse_desc(const tinygltf::Model& model);

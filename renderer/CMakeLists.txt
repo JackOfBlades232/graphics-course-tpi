@@ -38,4 +38,5 @@ target_add_shaders(renderer
   shaders/grass_mesh_depth.frag
   shaders/ssao_generate.frag
   shaders/ssao_blur.frag
+  shaders/water_time_indep_spectra_gen.comp
 )

@@ -1,0 +1,118 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "water.h"
+#include "terrain.h"
+#include "constants.h"
+
+layout(local_size_x = WATER_WORKGROUP_DIM, local_size_y = WATER_WORKGROUP_DIM, local_size_z = 1) in;
+
+layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D wkTex;
+layout(binding = 1, set = 0, rg32f) uniform writeonly image2D spectraTex;
+
+layout(binding = 2, set = 0) uniform sampler2D blueNoiseTex;
+
+layout(binding = 6, set = 0) uniform water_source_t
+{
+  WaterSourceData source;
+};
+layout(binding = 7, set = 0) uniform terrain_source_t
+{
+  TerrainSourceData terrainSource;
+};
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
+float sech(float v)
+{
+  return 1.f / cosh(v);
+}
+
+void main(void)
+{
+  const ivec2 imSz = imageSize(wkTex);
+  const ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
+  
+  if (imCoord.x >= imSz.x || imCoord.y >= imSz.y)
+    return;
+
+  const int cascade = int(gl_GlobalInvocationID.z);
+
+  float l = 0.f;
+  switch (cascade)
+  {
+  case 0:  l = source.l0; break;
+  case 1:  l = source.l1; break;
+  case 2:  l = source.l2; break;
+  default:                break;
+  }
+
+  const float h     = constants.waterH;
+  const float g     = constants.waterG;
+  const float f     = constants.waterF;
+  const float sigma = constants.waterSurfaceTension;
+  const float u     = constants.windStrength * constants.waterWindUnitsToMps;
+
+  ivec2 offId = imCoord - (imSz / 2);
+  float dk = SHADER_TWO_PI / l;
+  vec2 k = dk * vec2(offId);
+  float wavenumber = length(k);
+  float theta = atan(k.y, k.x);
+
+  float th = tanh(wavenumber * h);
+  float sc = sech(wavenumber * h);
+
+  // Finite-depth dispersion relationship
+  float omega = sqrt(g * wavenumber * th);
+  float ddkOmega = g * (th + wavenumber * h * sc * sc) / (2.f * omega);
+
+  // JONSWAP spectrum @TODO: some of these can be done on the cpu
+  const float gamma  = 3.3f;
+  const float omegaP = 22.f * (g * g) / (u * f);
+  const float alpha  = 0.076f * (u * u) / (f * g);
+
+  float dome  = omega - omegaP;
+  float rome  = omega / omegaP;
+  float rrome = omegaP / omega;
+  float s     = (dome > 0.f) ? 0.09f : 0.07f;
+  float r     = exp(-((dome * dome) / (2.f * s * s * omegaP * omegaP)));
+
+  float sJonswap =
+    ((alpha * g * g) / (omega * omega * omega * omega * omega)) *
+    exp(-1.25f * rrome * rrome * rrome * rrome) *
+    pow(gamma, r);
+
+  // TMA adjustment for shallow waves 
+  float omegaH = omega * sqrt(h / g);
+  float phi =
+    omegaH > 1.f
+      ? 1.f - 0.5f * (2.f - omegaH) * (2.f - omegaH)
+      : 0.5f * omegaH * omegaH;
+
+  float sTma = sJonswap * phi;
+
+  // Donlean-Banner directional spreading
+  float betaS;
+  if (rome < 0.95f)
+  {
+    betaS = 2.61f * pow(rome, 1.3f);
+  }
+  else if (rome < 1.6f)
+  {
+    betaS = 2.28f * pow(rome, -1.3f);
+  }
+  else
+  {
+    float eps = -0.4f + 0.8393f * exp(-0.567f * log(rome * rome));
+    betaS = pow(10.f, eps);
+  }
+
+  float sbt = sech(betaS * theta);
+  float dirSpreadDB = (betaS / (2.f * tanh(betaS * SHADER_PI))) * sbt * sbt;
+
+  // Now, compose
+}
+

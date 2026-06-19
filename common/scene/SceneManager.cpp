@@ -6,6 +6,7 @@
 #include <JB_terrain/JbTerrain.hpp>
 #include <JB_skybox/JbSkybox.hpp>
 #include <JB_water/JbWater.hpp>
+#include <JB_noise/JbNoise.hpp>
 
 #include <render_utils/Common.hpp>
 #include <render_utils/GrassUtils.hpp>
@@ -1134,6 +1135,11 @@ void SceneManager::selectScene(
     data.cubemapTexSmp = idPairForTexture(cubemapLoadedId);
   }
 
+  if (auto noiseExt = jb_noise_parse_desc(model))
+  {
+    blueNoiseTexSmp = idPairForTexture(noiseExt->blue.tex);
+  }
+
   {
     textures.reserve(model.images.size());
     for (size_t i = 0; i < model.images.size(); ++i)
@@ -1198,6 +1204,14 @@ void SceneManager::selectScene(
   {
     auto& data = waterData.emplace();
     data.waterLevel = waterExt->waterLevel;
+    ETNA_ASSERTF(
+      waterExt->cascades.size() == WATER_CASCADE_COUNT,
+      "Invalid cascade count in scene {} != {}",
+      waterExt->cascades.size(),
+      WATER_CASCADE_COUNT);
+    data.l0 = waterExt->cascades[0];
+    data.l1 = waterExt->cascades[1];
+    data.l2 = waterExt->cascades[2];
   }
 
   // @TODO: make terrain also use a material?
