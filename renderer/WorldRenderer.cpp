@@ -573,27 +573,20 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         etna::Image::CreateInfo{
           .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
           .name = fmt::format("TI_spectra_{}", i),
-          .format = vk::Format::eR32G32Sfloat,
-          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
-      createManagedImage(
-        cascade.timeDepSpectraTex,
-        etna::Image::CreateInfo{
-          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
-          .name = fmt::format("TD_spectra_{}", i),
-          .format = vk::Format::eR32G32Sfloat,
-          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
-      createManagedImage(
-        cascade.spatialDisplacementTex,
-        etna::Image::CreateInfo{
-          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
-          .name = fmt::format("wave_disp_{}", i),
           .format = vk::Format::eR32G32B32A32Sfloat,
           .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
       createManagedImage(
-        cascade.spatialDisplacementTex,
+        cascade.spatialDisplacementAndDxzTex,
         etna::Image::CreateInfo{
           .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
-          .name = fmt::format("wave_disp_derivatives_{}", i),
+          .name = fmt::format("wave_disp_and_dxz_{}", i),
+          .format = vk::Format::eR32G32B32A32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      createManagedImage(
+        cascade.spatialDisplacementOtherDerivativesTex,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("wave_disp_other_derivatives_{}", i),
           .format = vk::Format::eR32G32B32A32Sfloat,
           .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
       ++i;
@@ -700,6 +693,11 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "water_time_indep_spectra_gen",
     {RENDERER_SHADERS_ROOT "water_time_indep_spectra_gen.comp.spv"});
+  etna::create_program(
+    "water_time_indep_spectra_conjugate",
+    {RENDERER_SHADERS_ROOT "water_time_indep_spectra_conjugate.comp.spv"});
+  etna::create_program(
+    "water_time_spectra_gen", {RENDERER_SHADERS_ROOT "water_time_spectra_gen.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -926,6 +924,9 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   waterInitalSpectraGenerate =
     pipelineManager.createComputePipeline("water_time_indep_spectra_gen", {});
+  waterInitalSpectraConjugate =
+    pipelineManager.createComputePipeline("water_time_indep_spectra_conjugate", {});
+  waterTimeSpectraGenerate = pipelineManager.createComputePipeline("water_time_spectra_gen", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -1644,43 +1645,121 @@ void WorldRenderer::renderWorld(
 
     if (water)
     {
+      ETNA_PROFILE_GPU(cmd_buf, waterGen);
+
       if (waterSettingsDirty)
       {
-        auto programInfo = etna::get_shader_program("water_time_indep_spectra_gen");
+        ETNA_PROFILE_GPU(cmd_buf, waterIndepGen);
+
+        {
+          ETNA_PROFILE_GPU(cmd_buf, waterIndepGenCalc);
+          auto programInfo = etna::get_shader_program("water_time_indep_spectra_gen");
+          std::vector<etna::Binding> binds{}; // @SPEED piggy
+          for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+          {
+            binds.emplace_back(
+              0,
+              water->cascades[c].wavevectorFrequencyTex.genBinding({}, vk::ImageLayout::eGeneral),
+              uint32_t(c));
+            binds.emplace_back(
+              1,
+              water->cascades[c].timeIndepSpectraTex.genBinding({}, vk::ImageLayout::eGeneral),
+              uint32_t(c));
+          }
+          binds.emplace_back(6, water->source.genBinding());
+          binds.emplace_back(8, constants->get().genBinding());
+          auto set = etna::create_descriptor_set(
+            programInfo.getDescriptorLayoutId(0), cmd_buf, std::move(binds));
+          etna::flush_barriers(cmd_buf);
+          cmd_buf.bindDescriptorSets(
+            vk::PipelineBindPoint::eCompute,
+            waterInitalSpectraGenerate.getVkPipelineLayout(),
+            0,
+            {set.getVkSet(),
+             materialParamsDsetComp.getVkSet(),
+             bindlessTexturesDsetComp.getVkSet(),
+             bindlessSamplersDsetComp.getVkSet()},
+            {});
+          cmd_buf.bindPipeline(
+            vk::PipelineBindPoint::eCompute, waterInitalSpectraGenerate.getVkPipeline());
+          cmd_buf.dispatch(
+            get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
+            get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
+            WATER_CASCADE_COUNT);
+        }
+
+        {
+          ETNA_PROFILE_GPU(cmd_buf, waterIndepGenCalc);
+          auto programInfo = etna::get_shader_program("water_time_indep_spectra_conjugate");
+          std::vector<etna::Binding> binds{}; // @SPEED piggy
+          for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+          {
+            binds.emplace_back(
+              0,
+              water->cascades[c].timeIndepSpectraTex.genBinding({}, vk::ImageLayout::eGeneral),
+              uint32_t(c));
+          }
+          auto set = etna::create_descriptor_set(
+            programInfo.getDescriptorLayoutId(0), cmd_buf, std::move(binds));
+          etna::flush_barriers(cmd_buf);
+          cmd_buf.bindDescriptorSets(
+            vk::PipelineBindPoint::eCompute,
+            waterInitalSpectraConjugate.getVkPipelineLayout(),
+            0,
+            {set.getVkSet()},
+            {});
+          cmd_buf.bindPipeline(
+            vk::PipelineBindPoint::eCompute, waterInitalSpectraConjugate.getVkPipeline());
+          cmd_buf.dispatch(
+            get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
+            get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
+            WATER_CASCADE_COUNT);
+        }
+
+        waterSettingsDirty = false;
+      }
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, waterTimeDepGen);
+        auto programInfo = etna::get_shader_program("water_time_spectra_gen");
         std::vector<etna::Binding> binds{}; // @SPEED piggy
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
           binds.emplace_back(
             0,
-            water->cascades[c].wavevectorFrequencyTex.genBinding({}, vk::ImageLayout::eGeneral),
+            water->cascades[c].spatialDisplacementAndDxzTex.genBinding(
+              {}, vk::ImageLayout::eGeneral),
             uint32_t(c));
           binds.emplace_back(
             1,
+            water->cascades[c].spatialDisplacementOtherDerivativesTex.genBinding(
+              {}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
+          binds.emplace_back(
+            2,
+            water->cascades[c].wavevectorFrequencyTex.genBinding({}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
+          binds.emplace_back(
+            3,
             water->cascades[c].timeIndepSpectraTex.genBinding({}, vk::ImageLayout::eGeneral),
             uint32_t(c));
         }
-        binds.emplace_back(6, water->source.genBinding());
         binds.emplace_back(8, constants->get().genBinding());
         auto set = etna::create_descriptor_set(
           programInfo.getDescriptorLayoutId(0), cmd_buf, std::move(binds));
         etna::flush_barriers(cmd_buf);
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
-          waterInitalSpectraGenerate.getVkPipelineLayout(),
+          waterTimeSpectraGenerate.getVkPipelineLayout(),
           0,
-          {set.getVkSet(),
-           materialParamsDsetComp.getVkSet(),
-           bindlessTexturesDsetComp.getVkSet(),
-           bindlessSamplersDsetComp.getVkSet()},
+          {set.getVkSet()},
           {});
         cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, waterInitalSpectraGenerate.getVkPipeline());
+          vk::PipelineBindPoint::eCompute, waterTimeSpectraGenerate.getVkPipeline());
         cmd_buf.dispatch(
           get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
           get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
           WATER_CASCADE_COUNT);
-
-        waterSettingsDirty = false;
       }
     }
 

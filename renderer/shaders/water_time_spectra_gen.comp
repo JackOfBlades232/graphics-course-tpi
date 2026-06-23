@@ -1,0 +1,70 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "water.h"
+#include "constants.h"
+
+layout(local_size_x = WATER_WORKGROUP_DIM, local_size_y = WATER_WORKGROUP_DIM, local_size_z = 1) in;
+
+layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D dispDxzTex[WATER_CASCADE_COUNT];
+layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D dYXdYZdXXdZZTex[WATER_CASCADE_COUNT];
+
+layout(binding = 2, set = 0, rgba32f) uniform readonly image2D wkTex[WATER_CASCADE_COUNT];
+layout(binding = 3, set = 0, rgba32f) uniform readonly image2D spectraTex[WATER_CASCADE_COUNT];
+
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
+// @TODO: pull out complex functions
+vec2 comp_mult(vec2 a, vec2 b)
+{
+  return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+void main(void)
+{
+  const int cascade = int(gl_GlobalInvocationID.z);
+  if (cascade >= WATER_CASCADE_COUNT)
+    return;
+
+  const ivec2 imSz    = imageSize(wkTex[cascade]);
+  const ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
+  const vec2 imUv     = vec2(imCoord) / vec2(imSz);
+  
+  if (imCoord.x >= imSz.x || imCoord.y >= imSz.y)
+    return;
+
+  vec4 wave = imageLoad(wkTex[cascade], imCoord);
+  float phase = wave.w * constants.time;
+  vec2 exponent = vec2(cos(phase), sin(phase));
+  vec4 initSpectrum = imageLoad(spectraTex[cascade], imCoord);
+
+  vec2 h =
+    comp_mult(initSpectrum.xy, exponent) *
+    comp_mult(initSpectrum.zw, vec2(exponent.x, -exponent.y));
+  vec2 ih = vec2(-h.y, h.x);
+
+  vec2 displacementX = ih * wave.x * wave.y;
+  vec2 displacementY = h;
+  vec2 displacementZ = ih * wave.z * wave.y;
+
+  vec2 displacementXdX = -h * wave.x * wave.x * wave.y;
+  vec2 displacementYdX = ih * wave.x;
+  vec2 displacementZdX = -h * wave.x * wave.z * wave.y;
+
+  vec2 displacementYdZ = ih * wave.z;
+  vec2 displacementZdZ = -h * wave.z * wave.z * wave.y;
+
+  imageStore(dispDxzTex[cascade], imCoord,
+    vec4(
+      vec2(displacementX.x - displacementZ.y, displacementX.y + displacementZ.x),
+      vec2(displacementY.x - displacementZdX.y, displacementY.y + displacementZdX.x)));
+  imageStore(dYXdYZdXXdZZTex[cascade], imCoord,
+    vec4(
+      vec2(displacementYdX.x - displacementYdZ.y, displacementYdX.y + displacementYdZ.x),
+      vec2(displacementXdX.x - displacementZdZ.y, displacementXdX.y + displacementZdZ.x)));
+}
+

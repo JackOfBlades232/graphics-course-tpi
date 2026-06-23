@@ -39,4 +39,6 @@ target_add_shaders(renderer
   shaders/ssao_generate.frag
   shaders/ssao_blur.frag
   shaders/water_time_indep_spectra_gen.comp
+  shaders/water_time_indep_spectra_conjugate.comp
+  shaders/water_time_spectra_gen.comp
 )

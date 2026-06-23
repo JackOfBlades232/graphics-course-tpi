@@ -183,9 +183,8 @@ private:
     {
       etna::Image wavevectorFrequencyTex;
       etna::Image timeIndepSpectraTex;
-      etna::Image timeDepSpectraTex;
-      etna::Image spatialDisplacementTex;
-      etna::Image spatialDisplacementDerivativesTex;
+      etna::Image spatialDisplacementAndDxzTex;
+      etna::Image spatialDisplacementOtherDerivativesTex;
       // @TODO: cascade L and other params
     } cascades[WATER_CASCADE_COUNT]{};
     etna::Buffer source{};
@@ -281,6 +280,8 @@ private:
   etna::ComputePipeline vegetationGeneratePrepareInstCommand{};
   etna::ComputePipeline vegetationGenerateInstances{};
   etna::ComputePipeline waterInitalSpectraGenerate{};
+  etna::ComputePipeline waterInitalSpectraConjugate{};
+  etna::ComputePipeline waterTimeSpectraGenerate{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
 
