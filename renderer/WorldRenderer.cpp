@@ -697,6 +697,9 @@ void WorldRenderer::loadShaders()
     {RENDERER_SHADERS_ROOT "grass_generate_prepare_inst_command.comp.spv"});
   etna::create_program(
     "grass_generate_instances", {RENDERER_SHADERS_ROOT "grass_generate_instances.comp.spv"});
+  etna::create_program(
+    "water_time_indep_spectra_gen",
+    {RENDERER_SHADERS_ROOT "water_time_indep_spectra_gen.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -920,6 +923,9 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     pipelineManager.createComputePipeline("grass_generate_prepare_inst_command", {});
   vegetationGenerateInstances =
     pipelineManager.createComputePipeline("grass_generate_instances", {});
+
+  waterInitalSpectraGenerate =
+    pipelineManager.createComputePipeline("water_time_indep_spectra_gen", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -1634,6 +1640,48 @@ void WorldRenderer::renderWorld(
           .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
           .buffer = sceneMgr->getBboxesBuf().get(),
           .size = sceneMgr->getBboxes().size_bytes()}});
+    }
+
+    if (water)
+    {
+      if (waterSettingsDirty)
+      {
+        auto programInfo = etna::get_shader_program("water_time_indep_spectra_gen");
+        std::vector<etna::Binding> binds{}; // @SPEED piggy
+        for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+        {
+          binds.emplace_back(
+            0,
+            water->cascades[c].wavevectorFrequencyTex.genBinding({}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
+          binds.emplace_back(
+            1,
+            water->cascades[c].timeIndepSpectraTex.genBinding({}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
+        }
+        binds.emplace_back(6, water->source.genBinding());
+        binds.emplace_back(8, constants->get().genBinding());
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0), cmd_buf, std::move(binds));
+        etna::flush_barriers(cmd_buf);
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          waterInitalSpectraGenerate.getVkPipelineLayout(),
+          0,
+          {set.getVkSet(),
+           materialParamsDsetComp.getVkSet(),
+           bindlessTexturesDsetComp.getVkSet(),
+           bindlessSamplersDsetComp.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(
+          vk::PipelineBindPoint::eCompute, waterInitalSpectraGenerate.getVkPipeline());
+        cmd_buf.dispatch(
+          get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
+          get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
+          WATER_CASCADE_COUNT);
+
+        waterSettingsDirty = false;
+      }
     }
 
     if (drawVegetation)

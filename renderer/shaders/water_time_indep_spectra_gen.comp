@@ -3,23 +3,16 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "water.h"
-#include "terrain.h"
 #include "constants.h"
 
 layout(local_size_x = WATER_WORKGROUP_DIM, local_size_y = WATER_WORKGROUP_DIM, local_size_z = 1) in;
 
-layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D wkTex;
-layout(binding = 1, set = 0, rg32f) uniform writeonly image2D spectraTex;
-
-layout(binding = 2, set = 0) uniform sampler2D blueNoiseTex;
+layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D wkTex[WATER_CASCADE_COUNT];
+layout(binding = 1, set = 0, rg32f) uniform writeonly image2D spectraTex[WATER_CASCADE_COUNT];
 
 layout(binding = 6, set = 0) uniform water_source_t
 {
   WaterSourceData source;
-};
-layout(binding = 7, set = 0) uniform terrain_source_t
-{
-  TerrainSourceData terrainSource;
 };
 layout(binding = 8, set = 0) uniform constants_t
 {
@@ -31,15 +24,25 @@ float sech(float v)
   return 1.f / cosh(v);
 }
 
+#include "bindless.glsl.inc"
+
+vec2 get_blue_noise(vec2 uv)
+{
+  return sample_bindless_tex_lod(constants.blueNoiseTexSmp, uv, 0.f).xy;
+}
+
 void main(void)
 {
-  const ivec2 imSz = imageSize(wkTex);
+  const int cascade = int(gl_GlobalInvocationID.z);
+  if (cascade >= WATER_CASCADE_COUNT)
+    return;
+
+  const ivec2 imSz    = imageSize(wkTex[cascade]);
   const ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
+  const vec2 imUv     = vec2(imCoord) / vec2(imSz);
   
   if (imCoord.x >= imSz.x || imCoord.y >= imSz.y)
     return;
-
-  const int cascade = int(gl_GlobalInvocationID.z);
 
   float l = 0.f;
   switch (cascade)
@@ -53,7 +56,6 @@ void main(void)
   const float h     = constants.waterH;
   const float g     = constants.waterG;
   const float f     = constants.waterF;
-  const float sigma = constants.waterSurfaceTension;
   const float u     = constants.windStrength * constants.waterWindUnitsToMps;
 
   ivec2 offId = imCoord - (imSz / 2);
@@ -62,7 +64,7 @@ void main(void)
   float wavenumber = length(k);
   float theta = atan(k.y, k.x);
 
-  float th = tanh(wavenumber * h);
+  float th = tanh(min(wavenumber * h, 20.f));
   float sc = sech(wavenumber * h);
 
   // Finite-depth dispersion relationship
@@ -71,48 +73,72 @@ void main(void)
 
   // JONSWAP spectrum @TODO: some of these can be done on the cpu
   const float gamma  = 3.3f;
-  const float omegaP = 22.f * (g * g) / (u * f);
-  const float alpha  = 0.076f * (u * u) / (f * g);
+  const float omegaP = 22.f * pow((u * f) / (g * g), -0.33f);
+  const float alpha  = 0.076f * pow((f * g) / (u * u), -0.22f);
 
-  float dome  = omega - omegaP;
-  float rome  = omega / omegaP;
-  float rrome = omegaP / omega;
-  float s     = (dome > 0.f) ? 0.09f : 0.07f;
-  float r     = exp(-((dome * dome) / (2.f * s * s * omegaP * omegaP)));
+  float sigma;
+  if (omega <= omegaP)
+    sigma = 0.07f;
+  else
+    sigma = 0.09f;
 
+  float r = exp(-((omega - omegaP) * (omega - omegaP)) / (2.f * sigma * sigma * omegaP * omegaP));
+  float omegaRcp = 1.f / omega;
+  float omegaPOverOmega = omegaP / omega;
   float sJonswap =
-    ((alpha * g * g) / (omega * omega * omega * omega * omega)) *
-    exp(-1.25f * rrome * rrome * rrome * rrome) *
+    alpha * g * g * omegaRcp * omegaRcp * omegaRcp * omegaRcp * omegaRcp *
+    exp(-1.25f * omegaPOverOmega * omegaPOverOmega * omegaPOverOmega * omegaPOverOmega) *
     pow(gamma, r);
 
   // TMA adjustment for shallow waves 
   float omegaH = omega * sqrt(h / g);
-  float phi =
-    omegaH > 1.f
-      ? 1.f - 0.5f * (2.f - omegaH) * (2.f - omegaH)
-      : 0.5f * omegaH * omegaH;
+  float tmaCorrection = 1.f;
+  if (omegaH <= 1.f)
+    tmaCorrection = 0.5f * omegaH * omegaH;
+  else if (omegaH < 2.f)
+    tmaCorrection = 1.f - 0.5f * (2.f - omegaH) * (2.f - omegaH);
 
-  float sTma = sJonswap * phi;
+  float sTma = sJonswap * tmaCorrection;
 
   // Donlean-Banner directional spreading
   float betaS;
-  if (rome < 0.95f)
+  float x = omega / omegaP;
+  if (x < 0.95f)
   {
-    betaS = 2.61f * pow(rome, 1.3f);
+    betaS = 2.61f * pow(abs(x), 1.3f);
   }
-  else if (rome < 1.6f)
+  else if (x < 1.6f)
   {
-    betaS = 2.28f * pow(rome, -1.3f);
+    betaS = 2.28f * pow(abs(x), -1.3f);
   }
   else
   {
-    float eps = -0.4f + 0.8393f * exp(-0.567f * log(rome * rome));
+    float eps = -0.4f + 0.8393f * exp(-0.567f * log(x * x));
     betaS = pow(10.f, eps);
   }
 
   float sbt = sech(betaS * theta);
   float dirSpreadDB = (betaS / (2.f * tanh(betaS * SHADER_PI))) * sbt * sbt;
+  // @TODO: use actual wind direction, not the -> rigth (need to subtract from theta)
 
   // Now, compose
+  float sAdj = sTma * dirSpreadDB;
+  float skk = sAdj * abs(ddkOmega / wavenumber);
+  float spectrum = sqrt(2.f * skk * dk * dk);
+
+  vec2 rng = get_blue_noise(imUv);
+  vec2 initialSpectrum = rng * spectrum;
+
+  // ensure nyquist
+  if (wavenumber < dk * 0.5f)
+  {
+    imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f, k.y, 0.f));
+    imageStore(spectraTex[cascade], imCoord, vec4(0.f));
+  }
+  else
+  {
+    imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f / wavenumber, k.y, omega));
+    imageStore(spectraTex[cascade], imCoord, vec4(initialSpectrum, 0.f, 0.f));
+  }
 }
 
