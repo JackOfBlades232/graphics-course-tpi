@@ -1,0 +1,99 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "water.h"
+#include "constants.h"
+
+
+layout(local_size_x = WATER_IFFT_WG_THREAD_COUNT, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0, set = 0, rgba32f) uniform image2D buffers[WATER_IFFT_BUFFER_COUNT];
+
+layout(push_constant) uniform params_t
+{
+  uint vert;
+} params;
+
+shared vec4 cache[WATER_CASCADE_RES];
+
+uint bitrev_index(uint id)
+{
+  const uint shift = 32 - findMSB(WATER_CASCADE_RES);
+  return bitfieldReverse(id << shift);
+}
+
+vec2 fetch_component(vec4 pack, uint comp)
+{
+  return comp == 0 ? pack.xy : pack.zw;
+}
+
+vec4 comp_mult_double(vec4 a, vec4 b)
+{
+  return vec4(
+    a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x,
+    a.z * b.z - a.w * b.w, a.z * b.w + a.w * b.z);
+}
+
+vec4 comp_exp_double(float theta)
+{
+  const vec2 single = vec2(cos(theta), sin(theta));
+  return vec4(single, single);
+}
+
+vec4 comp_conj_double(vec4 a)
+{
+  return vec4(a.x, -a.y, a.z, -a.w);
+}
+
+void main(void)
+{
+  const bool vert = params.vert != 0;
+
+  const uint bufferId = gl_WorkGroupID.z;
+
+  const uint kId = 2 * gl_LocalInvocationID.x; // same as global
+  const uint lane = gl_GlobalInvocationID.y;
+
+  if (bufferId >= WATER_IFFT_BUFFER_COUNT || kId >= WATER_IFFT_WG_THREAD_COUNT || lane >= WATER_CASCADE_RES)
+    return;
+
+  // Simple radix-2 cooley-tukey fully in shared mem/one invocation.
+  // We do 2 lanes in one go to avoid sync issues.
+
+  const ivec2 increment = vert ? ivec2(0, 1) : ivec2(1, 0);
+  const ivec2 copyCursorBase = vert ? ivec2(lane, 0) : ivec2(0, lane);
+
+  // Read all elements to cache with bit-reverse index with conjugation to use fft
+  ivec2 copyCursor = copyCursorBase;
+  for (uint i = 0; i < WATER_CASCADE_RES; ++i)
+  {
+    cache[bitrev_index(i)] = comp_conj_double(imageLoad(buffers[bufferId], copyCursor));
+    copyCursor += increment;
+  }
+
+  barrier();
+
+  // Run IFFT
+  for (uint size = 2; size <= WATER_CASCADE_RES; size <<= 1)
+  {
+    const uint k = kId & (size - 1);
+    const vec4 twiddle = comp_exp_double(-SHADER_TWO_PI * float(k) / float(size)); 
+
+    const vec4 t = comp_mult_double(twiddle, cache[kId + size / 2]);
+    const vec4 u = cache[kId];
+
+    cache[kId] = u + t;
+    cache[kId + size / 2] = u - t;
+
+    barrier();
+  }
+
+  // Store calculations back. No bit reversion needed, just conjugate again and divide by N.
+  copyCursor = copyCursorBase;
+  for (uint i = 0; i < WATER_CASCADE_RES; ++i)
+  {
+    imageStore(buffers[bufferId], copyCursor, comp_conj_double(cache[i]) / float(WATER_CASCADE_RES));
+    copyCursor += increment;
+  }
+}

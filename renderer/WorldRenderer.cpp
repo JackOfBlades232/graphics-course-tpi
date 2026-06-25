@@ -698,6 +698,7 @@ void WorldRenderer::loadShaders()
     {RENDERER_SHADERS_ROOT "water_time_indep_spectra_conjugate.comp.spv"});
   etna::create_program(
     "water_time_spectra_gen", {RENDERER_SHADERS_ROOT "water_time_spectra_gen.comp.spv"});
+  etna::create_program("water_double_ifft", {RENDERER_SHADERS_ROOT "water_double_ifft.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -927,6 +928,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   waterInitalSpectraConjugate =
     pipelineManager.createComputePipeline("water_time_indep_spectra_conjugate", {});
   waterTimeSpectraGenerate = pipelineManager.createComputePipeline("water_time_spectra_gen", {});
+  waterDoubleIFFT = pipelineManager.createComputePipeline("water_double_ifft", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -1760,6 +1762,86 @@ void WorldRenderer::renderWorld(
           get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
           get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
           WATER_CASCADE_COUNT);
+      }
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, waterIFFT);
+        auto programInfo = etna::get_shader_program("water_double_ifft");
+        std::vector<etna::Binding> binds{}; // @SPEED piggy
+        for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+        {
+          binds.emplace_back(
+            0,
+            water->cascades[c].spatialDisplacementAndDxzTex.genBinding(
+              {}, vk::ImageLayout::eGeneral),
+            uint32_t(2 * c));
+          binds.emplace_back(
+            0,
+            water->cascades[c].spatialDisplacementOtherDerivativesTex.genBinding(
+              {}, vk::ImageLayout::eGeneral),
+            uint32_t(2 * c + 1));
+        }
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0), cmd_buf, std::move(binds));
+        etna::flush_barriers(cmd_buf);
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          waterDoubleIFFT.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, waterDoubleIFFT.getVkPipeline());
+
+        {
+          ETNA_PROFILE_GPU(cmd_buf, waterIFFTHorizontal);
+          cmd_buf.pushConstants<shader_uint>(
+            waterDoubleIFFT.getVkPipelineLayout(),
+            vk::ShaderStageFlagBits::eCompute,
+            0,
+            shader_uint(0));
+          cmd_buf.dispatch(1, WATER_CASCADE_RES, WATER_IFFT_BUFFER_COUNT);
+        }
+
+        for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+        {
+          emit_barriers(
+            cmd_buf,
+            {vk::ImageMemoryBarrier2{
+              .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .srcAccessMask =
+                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+              .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .dstAccessMask =
+                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+              .oldLayout = vk::ImageLayout::eGeneral,
+              .newLayout = vk::ImageLayout::eGeneral,
+              .image = water->cascades[c].spatialDisplacementAndDxzTex.get(),
+              .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}});
+          emit_barriers(
+            cmd_buf,
+            {vk::ImageMemoryBarrier2{
+              .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .srcAccessMask =
+                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+              .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+              .dstAccessMask =
+                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+              .oldLayout = vk::ImageLayout::eGeneral,
+              .newLayout = vk::ImageLayout::eGeneral,
+              .image = water->cascades[c].spatialDisplacementOtherDerivativesTex.get(),
+              .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}});
+        }
+
+        {
+          ETNA_PROFILE_GPU(cmd_buf, waterIFFTVertical);
+          cmd_buf.pushConstants<shader_uint>(
+            waterDoubleIFFT.getVkPipelineLayout(),
+            vk::ShaderStageFlagBits::eCompute,
+            0,
+            shader_uint(1));
+          cmd_buf.dispatch(1, WATER_CASCADE_RES, WATER_IFFT_BUFFER_COUNT);
+        }
       }
     }
 

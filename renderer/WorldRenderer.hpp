@@ -282,6 +282,7 @@ private:
   etna::ComputePipeline waterInitalSpectraGenerate{};
   etna::ComputePipeline waterInitalSpectraConjugate{};
   etna::ComputePipeline waterTimeSpectraGenerate{};
+  etna::ComputePipeline waterDoubleIFFT{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
 
