@@ -4056,7 +4056,7 @@
     },
     "JB_water" : {
       "level": 10.0,
-      "cascades": [5.0, 27.0, 100.0]
+      "cascades": [250.0, 17.0, 5.0]
     },
     "JB_terrain" : {
       "heightmap" : {

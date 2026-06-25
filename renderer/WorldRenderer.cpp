@@ -1649,7 +1649,8 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, waterGen);
 
-      if (waterSettingsDirty)
+      // @TEST
+      //if (waterSettingsDirty)
       {
         ETNA_PROFILE_GPU(cmd_buf, waterIndepGen);
 
@@ -1691,7 +1692,7 @@ void WorldRenderer::renderWorld(
         }
 
         {
-          ETNA_PROFILE_GPU(cmd_buf, waterIndepGenCalc);
+          ETNA_PROFILE_GPU(cmd_buf, waterIndepGenConjugate);
           auto programInfo = etna::get_shader_program("water_time_indep_spectra_conjugate");
           std::vector<etna::Binding> binds{}; // @SPEED piggy
           for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
@@ -2887,7 +2888,7 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Draw water", &waterSettings.enable);
       if (waterSettings.enable)
       {
-        ImGui::SliderFloat("Fetch", &waterSettings.f, 0.f, 500.f);
+        ImGui::SliderFloat("Fetch", &waterSettings.f, 0.f, 1e6f);
         ImGui::SliderFloat("Average depth", &waterSettings.h, 0.f, 10000.f);
         ImGui::SliderFloat("Density", &waterSettings.rho, 800.f, 1200.f);
         ImGui::SliderFloat("Surface tension", &waterSettings.surfaceTension, 0.f, 0.5f);

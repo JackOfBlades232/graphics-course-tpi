@@ -31,7 +31,6 @@ void main(void)
 
   const ivec2 imSz    = imageSize(wkTex[cascade]);
   const ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
-  const vec2 imUv     = vec2(imCoord) / vec2(imSz);
   
   if (imCoord.x >= imSz.x || imCoord.y >= imSz.y)
     return;
@@ -42,7 +41,7 @@ void main(void)
   vec4 initSpectrum = imageLoad(spectraTex[cascade], imCoord);
 
   vec2 h =
-    comp_mult(initSpectrum.xy, exponent) *
+    comp_mult(initSpectrum.xy, exponent) +
     comp_mult(initSpectrum.zw, vec2(exponent.x, -exponent.y));
   vec2 ih = vec2(-h.y, h.x);
 
@@ -59,11 +58,11 @@ void main(void)
 
   imageStore(dispDxzTex[cascade], imCoord,
     vec4(
-      vec2(displacementX.x - displacementZ.y, displacementX.y + displacementZ.x),
-      vec2(displacementY.x - displacementZdX.y, displacementY.y + displacementZdX.x)));
+      displacementX.x - displacementZ.y, displacementX.y + displacementZ.x,
+      displacementY.x - displacementZdX.y, displacementY.y + displacementZdX.x));
   imageStore(dYXdYZdXXdZZTex[cascade], imCoord,
     vec4(
-      vec2(displacementYdX.x - displacementYdZ.y, displacementYdX.y + displacementYdZ.x),
-      vec2(displacementXdX.x - displacementZdZ.y, displacementXdX.y + displacementZdZ.x)));
+      displacementYdX.x - displacementYdZ.y, displacementYdX.y + displacementYdZ.x,
+      displacementXdX.x - displacementZdZ.y, displacementXdX.y + displacementZdZ.x));
 }
 

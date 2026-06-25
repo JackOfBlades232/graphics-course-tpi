@@ -196,7 +196,7 @@ private:
     bool enable = true;
     uint8_t pad1_ = 0, pad2_ = 0, pad3_ = 0;
     float f = 100000.f;
-    float h = 100.f; // Not the same as ocean bed depth, for wave sim
+    float h = 500.f; // Not the same as ocean bed depth, for wave sim
     float g = 9.81f;
     float rho = 1000.f;
     float surfaceTension = 0.072f;

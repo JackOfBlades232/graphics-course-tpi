@@ -129,16 +129,32 @@ void main(void)
   vec2 rng = get_blue_noise(imUv);
   vec2 initialSpectrum = rng * spectrum;
 
-  // ensure nyquist
-  if (wavenumber < dk * 0.5f)
+  // ensure no overlap with other cascades
+  float minWavenumberCascade = 0.f;
+  float maxWavenumberCascade = 0.f;
+  switch (cascade)
   {
-    imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f, k.y, 0.f));
+  case 0:
+    minWavenumberCascade = 0.0001f;
+    maxWavenumberCascade = 6.f * SHADER_TWO_PI / source.l1;
+    break;
+  case 1:
+    minWavenumberCascade = 6.f * SHADER_TWO_PI / source.l1;
+    maxWavenumberCascade = 6.f * SHADER_TWO_PI / source.l2;
+    break;
+  case 2:
+    minWavenumberCascade = 6.f * SHADER_TWO_PI / source.l2;
+    maxWavenumberCascade = 9999.f;
+    break;
+  default:
+    break;
+  }
+
+  imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f / wavenumber, k.y, omega));
+
+  if (wavenumber < minWavenumberCascade || wavenumber > maxWavenumberCascade)
     imageStore(spectraTex[cascade], imCoord, vec4(0.f));
-  }
   else
-  {
-    imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f / wavenumber, k.y, omega));
     imageStore(spectraTex[cascade], imCoord, vec4(initialSpectrum, 0.f, 0.f));
-  }
 }
 

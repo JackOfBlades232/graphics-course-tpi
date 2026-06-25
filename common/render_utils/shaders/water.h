@@ -5,7 +5,8 @@
 #include "defs.h"
 
 #define WATER_CASCADE_COUNT 3
-#define WATER_CASCADE_RES 256
+#define WATER_CASCADE_RES_POW 8
+#define WATER_CASCADE_RES (1 << WATER_CASCADE_RES_POW)
 
 #define WATER_WORKGROUP_DIM 16
 
