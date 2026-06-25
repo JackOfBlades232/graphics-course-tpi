@@ -288,6 +288,15 @@ public:
   bool hasBlueNoise() const { return blueNoiseTexSmp != TexSmpIdPair::INVALID; }
   TexSmpIdPair getBlueNoiseTexSmp() const { return blueNoiseTexSmp; }
 
+  bool isBlueNoiseTexture(TexId tid) const
+  {
+    if (!hasBlueNoise())
+      return false;
+    if (tid == TexId::INVALID)
+      return false;
+    return unpack_tex_smp_id_pair(blueNoiseTexSmp).tid == tid;
+  }
+
   // For imgui, kinda hacky
   UniformLights& lightsRW() { return *lightsData; }
 

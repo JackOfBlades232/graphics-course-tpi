@@ -11,8 +11,7 @@
 #define WATER_WORKGROUP_DIM 16
 
 // 2 buffers per cascade -- (x, y, z, dXZ), (dYX, dYZ, dXX, dZZ)
-#define WATER_IFFT_BUFFER_COUNT (2 * WATER_CASCADE_COUNT)
-#define WATER_IFFT_WG_THREAD_COUNT (WATER_CASCADE_RES / 2)
+#define WATER_FFT_BUFFER_COUNT (2 * WATER_CASCADE_COUNT)
 
 struct WaterSourceData
 {

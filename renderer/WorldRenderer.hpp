@@ -185,6 +185,9 @@ private:
       etna::Image timeIndepSpectraTex;
       etna::Image spatialDisplacementAndDxzTex;
       etna::Image spatialDisplacementOtherDerivativesTex;
+      etna::Image displacement;
+      etna::Image derivatives;
+      etna::Image turbulence;
       // @TODO: cascade L and other params
     } cascades[WATER_CASCADE_COUNT]{};
     etna::Buffer source{};
@@ -282,7 +285,8 @@ private:
   etna::ComputePipeline waterInitalSpectraGenerate{};
   etna::ComputePipeline waterInitalSpectraConjugate{};
   etna::ComputePipeline waterTimeSpectraGenerate{};
-  etna::ComputePipeline waterDoubleIFFT{};
+  etna::ComputePipeline waterDoubleFFT{};
+  etna::ComputePipeline waterExtractGeodata{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
 

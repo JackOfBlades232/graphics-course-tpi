@@ -41,5 +41,6 @@ target_add_shaders(renderer
   shaders/water_time_indep_spectra_gen.comp
   shaders/water_time_indep_spectra_conjugate.comp
   shaders/water_time_spectra_gen.comp
-  shaders/water_double_ifft.comp
+  shaders/water_double_fft.comp
+  shaders/water_extract_geodata.comp
 )

@@ -53,108 +53,37 @@ void main(void)
   default:                break;
   }
 
-  const float h     = constants.waterH;
-  const float g     = constants.waterG;
-  const float f     = constants.waterF;
-  const float u     = constants.windStrength * constants.waterWindUnitsToMps;
+  // @TEST
+  const float L = 1000.f;
+  const float A = 1.f;
+  const float g = 9.81f;
 
   ivec2 offId = imCoord - (imSz / 2);
   float dk = SHADER_TWO_PI / l;
   vec2 k = dk * vec2(offId);
   float wavenumber = length(k);
-  float theta = atan(k.y, k.x);
 
-  float th = tanh(min(wavenumber * h, 20.f));
-  float sc = sech(wavenumber * h);
+  float omega = sqrt(g * wavenumber);
 
-  // Finite-depth dispersion relationship
-  float omega = sqrt(g * wavenumber * th);
-  float ddkOmega = g * (th + wavenumber * h * sc * sc) / (2.f * omega);
+  float ph = A * exp(-1.f / wavenumber / wavenumber / L / L) / wavenumber / wavenumber / wavenumber / wavenumber;
+  float cosine = dot(normalize(k), normalize(constants.windDirection));
+  float phDir = ph * cosine * cosine * cosine * cosine * cosine * cosine;
 
-  // JONSWAP spectrum @TODO: some of these can be done on the cpu
-  const float gamma  = 3.3f;
-  const float omegaP = 22.f * pow((u * f) / (g * g), -0.33f);
-  const float alpha  = 0.076f * pow((f * g) / (u * u), -0.22f);
+  vec2 initialSpectrum = sqrt(0.5f) * get_blue_noise(imUv) * sqrt(phDir);
 
-  float sigma;
-  if (omega <= omegaP)
-    sigma = 0.07f;
-  else
-    sigma = 0.09f;
-
-  float r = exp(-((omega - omegaP) * (omega - omegaP)) / (2.f * sigma * sigma * omegaP * omegaP));
-  float omegaRcp = 1.f / omega;
-  float omegaPOverOmega = omegaP / omega;
-  float sJonswap =
-    alpha * g * g * omegaRcp * omegaRcp * omegaRcp * omegaRcp * omegaRcp *
-    exp(-1.25f * omegaPOverOmega * omegaPOverOmega * omegaPOverOmega * omegaPOverOmega) *
-    pow(gamma, r);
-
-  // TMA adjustment for shallow waves 
-  float omegaH = omega * sqrt(h / g);
-  float tmaCorrection = 1.f;
-  if (omegaH <= 1.f)
-    tmaCorrection = 0.5f * omegaH * omegaH;
-  else if (omegaH < 2.f)
-    tmaCorrection = 1.f - 0.5f * (2.f - omegaH) * (2.f - omegaH);
-
-  float sTma = sJonswap * tmaCorrection;
-
-  // Donlean-Banner directional spreading
-  float betaS;
-  float x = omega / omegaP;
-  if (x < 0.95f)
-  {
-    betaS = 2.61f * pow(abs(x), 1.3f);
-  }
-  else if (x < 1.6f)
-  {
-    betaS = 2.28f * pow(abs(x), -1.3f);
-  }
-  else
-  {
-    float eps = -0.4f + 0.8393f * exp(-0.567f * log(x * x));
-    betaS = pow(10.f, eps);
-  }
-
-  float sbt = sech(betaS * theta);
-  float dirSpreadDB = (betaS / (2.f * tanh(betaS * SHADER_PI))) * sbt * sbt;
-  // @TODO: use actual wind direction, not the -> rigth (need to subtract from theta)
-
-  // Now, compose
-  float sAdj = sTma * dirSpreadDB;
-  float skk = sAdj * abs(ddkOmega / wavenumber);
-  float spectrum = sqrt(2.f * skk * dk * dk);
-
-  vec2 rng = get_blue_noise(imUv);
-  vec2 initialSpectrum = rng * spectrum;
-
-  // ensure no overlap with other cascades
-  float minWavenumberCascade = 0.f;
-  float maxWavenumberCascade = 0.f;
-  switch (cascade)
-  {
-  case 0:
-    minWavenumberCascade = 0.0001f;
-    maxWavenumberCascade = 6.f * SHADER_TWO_PI / source.l1;
-    break;
-  case 1:
-    minWavenumberCascade = 6.f * SHADER_TWO_PI / source.l1;
-    maxWavenumberCascade = 6.f * SHADER_TWO_PI / source.l2;
-    break;
-  case 2:
-    minWavenumberCascade = 6.f * SHADER_TWO_PI / source.l2;
-    maxWavenumberCascade = 9999.f;
-    break;
-  default:
-    break;
-  }
-
-  imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f / wavenumber, k.y, omega));
+  // @TODO: ensure no overlap with other cascades
+  float minWavenumberCascade = 0.0001f;
+  float maxWavenumberCascade = 9999.f;
 
   if (wavenumber < minWavenumberCascade || wavenumber > maxWavenumberCascade)
+  {
+    imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f, k.y, 0.f));
     imageStore(spectraTex[cascade], imCoord, vec4(0.f));
+  }
   else
+  {
+    imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f / wavenumber, k.y, omega));
     imageStore(spectraTex[cascade], imCoord, vec4(initialSpectrum, 0.f, 0.f));
+  }
 }
 

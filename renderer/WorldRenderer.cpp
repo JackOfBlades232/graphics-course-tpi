@@ -589,6 +589,27 @@ void WorldRenderer::loadScene(std::filesystem::path path)
           .name = fmt::format("wave_disp_other_derivatives_{}", i),
           .format = vk::Format::eR32G32B32A32Sfloat,
           .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      createManagedImage(
+        cascade.displacement,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("wave_displacement_{}", i),
+          .format = vk::Format::eR32G32B32A32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      createManagedImage(
+        cascade.derivatives,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("wave_derivatives_{}", i),
+          .format = vk::Format::eR32G32B32A32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+      createManagedImage(
+        cascade.turbulence,
+        etna::Image::CreateInfo{
+          .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
+          .name = fmt::format("wave_turbulence_{}", i),
+          .format = vk::Format::eR32Sfloat,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
       ++i;
     }
   }
@@ -698,7 +719,9 @@ void WorldRenderer::loadShaders()
     {RENDERER_SHADERS_ROOT "water_time_indep_spectra_conjugate.comp.spv"});
   etna::create_program(
     "water_time_spectra_gen", {RENDERER_SHADERS_ROOT "water_time_spectra_gen.comp.spv"});
-  etna::create_program("water_double_ifft", {RENDERER_SHADERS_ROOT "water_double_ifft.comp.spv"});
+  etna::create_program("water_double_fft", {RENDERER_SHADERS_ROOT "water_double_fft.comp.spv"});
+  etna::create_program(
+    "water_extract_geodata", {RENDERER_SHADERS_ROOT "water_extract_geodata.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -928,7 +951,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   waterInitalSpectraConjugate =
     pipelineManager.createComputePipeline("water_time_indep_spectra_conjugate", {});
   waterTimeSpectraGenerate = pipelineManager.createComputePipeline("water_time_spectra_gen", {});
-  waterDoubleIFFT = pipelineManager.createComputePipeline("water_double_ifft", {});
+  waterDoubleFFT = pipelineManager.createComputePipeline("water_double_fft", {});
+  waterExtractGeodata = pipelineManager.createComputePipeline("water_extract_geodata", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -1419,6 +1443,13 @@ void WorldRenderer::renderWorld(
     {
       queueClipmapInvalidation();
     }
+
+    if (std::any_of(readyTids.begin(), readyTids.end(), [this](TexId tid) {
+          return sceneMgr->isBlueNoiseTexture(tid);
+        }))
+    {
+      waterSettingsDirty = true;
+    }
   }
 
   // @NOTE: can be more adaptive
@@ -1649,8 +1680,7 @@ void WorldRenderer::renderWorld(
     {
       ETNA_PROFILE_GPU(cmd_buf, waterGen);
 
-      // @TEST
-      //if (waterSettingsDirty)
+      if (waterSettingsDirty)
       {
         ETNA_PROFILE_GPU(cmd_buf, waterIndepGen);
 
@@ -1766,8 +1796,8 @@ void WorldRenderer::renderWorld(
       }
 
       {
-        ETNA_PROFILE_GPU(cmd_buf, waterIFFT);
-        auto programInfo = etna::get_shader_program("water_double_ifft");
+        ETNA_PROFILE_GPU(cmd_buf, waterFFT);
+        auto programInfo = etna::get_shader_program("water_double_fft");
         std::vector<etna::Binding> binds{}; // @SPEED piggy
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
@@ -1788,61 +1818,121 @@ void WorldRenderer::renderWorld(
 
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
-          waterDoubleIFFT.getVkPipelineLayout(),
+          waterDoubleFFT.getVkPipelineLayout(),
           0,
           {set.getVkSet()},
           {});
-        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, waterDoubleIFFT.getVkPipeline());
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, waterDoubleFFT.getVkPipeline());
+
+        struct FFTPC
+        {
+          shader_uint vert;
+          shader_uint inv;
+        };
+
+        auto fftMidBarriers = [&, this] {
+          for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+          {
+            emit_barriers(
+              cmd_buf,
+              {vk::ImageMemoryBarrier2{
+                .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .oldLayout = vk::ImageLayout::eGeneral,
+                .newLayout = vk::ImageLayout::eGeneral,
+                .image = water->cascades[c].spatialDisplacementAndDxzTex.get(),
+                .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}});
+            emit_barriers(
+              cmd_buf,
+              {vk::ImageMemoryBarrier2{
+                .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+                .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead |
+                  vk::AccessFlagBits2::eShaderStorageWrite,
+                .oldLayout = vk::ImageLayout::eGeneral,
+                .newLayout = vk::ImageLayout::eGeneral,
+                .image = water->cascades[c].spatialDisplacementOtherDerivativesTex.get(),
+                .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}});
+          }
+        };
+
+        auto fftPass = [&, this](FFTPC params) {
+          cmd_buf.pushConstants<FFTPC>(
+            waterDoubleFFT.getVkPipelineLayout(), vk::ShaderStageFlagBits::eCompute, 0, params);
+          cmd_buf.dispatch(1, WATER_CASCADE_RES, WATER_FFT_BUFFER_COUNT);
+        };
 
         {
-          ETNA_PROFILE_GPU(cmd_buf, waterIFFTHorizontal);
-          cmd_buf.pushConstants<shader_uint>(
-            waterDoubleIFFT.getVkPipelineLayout(),
-            vk::ShaderStageFlagBits::eCompute,
-            0,
-            shader_uint(0));
-          cmd_buf.dispatch(1, WATER_CASCADE_RES, WATER_IFFT_BUFFER_COUNT);
+          ETNA_PROFILE_GPU(cmd_buf, waterFFTHorizontal);
+          fftPass(FFTPC{.vert = 1, .inv = 1});
         }
 
+        fftMidBarriers();
+
+        {
+          ETNA_PROFILE_GPU(cmd_buf, waterFFTVertical);
+          fftPass(FFTPC{.vert = 0, .inv = 1});
+        }
+
+        // @TEST
+        // fftMidBarriers();
+        // fftPass(FFTPC{.vert = 1, .inv = 0});
+        // fftMidBarriers();
+        // fftPass(FFTPC{.vert = 0, .inv = 0});
+      }
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, waterExtract);
+        auto programInfo = etna::get_shader_program("water_extract_geodata");
+        std::vector<etna::Binding> binds{}; // @SPEED piggy
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
-          emit_barriers(
-            cmd_buf,
-            {vk::ImageMemoryBarrier2{
-              .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-              .srcAccessMask =
-                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-              .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-              .dstAccessMask =
-                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-              .oldLayout = vk::ImageLayout::eGeneral,
-              .newLayout = vk::ImageLayout::eGeneral,
-              .image = water->cascades[c].spatialDisplacementAndDxzTex.get(),
-              .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}});
-          emit_barriers(
-            cmd_buf,
-            {vk::ImageMemoryBarrier2{
-              .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-              .srcAccessMask =
-                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-              .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-              .dstAccessMask =
-                vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-              .oldLayout = vk::ImageLayout::eGeneral,
-              .newLayout = vk::ImageLayout::eGeneral,
-              .image = water->cascades[c].spatialDisplacementOtherDerivativesTex.get(),
-              .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}});
-        }
-
-        {
-          ETNA_PROFILE_GPU(cmd_buf, waterIFFTVertical);
-          cmd_buf.pushConstants<shader_uint>(
-            waterDoubleIFFT.getVkPipelineLayout(),
-            vk::ShaderStageFlagBits::eCompute,
+          binds.emplace_back(
             0,
-            shader_uint(1));
-          cmd_buf.dispatch(1, WATER_CASCADE_RES, WATER_IFFT_BUFFER_COUNT);
+            water->cascades[c].displacement.genBinding({}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
+          binds.emplace_back(
+            1,
+            water->cascades[c].derivatives.genBinding({}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
+          binds.emplace_back(
+            2,
+            water->cascades[c].turbulence.genBinding({}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
+          binds.emplace_back(
+            3,
+            water->cascades[c].spatialDisplacementAndDxzTex.genBinding(
+              {}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
+          binds.emplace_back(
+            4,
+            water->cascades[c].spatialDisplacementOtherDerivativesTex.genBinding(
+              {}, vk::ImageLayout::eGeneral),
+            uint32_t(c));
         }
+        binds.emplace_back(8, constants->get().genBinding());
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0), cmd_buf, std::move(binds));
+        etna::flush_barriers(cmd_buf);
+
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          waterExtractGeodata.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, waterExtractGeodata.getVkPipeline());
+
+        cmd_buf.dispatch(
+          get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
+          get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
+          WATER_CASCADE_COUNT);
       }
     }
 

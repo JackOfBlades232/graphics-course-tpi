@@ -1,0 +1,50 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "water.h"
+#include "constants.h"
+
+layout(local_size_x = WATER_WORKGROUP_DIM, local_size_y = WATER_WORKGROUP_DIM, local_size_z = 1) in;
+
+layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D displacement[WATER_CASCADE_COUNT];
+layout(binding = 1, set = 0, rgba32f) uniform writeonly image2D derivatives[WATER_CASCADE_COUNT];
+
+layout(binding = 2, set = 0, r32f) uniform image2D turbulence[WATER_CASCADE_COUNT];
+
+layout(binding = 3, set = 0, rgba32f) uniform readonly image2D dispDxzTex[WATER_CASCADE_COUNT];
+layout(binding = 4, set = 0, rgba32f) uniform readonly image2D dYXdYZdXXdZZTex[WATER_CASCADE_COUNT];
+
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
+void main(void)
+{
+  const int cascade = int(gl_GlobalInvocationID.z);
+  if (cascade >= WATER_CASCADE_COUNT)
+    return;
+
+  const ivec2 imSz    = imageSize(displacement[cascade]);
+  const ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
+  
+  if (imCoord.x >= imSz.x || imCoord.y >= imSz.y)
+    return;
+
+  const vec4 xzyDxz = imageLoad(dispDxzTex[cascade], imCoord);
+  const vec4 dYXdYZdXXdZZ = imageLoad(dYXdYZdXXdZZTex[cascade], imCoord);
+
+  const vec3 disp = vec3(xzyDxz.x, xzyDxz.z, xzyDxz.y);
+  const vec4 der = dYXdYZdXXdZZ;
+
+  const float j = (1.f + dYXdYZdXXdZZ.z) * (1.f + dYXdYZdXXdZZ.w) - xzyDxz.w * xzyDxz.w;
+  const float prevTurbulence = imageLoad(turbulence[cascade], imCoord).x;
+  const float integratedTurbulence = prevTurbulence + constants.dt * 0.5f / max(j, 0.5f);
+  const float newTurbulence = min(j, integratedTurbulence);
+
+  imageStore(displacement[cascade], imCoord, vec4(disp, 0.f));
+  imageStore(derivatives[cascade], imCoord, der);
+  imageStore(turbulence[cascade], imCoord, vec4(newTurbulence, 0.f, 0.f, 0.f));
+}  
+
