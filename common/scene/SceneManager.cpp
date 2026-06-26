@@ -382,13 +382,18 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
     }
   }
 
+  size_t sceneInstCount = result.allInstances.size();
+  size_t sceneCmdCount = result.sceneDrawCommands.size();
+
   auto pushTesshquadCommand = [&, this](
                                 uint32_t first_level_chunks,
                                 uint32_t other_levels_chunks,
                                 uint32_t chunks_level_dim,
                                 uint32_t level_count,
                                 float extent_step,
-                                uint32_t flag) {
+                                uint32_t flag,
+                                float chunk_coord_y,
+                                float chunk_extent_y) {
     const uint32_t totalChunkCount = first_level_chunks + (level_count - 1) * other_levels_chunks;
 
     result.bboxes.reserve(result.bboxes.size() + totalChunkCount);
@@ -406,7 +411,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
     for (size_t i = 0; i < totalChunkCount; ++i)
     {
       result.allInstances.push_back(CullableInstance{
-        shader_uint(i + commandId),
+        shader_uint(i + cmd.firstInstance - sceneInstCount + sceneCmdCount),
         shader_uint(MaterialId::INVALID), // @TODO set in scene
         shader_uint(commandId),
         flag});
@@ -414,9 +419,8 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       glm::vec3 chunkCoord = {};
       glm::vec3 chunkExtent = {};
 
-      // @NOTE: filled dynamically from compute shaders
-      chunkCoord.y = 0.f;
-      chunkExtent.y = 0.f;
+      chunkCoord.y = chunk_coord_y;
+      chunkExtent.y = chunk_extent_y;
 
       if (i < first_level_chunks)
       {
@@ -441,8 +445,8 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
         }
         else if (chunkId < other_levels_chunks - chunks_level_dim)
         {
-          const uint32_t yId = (chunkId - TERRAIN_CHUNKS_LEVEL_DIM) >> 1;
-          const uint32_t xId = (chunkId - TERRAIN_CHUNKS_LEVEL_DIM) & 1;
+          const uint32_t yId = (chunkId - chunks_level_dim) >> 1;
+          const uint32_t xId = (chunkId - chunks_level_dim) & 1;
           chunkCoord.z = chunkExtent.z * float(yId + 1) - levelExtent;
           chunkCoord.x = xId ? (-levelExtent) : (levelExtent - chunkExtent.x);
         }
@@ -461,7 +465,6 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
 
   // @NOTE: done here, if it is not added the span is just empty
   result.firstTerrainCommand = result.sceneDrawCommands.size();
-
   if (terrainData)
   {
     pushTesshquadCommand(
@@ -470,7 +473,10 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       TERRAIN_CHUNKS_LEVEL_DIM,
       CLIPMAP_LEVEL_COUNT,
       CLIPMAP_EXTENT_STEP,
-      TERRAIN_CHUNK_INSTANCE_FLAG);
+      TERRAIN_CHUNK_INSTANCE_FLAG,
+      // @NOTE: filled dynamically from compute shaders
+      0.f,
+      0.f);
 
     if (terrainData->vegetationTypeCount > 0)
     {
@@ -480,6 +486,21 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       result.vegetationDrawCommand.instanceCount = 0;
       result.vegetationDrawCommand.firstInstance = 0;
     }
+  }
+
+  result.firstWaterCommand = result.sceneDrawCommands.size();
+  if (waterData)
+  {
+    pushTesshquadCommand(
+      WATER_TESSHQUAD_FIRST_LEVEL_CHUNKS,
+      WATER_TESSHQUAD_OTHER_LEVELS_CHUNKS,
+      WATER_TESSHQUAD_CHUNKS_LEVEL_DIM,
+      WATER_TESSHQUAD_LEVEL_COUNT,
+      WATER_TESSHQUAD_EXTENT_STEP,
+      WATER_CHUNK_INSTANCE_FLAG,
+      // @TODO: real extent or exhaustive extent
+      waterData->waterLevel - 1.f,
+      2.f);
   }
 
   return result;
@@ -1308,8 +1329,16 @@ void SceneManager::selectScene(
   directionalLightCsmCascades = dlcsm;
 
   auto
-    [verts, inds, relems, meshs, commands, bboxs, insts, firstTerrainCommand, vegetationCommand] =
-      processMeshes(model, materialRemapping);
+    [verts,
+     inds,
+     relems,
+     meshs,
+     commands,
+     bboxs,
+     insts,
+     firstTerrainCommand,
+     firstWaterCommand,
+     vegetationCommand] = processMeshes(model, materialRemapping);
   renderElements = std::move(relems);
   meshes = std::move(meshs);
   sceneDrawCommands = std::move(commands);
@@ -1322,6 +1351,10 @@ void SceneManager::selectScene(
     terrainChunksDrawCommands = std::span{sceneDrawCommands}.subspan(firstTerrainCommand, 1);
     if (terrainData->vegetationTypeCount > 0)
       vegetationDrawCommand = vegetationCommand;
+  }
+  if (waterData)
+  {
+    waterChunksDrawCommands = std::span{sceneDrawCommands}.subspan(firstWaterCommand, 1);
   }
 
   startDataUpload(

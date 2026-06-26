@@ -677,6 +677,12 @@ void WorldRenderer::loadShaders()
     {RENDERER_SHADERS_ROOT "tesshquad_mesh.vert.spv",
      RENDERER_SHADERS_ROOT "tesshquad_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh_depth.tese.spv"});
+  etna::create_program(
+    "water_mesh",
+    {RENDERER_SHADERS_ROOT "water_mesh.frag.spv",
+     RENDERER_SHADERS_ROOT "tesshquad_mesh.vert.spv",
+     RENDERER_SHADERS_ROOT "tesshquad_mesh.tesc.spv",
+     RENDERER_SHADERS_ROOT "water_mesh.tese.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
   etna::create_program(
     "reset_terrain_chunk_height_bounds",
@@ -905,6 +911,61 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
           },
       };
 
+  // @TODO: transparent pass
+  auto
+    waterPipelineCreateInfo =
+      etna::GraphicsPipeline::CreateInfo{
+        .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::ePatchList},
+        .tessellationConfig = {.patchControlPoints = 4},
+        .rasterizationConfig =
+          vk::PipelineRasterizationStateCreateInfo{
+            .polygonMode = vk::PolygonMode::eFill,
+            .cullMode = vk::CullModeFlagBits::eBack,
+            .frontFace = vk::FrontFace::eCounterClockwise,
+            .lineWidth = 1.f,
+          },
+        .blendingConfig =
+          {.attachments =
+             {
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+               vk::PipelineColorBlendAttachmentState{
+                 .blendEnable = vk::False,
+                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+               },
+             },
+           .logicOp = vk::LogicOp::eSet},
+        .fragmentShaderOutput =
+          {
+            .colorAttachmentFormats = // @TODO: save these into vars
+            {vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32B32A32Sfloat,
+             vk::Format::eR32G32Sfloat},
+            .depthAttachmentFormat = vk::Format::eD32Sfloat,
+          },
+      };
+
   staticMeshPipeline.emplace(
     pipelineManager,
     "static_mesh",
@@ -926,6 +987,14 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     "grass_mesh_depth",
     "grass_mesh_depth",
     vegetationPipelineCreateInfo);
+
+  waterMeshPipeline.emplace(
+    pipelineManager,
+    "water_mesh",
+    "water_mesh",
+    "water_mesh",
+    "water_mesh",
+    waterPipelineCreateInfo);
 
   generateClipmapPipeline = pipelineManager.createComputePipeline("clipmap_gen", {});
   resetTerrainChunkHeightBoundsPipeline =
@@ -1233,6 +1302,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
   const bool needToDrawScene = drawScene && (srpi.flags & SRPO_STATIC);
   const bool needToDrawTerrain = terrain && drawTerrain && (srpi.flags & SRPO_TERRAIN);
   const bool needToDrawVegetation = vegetation && drawVegetation && (srpi.flags & SRPO_VEGETATION);
+  const bool needToDrawWater = water && enableWater && (srpi.flags & SRPO_WATER);
 
   if (!srpi.skipCulling)
   {
@@ -1312,6 +1382,24 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         return std::nullopt;
       }
     }();
+    auto waterDset = [&, this]() -> std::optional<etna::DescriptorSet> {
+      if (needToDrawWater)
+      {
+        return etna::create_descriptor_set(
+          waterMeshPipeline->getProg(srpi.pass).getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, sceneMgr->getBboxesBuf().genBinding()},
+           etna::Binding{1, srpi.vctx->culledInstancesBuf.genBinding()},
+           etna::Binding{6, water->source.genBinding()},
+           etna::Binding{8, constants->get().genBinding()},
+           etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()},
+           etna::Binding{10, srpi.vctx->viewDataBuf.genBinding()}});
+      }
+      else
+      {
+        return std::nullopt;
+      }
+    }();
 
     etna::RenderTargetState renderTargets{cmd_buf, srpi.rtargetInfo};
 
@@ -1377,6 +1465,42 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
           .chunksLevelDim = TERRAIN_CHUNKS_LEVEL_DIM,
           .chunkTessellationFactor = TERRAIN_CHUNK_TESSELLATION_FACTOR,
           .levelCount = CLIPMAP_LEVEL_COUNT,
+          .chunksInstBase = shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance)});
+
+      cmd_buf.drawIndexedIndirect(
+        srpi.vctx->indirectDrawBuf.get(),
+        offset * sizeof(IndirectCommand),
+        count,
+        sizeof(IndirectCommand));
+    }
+
+    if (needToDrawWater)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, water);
+
+      const auto& pipe = waterMeshPipeline->get(srpi.pass, bool(srpi.vparams.needReverseZ));
+
+      cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        pipe.getVkPipelineLayout(),
+        0,
+        {waterDset->getVkSet()},
+        {});
+
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
+
+      auto [offset, count] = sceneMgr->getWaterIndirectCommandsSubrange();
+
+      cmd_buf.pushConstants<TesshquadParams>(
+        pipe.getVkPipelineLayout(),
+        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eTessellationControl,
+        0,
+        TesshquadParams{
+          .firstLevelChunks = WATER_TESSHQUAD_FIRST_LEVEL_CHUNKS,
+          .otherLevelsChunks = WATER_TESSHQUAD_OTHER_LEVELS_CHUNKS,
+          .chunksLevelDim = WATER_TESSHQUAD_CHUNKS_LEVEL_DIM,
+          .chunkTessellationFactor = WATER_TESSHQUAD_CHUNK_TESSELLATION_FACTOR,
+          .levelCount = WATER_TESSHQUAD_LEVEL_COUNT,
           .chunksInstBase = shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance)});
 
       cmd_buf.drawIndexedIndirect(
@@ -2505,7 +2629,7 @@ void WorldRenderer::renderWorld(
         .buffer = lightMatricesBuf.get(),
         .size = sizeof(LightMatrices)}});
 
-    constexpr auto Z_PREPASS_OBJ_MASK = SRPO_ALL;
+    constexpr auto Z_PREPASS_OBJ_MASK = SRPO_OPAQUE;
     static_assert(Z_PREPASS_OBJ_MASK != 0);
 
     if (zPrepass)

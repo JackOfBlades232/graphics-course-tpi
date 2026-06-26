@@ -95,8 +95,11 @@ private:
     SRPO_STATIC = 1,
     SRPO_TERRAIN = 1 << 1,
     SRPO_VEGETATION = 1 << 2,
+    SRPO_WATER = 1 << 3,
 
-    SRPO_ALL = SRPO_STATIC | SRPO_TERRAIN | SRPO_VEGETATION
+    SRPO_OPAQUE = SRPO_STATIC | SRPO_TERRAIN | SRPO_VEGETATION,
+    SRPO_TRANSPARENT = SRPO_WATER,
+    SRPO_ALL = SRPO_OPAQUE | SRPO_WATER
   };
 
   struct SceneRenderPassInfo
@@ -257,6 +260,7 @@ private:
   std::optional<MeshPipeline> staticMeshPipeline{};
   std::optional<MeshPipeline> terrainMeshPipeline{};
   std::optional<MeshPipeline> vegetationMeshPipeline{};
+  std::optional<MeshPipeline> waterMeshPipeline{};
   etna::ComputePipeline generateClipmapPipeline{};
   etna::ComputePipeline resetTerrainChunkHeightBoundsPipeline{};
   etna::ComputePipeline generateTerrainChunkHeightBoundsPipeline{};

@@ -27,7 +27,7 @@ layout(binding = 9, set = 0) uniform view_params_t
 
 BBox get_inst_bbox(const CullableInstance inst)
 {
-  if ((inst.flags & TERRAIN_CHUNK_INSTANCE_FLAG) != 0)
+  if ((inst.flags & (TERRAIN_CHUNK_INSTANCE_FLAG | WATER_CHUNK_INSTANCE_FLAG)) != 0)
     return bboxes[inst.instId];
   else
     return bboxes[inst.commandId];
@@ -39,7 +39,7 @@ mat4 get_inst_matrix(const CullableInstance inst)
   // as they are always axis aligned
 
   // Bboxes are already world-space for chunks relative to toroidal center.
-  if ((inst.flags & TERRAIN_CHUNK_INSTANCE_FLAG) != 0)
+  if ((inst.flags & (TERRAIN_CHUNK_INSTANCE_FLAG | WATER_CHUNK_INSTANCE_FLAG)) != 0)
     return translation(vec3(constants.toroidalUpdatePlayerWorldPos.x, 0.f, constants.toroidalUpdatePlayerWorldPos.y));
   else
     return instanceMatrices[inst.instId];

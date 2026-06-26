@@ -13,6 +13,20 @@
 // 2 buffers per cascade -- (x, y, z, dXZ), (dYX, dYZ, dXX, dZZ)
 #define WATER_FFT_BUFFER_COUNT (2 * WATER_CASCADE_COUNT)
 
+#define WATER_TESSHQUAD_LEVEL_COUNT 8
+#define WATER_TESSHQUAD_EXTENT_STEP 10.f
+
+#define WATER_TESSHQUAD_CHUNKS_LEVEL_DIM 4
+#define WATER_TESSHQUAD_FIRST_LEVEL_CHUNKS                                                         \
+  (WATER_TESSHQUAD_CHUNKS_LEVEL_DIM * WATER_TESSHQUAD_CHUNKS_LEVEL_DIM)
+#define WATER_TESSHQUAD_OTHER_LEVELS_CHUNKS                                                        \
+  (WATER_TESSHQUAD_FIRST_LEVEL_CHUNKS - (WATER_TESSHQUAD_FIRST_LEVEL_CHUNKS / 4))
+#define WATER_TESSHQUAD_TOTAL_CHUNK_COUNT                                                          \
+  (WATER_TESSHQUAD_FIRST_LEVEL_CHUNKS +                                                            \
+   (WATER_CASCADE_COUNT - 1) * WATER_TESSHQUAD_OTHER_LEVELS_CHUNKS)
+
+#define WATER_TESSHQUAD_CHUNK_TESSELLATION_FACTOR 64
+
 struct WaterSourceData
 {
   float waterLevel;
@@ -22,4 +36,3 @@ struct WaterSourceData
 };
 
 #endif // WATER_H_INCLUDED
-

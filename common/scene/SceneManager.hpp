@@ -149,6 +149,10 @@ public:
   {
     return terrainChunksDrawCommands;
   }
+  std::span<const IndirectCommand> getWaterIndirectCommands() const
+  {
+    return waterChunksDrawCommands;
+  }
 
   std::pair<uint32_t, uint32_t> getSceneObjectsIndirectCommandsSubrange() const
   {
@@ -161,6 +165,12 @@ public:
     return {
       uint32_t(terrainChunksDrawCommands.data() - sceneDrawCommands.data()),
       uint32_t(terrainChunksDrawCommands.size())};
+  }
+  std::pair<uint32_t, uint32_t> getWaterIndirectCommandsSubrange() const
+  {
+    return {
+      uint32_t(waterChunksDrawCommands.data() - sceneDrawCommands.data()),
+      uint32_t(waterChunksDrawCommands.size())};
   }
 
   std::span<const glm::mat4> getInstanceMatrices() { return instanceMatrices; }
@@ -345,6 +355,7 @@ private:
     std::vector<BBox> bboxes;
     std::vector<CullableInstance> allInstances;
     size_t firstTerrainCommand;
+    size_t firstWaterCommand;
     IndirectCommand vegetationDrawCommand;
   };
 
@@ -400,6 +411,7 @@ private:
 
   std::span<IndirectCommand> sceneObjectsDrawCommands;
   std::span<IndirectCommand> terrainChunksDrawCommands;
+  std::span<IndirectCommand> waterChunksDrawCommands;
 
   std::unique_ptr<UniformLights> lightsData{};
 

@@ -34,4 +34,7 @@ void main()
   const uint vid = (gl_VertexIndex % 2 == 1) ? edge.y : edge.x;
 
   gl_Position = viewParams.mProjView * instMat * vs[vid];
+  // @TEST
+  if ((inst.flags & WATER_CHUNK_INSTANCE_FLAG) == 0)
+    gl_Position = vec4(-999.f, -999.f, -999.f, 1.f);
 }
