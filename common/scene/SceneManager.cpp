@@ -382,13 +382,14 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
     }
   }
 
-  // @NOTE: done here, if it is not added the span is just empty
-  result.firstTerrainCommand = result.sceneDrawCommands.size();
-
-  if (terrainData)
-  {
-    const uint32_t totalChunkCount =
-      TERRAIN_FIRST_LEVEL_CHUNKS + (CLIPMAP_LEVEL_COUNT - 1) * TERRAIN_OTHER_LEVELS_CHUNKS;
+  auto pushTesshquadCommand = [&, this](
+                                uint32_t first_level_chunks,
+                                uint32_t other_levels_chunks,
+                                uint32_t chunks_level_dim,
+                                uint32_t level_count,
+                                float extent_step,
+                                uint32_t flag) {
+    const uint32_t totalChunkCount = first_level_chunks + (level_count - 1) * other_levels_chunks;
 
     result.bboxes.reserve(result.bboxes.size() + totalChunkCount);
     result.allInstances.reserve(result.allInstances.size() + totalChunkCount);
@@ -408,7 +409,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
         shader_uint(i + commandId),
         shader_uint(MaterialId::INVALID), // @TODO set in scene
         shader_uint(commandId),
-        TERRAIN_CHUNK_INSTANCE_FLAG});
+        flag});
 
       glm::vec3 chunkCoord = {};
       glm::vec3 chunkExtent = {};
@@ -417,30 +418,28 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       chunkCoord.y = 0.f;
       chunkExtent.y = 0.f;
 
-      if (i < TERRAIN_FIRST_LEVEL_CHUNKS)
+      if (i < first_level_chunks)
       {
-        chunkExtent.x = chunkExtent.z = CLIPMAP_EXTENT_STEP * 2.f / float(TERRAIN_CHUNKS_LEVEL_DIM);
-        chunkCoord.x = float(i % TERRAIN_CHUNKS_LEVEL_DIM) * chunkExtent.x - CLIPMAP_EXTENT_STEP;
-        chunkCoord.z = float(i / TERRAIN_CHUNKS_LEVEL_DIM) * chunkExtent.z - CLIPMAP_EXTENT_STEP;
+        chunkExtent.x = chunkExtent.z = extent_step * 2.f / float(chunks_level_dim);
+        chunkCoord.x = float(i % chunks_level_dim) * chunkExtent.x - extent_step;
+        chunkCoord.z = float(i / chunks_level_dim) * chunkExtent.z - extent_step;
       }
       else
       {
-        const uint32_t level =
-          (uint32_t(i) - TERRAIN_FIRST_LEVEL_CHUNKS) / TERRAIN_OTHER_LEVELS_CHUNKS + 1;
+        const uint32_t level = (uint32_t(i) - first_level_chunks) / other_levels_chunks + 1;
         const float levelMult = float(1 << level);
-        chunkExtent.x = chunkExtent.z =
-          levelMult * CLIPMAP_EXTENT_STEP * 2.f / float(TERRAIN_CHUNKS_LEVEL_DIM);
+        chunkExtent.x = chunkExtent.z = levelMult * extent_step * 2.f / float(chunks_level_dim);
 
-        const uint32_t chunkId = (i - TERRAIN_FIRST_LEVEL_CHUNKS) % TERRAIN_OTHER_LEVELS_CHUNKS;
-        const float levelExtent = levelMult * CLIPMAP_EXTENT_STEP;
+        const uint32_t chunkId = (i - first_level_chunks) % other_levels_chunks;
+        const float levelExtent = levelMult * extent_step;
 
         // @NOTE: this only works for one-wide trim
-        if (chunkId < TERRAIN_CHUNKS_LEVEL_DIM)
+        if (chunkId < chunks_level_dim)
         {
           chunkCoord.x = float(chunkId) * chunkExtent.x - levelExtent;
           chunkCoord.z = -levelExtent;
         }
-        else if (chunkId < TERRAIN_OTHER_LEVELS_CHUNKS - TERRAIN_CHUNKS_LEVEL_DIM)
+        else if (chunkId < other_levels_chunks - chunks_level_dim)
         {
           const uint32_t yId = (chunkId - TERRAIN_CHUNKS_LEVEL_DIM) >> 1;
           const uint32_t xId = (chunkId - TERRAIN_CHUNKS_LEVEL_DIM) & 1;
@@ -449,9 +448,8 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
         }
         else
         {
-          chunkCoord.x = float(chunkId - TERRAIN_OTHER_LEVELS_CHUNKS + TERRAIN_CHUNKS_LEVEL_DIM) *
-              chunkExtent.x -
-            levelExtent;
+          chunkCoord.x =
+            float(chunkId - other_levels_chunks + chunks_level_dim) * chunkExtent.x - levelExtent;
           chunkCoord.z = levelExtent - chunkExtent.z;
         }
       }
@@ -459,6 +457,20 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       result.bboxes.push_back(
         BBox{shader_vec4{chunkCoord, 1.f}, shader_vec4{chunkCoord + chunkExtent, 1.f}});
     }
+  };
+
+  // @NOTE: done here, if it is not added the span is just empty
+  result.firstTerrainCommand = result.sceneDrawCommands.size();
+
+  if (terrainData)
+  {
+    pushTesshquadCommand(
+      TERRAIN_FIRST_LEVEL_CHUNKS,
+      TERRAIN_OTHER_LEVELS_CHUNKS,
+      TERRAIN_CHUNKS_LEVEL_DIM,
+      CLIPMAP_LEVEL_COUNT,
+      CLIPMAP_EXTENT_STEP,
+      TERRAIN_CHUNK_INSTANCE_FLAG);
 
     if (terrainData->vegetationTypeCount > 0)
     {
