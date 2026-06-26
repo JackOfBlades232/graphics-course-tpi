@@ -385,7 +385,7 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
   size_t sceneInstCount = result.allInstances.size();
   size_t sceneCmdCount = result.sceneDrawCommands.size();
 
-  auto pushTesshquadCommand = [&, this](
+  auto pushTesshquadCommand = [&](
                                 uint32_t first_level_chunks,
                                 uint32_t other_levels_chunks,
                                 uint32_t chunks_level_dim,
