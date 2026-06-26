@@ -1125,13 +1125,7 @@ void WorldRenderer::update(const FramePacket& packet)
 
     constantsData.taaEmaCoeff = taaEmaCoeff;
 
-    constantsData.waterF = waterSettings.f;
-    constantsData.waterH = waterSettings.h;
-    constantsData.waterG = waterSettings.g;
-    constantsData.waterRho = waterSettings.rho;
-    constantsData.waterSurfaceTension = waterSettings.surfaceTension;
-    constantsData.waterWindUnitsToMps = waterSettings.windUnitsToMps;
-    constantsData.waterEnabled = waterSettings.enable;
+    constantsData.waterEnabled = enableWater;
   }
 
   {
@@ -1826,8 +1820,10 @@ void WorldRenderer::renderWorld(
 
         struct FFTPC
         {
-          shader_uint vert;
-          shader_uint inv;
+          shader_uint vert = 0;
+          shader_uint inv = 0;
+          shader_uint fin = 0;
+          shader_uint pad_ = 0;
         };
 
         auto fftMidBarriers = [&, this] {
@@ -1870,21 +1866,15 @@ void WorldRenderer::renderWorld(
 
         {
           ETNA_PROFILE_GPU(cmd_buf, waterFFTHorizontal);
-          fftPass(FFTPC{.vert = 1, .inv = 1});
+          fftPass(FFTPC{.vert = 0, .inv = 1, .fin = 0});
         }
 
         fftMidBarriers();
 
         {
           ETNA_PROFILE_GPU(cmd_buf, waterFFTVertical);
-          fftPass(FFTPC{.vert = 0, .inv = 1});
+          fftPass(FFTPC{.vert = 1, .inv = 1, .fin = 1});
         }
-
-        // @TEST
-        // fftMidBarriers();
-        // fftPass(FFTPC{.vert = 1, .inv = 0});
-        // fftMidBarriers();
-        // fftPass(FFTPC{.vert = 0, .inv = 0});
       }
 
       {
@@ -2960,6 +2950,7 @@ void WorldRenderer::drawGui()
           vegetationRenderingDistance);
       }
       ImGui::Checkbox("Show vegetation debug", &showGrassChunkDebug);
+      auto prevWindDir = windDirection;
       ImGui::SliderFloat2("Wind direction", (float*)&windDirection, -1.f, 1.f);
       windDirection = glm::normalize(windDirection);
       ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 1.f);
@@ -2974,17 +2965,9 @@ void WorldRenderer::drawGui()
         "Ambient light coeff",
         (float*)&ambientCoeff,
         ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-      auto prevWaterSettings = waterSettings;
-      ImGui::Checkbox("Draw water", &waterSettings.enable);
-      if (waterSettings.enable)
-      {
-        ImGui::SliderFloat("Fetch", &waterSettings.f, 0.f, 1e6f);
-        ImGui::SliderFloat("Average depth", &waterSettings.h, 0.f, 10000.f);
-        ImGui::SliderFloat("Density", &waterSettings.rho, 800.f, 1200.f);
-        ImGui::SliderFloat("Surface tension", &waterSettings.surfaceTension, 0.f, 0.5f);
-        ImGui::SliderFloat("Window mps per app unit", &waterSettings.windUnitsToMps, 0.f, 100.f);
-      }
-      waterSettingsDirty |= waterSettings != prevWaterSettings;
+      bool prevEnableWater = false;
+      ImGui::Checkbox("Draw water", &enableWater);
+      waterSettingsDirty |= prevEnableWater != enableWater || prevWindDir != windDirection;
       ImGui::Checkbox("Use SSAO", &useSsao);
       if (useSsao)
       {
@@ -3232,7 +3215,7 @@ void WorldRenderer::drawGui()
       if (!vegetation)
         drawVegetation = false;
       if (!water)
-        waterSettings.enable = false;
+        enableWater = false;
 
       if (ImGui::BeginCombo(
             "Debug texture view", currentDebugDrawer ? currentDebugDrawer->c_str() : "none"))
@@ -3573,7 +3556,7 @@ void WorldRenderer::loadDebugConfig()
   taaTemporalAccumBacklog = unwrap(reader.read<uint32_t>());
   showTaaPatternDebug = unwrap(reader.read<bool>());
   taaEmaCoeff = unwrap(reader.read<float>());
-  waterSettings = unwrap(reader.read<WaterSettings>());
+  enableWater = unwrap(reader.read<bool>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -3671,7 +3654,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(taaTemporalAccumBacklog));
   ETNA_VERIFY(writer.write(showTaaPatternDebug));
   ETNA_VERIFY(writer.write(taaEmaCoeff));
-  ETNA_VERIFY(writer.write(waterSettings));
+  ETNA_VERIFY(writer.write(enableWater));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

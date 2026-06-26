@@ -93,17 +93,11 @@ struct Constants
 
   float taaEmaCoeff;
 
-  float waterF;
-  float waterH;
-  float waterG;
-  float waterRho;
-  float waterSurfaceTension;
-  float waterWindUnitsToMps;
   shader_uint waterEnabled;
 
   TexSmpIdPair blueNoiseTexSmp;
 
-  float pad1_;
+  float pad0_, pad1_, pad2_;
 
   SsaoConstData ssaoData;
 };

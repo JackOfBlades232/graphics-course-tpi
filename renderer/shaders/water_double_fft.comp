@@ -14,9 +14,11 @@ layout(push_constant) uniform params_t
 {
   uint vert;
   uint inv; // for debuge
+  uint fin;
+  uint pad_;
 } params;
 
-shared vec4 cache[WATER_CASCADE_RES];
+shared vec4 cache[2][WATER_CASCADE_RES];
 
 uint bitrev_index(uint id)
 {
@@ -51,6 +53,7 @@ void main(void)
 {
   const bool vert = params.vert != 0;
   const bool inv = params.inv != 0;
+  const bool fin = params.fin != 0;
 
   // these all are same as global
   const uint lane = gl_WorkGroupID.y;
@@ -67,13 +70,16 @@ void main(void)
   const ivec2 copyCursor = vert ? copyCursorBase : copyCursorBase.yx;
 
   // Read all elements to cache with bit-reverse index.
-  cache[bitrev_index(kId)] = imageLoad(buffers[bufferId], copyCursor);
+  cache[0][bitrev_index(kId)] = imageLoad(buffers[bufferId], copyCursor);
 
   barrier();
 
   // Run FFT
   for (uint shift = 0; shift < WATER_CASCADE_RES_POW; ++shift)
   {
+    const uint srcid = shift & 1;
+    const uint dstid = ~shift & 1;
+
     const uint gsize = 2 << shift;
     const uint hsize = gsize / 2;
     const uint relid = kId % gsize;
@@ -85,16 +91,21 @@ void main(void)
     // Conjugate cuz ifft
     const vec4 twiddleBase = comp_exp_double(-SHADER_TWO_PI * float(relid) / float(gsize));
     const vec4 twiddle = inv ? comp_conj_double(twiddleBase) : twiddleBase;
-    const vec4 res = cache[lowid] + comp_mult_double(twiddle, cache[uppid]);
+    const vec4 res = cache[srcid][lowid] + comp_mult_double(twiddle, cache[srcid][uppid]);
 
-    barrier();
-
-    cache[kId] = res;
+    cache[dstid][kId] = res;
 
     barrier();
   }
 
   // Store calculations back. No bit reversion needed.
-  const vec4 result = cache[kId] / (inv ? float(WATER_CASCADE_RES) : 1.f);
+  vec4 result = cache[WATER_CASCADE_RES_POW & 1][kId];
+  if (fin)
+  {
+    // @HACK: this compensates the N/2 freq while sacrificing invertibility. Sadge.
+    result *= ((lane + kId) % 2 == 0 ? 1.f : -1.f);
+    if (inv)
+      result = result / float(WATER_CASCADE_RES) / float(WATER_CASCADE_RES);
+  }
   imageStore(buffers[bufferId], copyCursor, result);
 }

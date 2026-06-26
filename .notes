@@ -146,16 +146,23 @@ v Plan geometric implementation
   v Initial specter gen shader from blog 
   v Temporal specter gen shader from blog
   v IFFT shader -- 3d disp and normals.
-  - Fix until looks correct in debug tex view
-    - Make aplified debug visualizations of spectra stages and fix until adequate values
-    - Investigate cooley-tukey shader impl and fix until correct
-  - Copypasta terrain render (all geom cascades) and render single fft cascade with cook-torrance, for now opaque after gbuf resolve
+  v Fix until looks correct in debug tex view
+    v Make aplified debug visualizations of spectra stages and fix until adequate values
+    v Investigate cooley-tukey shader impl and fix until correct
+  - Render geometry
+    - Add cascade scale params to scene def
+    - Copypasta terrain render (multi-chunk size)
+    - Sample from multiple cascades to generate pos and norm
+    - Write placeholder material data to get visual in deferred pipeline
   - Finish spectra setup
     - Use correct wind direction for dir spread (now it's <1, 0>)
     - Clamp frequencies in cascades to non-overlapping regions
   - Disable hires cascades at distance
-  - Add planar wind influence to fft (idea -- the higher the amp of a cascade, the less it reacts to wind)
   - Consider moving to transparent pass -- how is it done and what to render under?
+  - Finish proper spectra implementation
+    - Implement a better spectrum generator -- JONSWAP + TMA (currently -- phillips). Params in shader, easier that way.
+    - Restrict wavenumbers in different cascades
+    - Look into further generation improvements
 - Plan lighting implementation
   - Specular and diff components
   - Sky reflection

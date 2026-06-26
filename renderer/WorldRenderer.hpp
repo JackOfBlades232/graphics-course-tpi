@@ -194,21 +194,6 @@ private:
     WaterSourceData sourceData{};
   };
 
-  struct WaterSettings
-  {
-    bool enable = true;
-    uint8_t pad1_ = 0, pad2_ = 0, pad3_ = 0;
-    float f = 100000.f;
-    float h = 500.f; // Not the same as ocean bed depth, for wave sim
-    float g = 9.81f;
-    float rho = 1000.f;
-    float surfaceTension = 0.072f;
-    float windUnitsToMps = 1.f;
-
-    friend bool operator==(const WaterSettings& s1, const WaterSettings& s2) = default;
-    friend bool operator!=(const WaterSettings& s1, const WaterSettings& s2) = default;
-  };
-
   enum class TonemappingTechnique
   {
     HISTOGRAM_EQ = 0,
@@ -398,7 +383,7 @@ private:
   float terrainNoisePeriod = 0.25f;
   float vegetationRenderingDistance = 100.f;
   float vegetationRenderingDropoffDistance = 80.f;
-  glm::vec2 windDirection = {1.f, 0.f};
+  glm::vec2 windDirection = glm::normalize(glm::vec2{1.f, 1.f});
   float windStrength = 0.35f;
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
@@ -431,7 +416,7 @@ private:
   uint32_t taaTemporalAccumBacklog = 8;
   bool showTaaPatternDebug = false;
   float taaEmaCoeff = 0.1f;
-  WaterSettings waterSettings{};
+  bool enableWater = true;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 
