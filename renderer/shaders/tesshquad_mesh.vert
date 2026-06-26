@@ -7,9 +7,15 @@
 #include "constants.h"
 
 
-// @TODO: figure out why I don't have gl_BaseInstance and use it instead
 layout(push_constant) uniform params_t
 {
+  uint firstLevelChunks;
+  uint otherLevelsChunks;
+  uint chunksLevelDim;
+  uint chunkTessellationFactor;
+  uint levelCount;
+
+  // @TODO: figure out why I don't have gl_BaseInstance and use it instead
   uint chunksInstBase;
 } params;
 

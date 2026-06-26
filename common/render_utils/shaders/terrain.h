@@ -2,6 +2,7 @@
 #define TERRAIN_H_INCLUDED
 
 #include "materials.h"
+#include "tesshquad.h"
 #include "cpp_glsl_compat.h"
 
 #define TERRAIN_MAX_DETAILS 4

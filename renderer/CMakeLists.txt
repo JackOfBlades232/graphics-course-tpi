@@ -21,8 +21,8 @@ target_add_shaders(renderer
   shaders/static_mesh.vert
   shaders/static_mesh.frag
   shaders/static_mesh_depth.vert
-  shaders/terrain_mesh.vert
-  shaders/terrain_mesh.tesc
+  shaders/tesshquad_mesh.vert
+  shaders/tesshquad_mesh.tesc
   shaders/terrain_mesh.tese
   shaders/terrain_mesh.frag
   shaders/terrain_mesh_depth.tese

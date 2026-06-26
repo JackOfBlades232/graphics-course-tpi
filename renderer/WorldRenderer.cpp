@@ -669,13 +669,13 @@ void WorldRenderer::loadShaders()
   etna::create_program(
     "terrain_mesh",
     {RENDERER_SHADERS_ROOT "terrain_mesh.frag.spv",
-     RENDERER_SHADERS_ROOT "terrain_mesh.vert.spv",
-     RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
+     RENDERER_SHADERS_ROOT "tesshquad_mesh.vert.spv",
+     RENDERER_SHADERS_ROOT "tesshquad_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh.tese.spv"});
   etna::create_program(
     "terrain_mesh_depth",
-    {RENDERER_SHADERS_ROOT "terrain_mesh.vert.spv",
-     RENDERER_SHADERS_ROOT "terrain_mesh.tesc.spv",
+    {RENDERER_SHADERS_ROOT "tesshquad_mesh.vert.spv",
+     RENDERER_SHADERS_ROOT "tesshquad_mesh.tesc.spv",
      RENDERER_SHADERS_ROOT "terrain_mesh_depth.tese.spv"});
   etna::create_program("clipmap_gen", {RENDERER_SHADERS_ROOT "clipmap_gen.comp.spv"});
   etna::create_program(
@@ -1367,11 +1367,17 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
 
       auto [offset, count] = sceneMgr->getTerrainIndirectCommandsSubrange();
 
-      cmd_buf.pushConstants<shader_uint>(
+      cmd_buf.pushConstants<TesshquadParams>(
         pipe.getVkPipelineLayout(),
-        vk::ShaderStageFlagBits::eVertex,
+        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eTessellationControl,
         0,
-        shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance));
+        TesshquadParams{
+          .firstLevelChunks = TERRAIN_FIRST_LEVEL_CHUNKS,
+          .otherLevelsChunks = TERRAIN_OTHER_LEVELS_CHUNKS,
+          .chunksLevelDim = TERRAIN_CHUNKS_LEVEL_DIM,
+          .chunkTessellationFactor = TERRAIN_CHUNK_TESSELLATION_FACTOR,
+          .levelCount = CLIPMAP_LEVEL_COUNT,
+          .chunksInstBase = shader_uint(sceneMgr->getIndirectCommands()[offset].firstInstance)});
 
       cmd_buf.drawIndexedIndirect(
         srpi.vctx->indirectDrawBuf.get(),
