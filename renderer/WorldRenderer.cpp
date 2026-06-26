@@ -1821,9 +1821,9 @@ void WorldRenderer::renderWorld(
         struct FFTPC
         {
           shader_uint vert = 0;
-          shader_uint inv = 0;
-          shader_uint fin = 0;
-          shader_uint pad_ = 0;
+          shader_uint invert = 0;
+          shader_uint scale = 0;
+          shader_uint permute = 0;
         };
 
         auto fftMidBarriers = [&, this] {
@@ -1866,14 +1866,14 @@ void WorldRenderer::renderWorld(
 
         {
           ETNA_PROFILE_GPU(cmd_buf, waterFFTHorizontal);
-          fftPass(FFTPC{.vert = 0, .inv = 1, .fin = 0});
+          fftPass(FFTPC{.vert = 0, .invert = 1, .scale = 0, .permute = 0});
         }
 
         fftMidBarriers();
 
         {
           ETNA_PROFILE_GPU(cmd_buf, waterFFTVertical);
-          fftPass(FFTPC{.vert = 1, .inv = 1, .fin = 1});
+          fftPass(FFTPC{.vert = 1, .invert = 1, .scale = 1, .permute = 1});
         }
       }
 
@@ -2951,9 +2951,10 @@ void WorldRenderer::drawGui()
       }
       ImGui::Checkbox("Show vegetation debug", &showGrassChunkDebug);
       auto prevWindDir = windDirection;
+      auto prevWindStr = windStrength;
       ImGui::SliderFloat2("Wind direction", (float*)&windDirection, -1.f, 1.f);
       windDirection = glm::normalize(windDirection);
-      ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 1.f);
+      ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 150.f);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Perform Z Prepass", &zPrepass);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
@@ -2967,7 +2968,8 @@ void WorldRenderer::drawGui()
         ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
       bool prevEnableWater = false;
       ImGui::Checkbox("Draw water", &enableWater);
-      waterSettingsDirty |= prevEnableWater != enableWater || prevWindDir != windDirection;
+      waterSettingsDirty |= prevEnableWater != enableWater || prevWindDir != windDirection ||
+        prevWindStr != windStrength;
       ImGui::Checkbox("Use SSAO", &useSsao);
       if (useSsao)
       {

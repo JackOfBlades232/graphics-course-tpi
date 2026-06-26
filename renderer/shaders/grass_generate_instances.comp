@@ -76,11 +76,13 @@ vec2 random_dir_notrig(vec2 seed)
   return normalize(2.f * vec2(x, y) - 1.f);
 }
 
-vec3 calc_wind_pos_offset(float t, float relAmp, float strengthPeriod, vec3 grassPos, float strengthFalloff, vec2 wvn, float shrinkFactor)
+vec3 calc_wind_pos_offset(
+  float t, float relAmp, float strengthPeriod, vec3 grassPos, float strengthFalloff, vec2 wvn, float shrinkFactor, float strScale)
 {
   float strengthOscillation = relAmp * wind_oscillator(strengthPeriod * t, grassPos.xz);
+  float strengthBase = constants.windStrength * strScale;
 
-  float windInfluenceAmt = constants.windStrength * (1.f + strengthOscillation) * strengthFalloff;
+  float windInfluenceAmt = strengthBase * (1.f + strengthOscillation) * strengthFalloff;
   vec2 windInfluence = wvn * windInfluenceAmt;
   return shrinkFactor * vec3(windInfluence.x, -0.5f * (windInfluenceAmt * windInfluenceAmt), windInfluence.y);
 }
@@ -156,17 +158,19 @@ void main(void)
       float tAlongDir = dot(wvn, grassPos.xz);
       float dist = abs(tAlongDir);
 
-      // @TODO: settable
       const float lambda = 0.5f;
       const float plambda = 0.5f;
       const float pscale = 5.f;
       const float relAmp = 0.4f;
+      const float strScale = 0.01f;
 
       float strengthFalloff = lambda + (1.f - lambda) / (1.f + dist);
       float strengthPeriod = pscale * (plambda + (1.f - plambda) / (1.f + dist));
 
-      culledInstances[instId].windOffset = calc_wind_pos_offset(constants.time, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor);
-      culledInstances[instId].prevWindOffset = calc_wind_pos_offset(constants.time - constants.dt, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor);
+      culledInstances[instId].windOffset = calc_wind_pos_offset(
+        constants.time, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor, strScale);
+      culledInstances[instId].prevWindOffset = calc_wind_pos_offset(
+        constants.time - constants.dt, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor, strScale);
     }
   }
 }

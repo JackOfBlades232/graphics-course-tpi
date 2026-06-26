@@ -13,9 +13,9 @@ layout(binding = 0, set = 0, rgba32f) uniform image2D buffers[WATER_FFT_BUFFER_C
 layout(push_constant) uniform params_t
 {
   uint vert;
-  uint inv; // for debuge
-  uint fin;
-  uint pad_;
+  uint invert; // for debuge
+  uint scale;
+  uint permute;
 } params;
 
 shared vec4 cache[2][WATER_CASCADE_RES];
@@ -52,8 +52,9 @@ vec4 comp_conj_double(vec4 a)
 void main(void)
 {
   const bool vert = params.vert != 0;
-  const bool inv = params.inv != 0;
-  const bool fin = params.fin != 0;
+  const bool inv = params.invert != 0;
+  const bool scl = params.scale != 0;
+  const bool prm = params.permute != 0;
 
   // these all are same as global
   const uint lane = gl_WorkGroupID.y;
@@ -100,12 +101,9 @@ void main(void)
 
   // Store calculations back. No bit reversion needed.
   vec4 result = cache[WATER_CASCADE_RES_POW & 1][kId];
-  if (fin)
-  {
-    // @HACK: this compensates the N/2 freq while sacrificing invertibility. Sadge.
+  if (prm)
     result *= ((lane + kId) % 2 == 0 ? 1.f : -1.f);
-    if (inv)
-      result = result / float(WATER_CASCADE_RES) / float(WATER_CASCADE_RES);
-  }
+  if (scl)
+    result = result / float(WATER_CASCADE_RES) / float(WATER_CASCADE_RES);
   imageStore(buffers[bufferId], copyCursor, result);
 }

@@ -54,9 +54,9 @@ void main(void)
   }
 
   // Phillips
-  const float L = 1000.f;
-  const float A = 1.f;
   const float g = 9.81f;
+  const float A = 1.f;
+  const float L = constants.windStrength * constants.windStrength / g;
 
   ivec2 offId = imCoord - (imSz / 2);
   float dk = SHADER_TWO_PI / l;
