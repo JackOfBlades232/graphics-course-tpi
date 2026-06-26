@@ -28,7 +28,7 @@ float sech(float v)
 
 vec2 get_blue_noise(vec2 uv)
 {
-  return sample_bindless_tex_lod(constants.blueNoiseTexSmp, uv, 0.f).xy;
+  return 2.f * sample_bindless_tex_lod(constants.blueNoiseTexSmp, uv, 0.f).xy - 1.f;
 }
 
 void main(void)

@@ -35,10 +35,8 @@ void main(void)
   if (imCoord.x >= imSz.x || imCoord.y >= imSz.y)
     return;
 
-  const float timeDecorrelationBump = 300.f; // @HACK: getting bands aroung t0
-
   vec4 wave = imageLoad(wkTex[cascade], imCoord);
-  float phase = wave.w * (constants.time + timeDecorrelationBump);
+  float phase = wave.w * constants.time;
   vec2 exponent = vec2(cos(phase), sin(phase));
   vec4 initSpectrum = imageLoad(spectraTex[cascade], imCoord);
 
