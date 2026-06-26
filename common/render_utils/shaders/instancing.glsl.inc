@@ -25,9 +25,19 @@ layout(binding = 9, set = 0) uniform view_params_t
   ViewParams viewParams;
 };
 
+BBox expand_bbox(BBox base, float addition)
+{
+  vec3 ext = base.max.xyz - base.min.xyz;
+  base.min.xyz -= addition * ext;
+  base.max.xyz += addition * ext;
+  return base;
+}
+
 BBox get_inst_bbox(const CullableInstance inst)
 {
-  if ((inst.flags & (TERRAIN_CHUNK_INSTANCE_FLAG | WATER_CHUNK_INSTANCE_FLAG)) != 0)
+  if ((inst.flags & WATER_CHUNK_INSTANCE_FLAG) != 0)
+    return expand_bbox(bboxes[inst.instId], 0.5f);
+  if ((inst.flags & TERRAIN_CHUNK_INSTANCE_FLAG) != 0)
     return bboxes[inst.instId];
   else
     return bboxes[inst.commandId];

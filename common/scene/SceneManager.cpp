@@ -499,8 +499,8 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(
       WATER_TESSHQUAD_EXTENT_STEP,
       WATER_CHUNK_INSTANCE_FLAG,
       // @TODO: real extent or exhaustive extent
-      waterData->waterLevel - 1.f,
-      2.f);
+      waterData->waterLevel - 25.f,
+      50.f);
   }
 
   return result;

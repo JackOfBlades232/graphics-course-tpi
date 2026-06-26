@@ -9,6 +9,10 @@
 
 layout(quads, fractional_even_spacing, ccw) in;
 
+layout(binding = 2, set = 0) uniform sampler2D displacement[WATER_CASCADE_COUNT];
+layout(binding = 3, set = 0) uniform sampler2D derivatives[WATER_CASCADE_COUNT];
+layout(binding = 4, set = 0) uniform sampler2D turbulence[WATER_CASCADE_COUNT];
+
 layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
@@ -25,7 +29,8 @@ layout(binding = 10, set = 0) readonly buffer view_data_t
 layout(location = 0) out TE_OUT
 {
   vec3 wPos;
-  vec2 texCoord;
+  vec3 wNormal;
+  float foamfactor;
 } teOut;
 
 // @TODO: pull out to water_mesh.glsl.inc
@@ -34,6 +39,41 @@ layout(binding = 6, set = 0) uniform water_source_t
   WaterSourceData source;
 };
 
+struct Cascade
+{
+  vec3 disp;
+  float dydx;
+  float dydz;
+  float dxdx;
+  float dzdz;
+  float turbulence;
+};
+
+Cascade sample_cascade(vec2 world_planar_pos, uint cid)
+{
+  float l = 0.f;
+  switch (cid)
+  {
+  case 0:  l = source.l0; break;
+  case 1:  l = source.l1; break;
+  case 2:  l = source.l2; break;
+  default:                break;
+  }
+
+  vec2 uv = fract(world_planar_pos / l);
+
+  Cascade data;
+  data.disp = textureLod(displacement[cid], uv, 0.f).xyz;
+  vec4 derivatives = textureLod(derivatives[cid], uv, 0.f);
+  data.dydx = derivatives.x;
+  data.dydz = derivatives.y;
+  data.dxdx = derivatives.z;
+  data.dzdz = derivatives.w;
+  data.turbulence = textureLod(turbulence[cid], uv, 0.f).x;
+
+  return data;
+}
+
 void main(void)
 {
   const vec2 baseXZ = gl_in[0].gl_Position.xz;
@@ -41,9 +81,31 @@ void main(void)
 
   const vec2 pointXZ = baseXZ + gl_TessCoord.xy * extentXZ;
 
-  // @TEST
-  teOut.wPos = vec3(pointXZ.x, source.waterLevel, pointXZ.y);
-  teOut.texCoord = vec2(0.f);
+  vec3 disp = vec3(0.f);
+  float dydx = 0.f;
+  float dydz = 0.f;
+  float dxdx = 0.f;
+  float dzdz = 0.f;
+  float turbulence = 0.f;
+
+  const float K = 100.f;
+
+  for (uint cid = 0; cid < WATER_CASCADE_COUNT; ++cid)
+  {
+    Cascade data = sample_cascade(pointXZ, cid);
+    disp += K * data.disp;
+    dydx += K * data.dydx;
+    dydz += K * data.dydz;
+    dxdx += K * data.dxdx;
+    dzdz += K * data.dzdz;
+    turbulence += data.turbulence - 1.f;
+  }
+
+  const vec2 slope = vec2(dydx / abs(1.f + dxdx), dydz / abs(1.f + dzdz));
+
+  teOut.wPos = vec3(pointXZ.x, source.waterLevel, pointXZ.y) + disp;
+  teOut.wNormal = normalize(vec3(-slope.x, 1.f, -slope.y));
+  teOut.foamfactor = turbulence + 0.002f;
 
   gl_Position = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(teOut.wPos, 1.f);
 }

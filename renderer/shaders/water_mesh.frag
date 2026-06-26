@@ -32,11 +32,11 @@ layout(binding = 10, set = 0) readonly buffer view_data_t
 layout(location = 0) in TE_OUT
 {
   vec3 wPos;
-  vec2 texCoord;
+  vec3 wNormal;
+  float foamfactor;
 } surf;
 
 #include "motion_vectors.glsl.inc"
-#include "temporal_helpers.frag.inc"
 
 void main(void)
 {
@@ -44,17 +44,16 @@ void main(void)
   vec3 materialData;
   vec3 normal;
 
-  vec2 tc = unjitter_surface_texcoord(surf.texCoord, viewParams);
-  vec2 tcDdx = dFdx(tc);
-  vec2 tcDdy = dFdy(tc);
-
   // @TEST
-  surfaceColor = vec4(0.f, 0.4f, 1.f, 1.f);
-  materialData = vec3(
-    float(MATERIAL_DIFFUSE),
-    uintBitsToFloat(quantize4fcol(vec4(0.f, 1.f, 1.f, 0.f))),
-    0.f);
-  normal = vec3(0.f, 1.f, 0.f);
+  vec4 waterColor = vec4(0.f, 0.4f, 1.f, 1.f);
+  vec3 waterMatdata = vec3(float(MATERIAL_PBR), 0.f, 0.2f);
+
+  vec4 foamColor = vec4(1.f, 1.f, 1.f, 1.f);
+  vec3 foamMatdata = vec3(float(MATERIAL_PBR), 0.f, 0.9f);
+
+  surfaceColor = surf.foamfactor < 0.f ? foamColor : waterColor;
+  materialData = surf.foamfactor < 0.f ? foamMatdata : waterMatdata;
+  normal = surf.wNormal;
 
   out_fragAlbedo = surfaceColor;
   out_fragMaterial = materialData;

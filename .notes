@@ -149,29 +149,30 @@ v Plan geometric implementation
   v Fix until looks correct in debug tex view
     v Make aplified debug visualizations of spectra stages and fix until adequate values
     v Investigate cooley-tukey shader impl and fix until correct
-  - Render geometry
-    - Add cascade scale params to scene def
-    - Copypasta terrain render (multi-chunk size)
-    - Sample from multiple cascades to generate pos and norm
-    - Write placeholder material data to get visual in deferred pipeline
-  - Finish spectra setup
-    - Use correct wind direction for dir spread (now it's <1, 0>)
+  v Render geometry
+    v Copypasta terrain render (multi-chunk size)
+    v Sample from multiple cascades to generate pos and norm
+    v Write placeholder material data to get visual in deferred pipeline
+  - Finish geo implementation
     - Clamp frequencies in cascades to non-overlapping regions
-  - Disable hires cascades at distance
-  - Consider moving to transparent pass -- how is it done and what to render under?
-  - Finish proper spectra implementation
+    - Disable hires cascades at distance
     - Implement a better spectrum generator -- JONSWAP + TMA (currently -- phillips). Params in shader, easier that way.
     - Restrict wavenumbers in different cascades
-    - Look into further generation improvements
+    - Fix seams at cascade borders
+    - Fix normal artifacts (squares)
+    - Do another examination of jacobian calc
+    - Remove extraction pass
 - Plan lighting implementation
-  - Specular and diff components
+  - Transparent pass forward lighting
+  - BRDF
+  - Proper foam
   - Sky reflection
   - Bottom refraction(or distortion?)
   - Caustics
-  - Foam
 - Plan shore interaction implementation
   - How we create the shore outline data
   - How we factor it in
+
 Fog
 - Gather task
 - Gather sources

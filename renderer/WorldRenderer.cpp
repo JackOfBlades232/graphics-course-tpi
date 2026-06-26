@@ -1385,15 +1385,36 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
     auto waterDset = [&, this]() -> std::optional<etna::DescriptorSet> {
       if (needToDrawWater)
       {
+        std::vector<etna::Binding> waterBinds{};
+        waterBinds.reserve(3 * WATER_CASCADE_COUNT + 6);
+        waterBinds.emplace_back(0, sceneMgr->getBboxesBuf().genBinding());
+        waterBinds.emplace_back(1, srpi.vctx->culledInstancesBuf.genBinding());
+        waterBinds.emplace_back(6, water->source.genBinding());
+        waterBinds.emplace_back(8, constants->get().genBinding());
+        waterBinds.emplace_back(9, srpi.vctx->viewParamsBuf.get().genBinding());
+        waterBinds.emplace_back(10, srpi.vctx->viewDataBuf.genBinding());
+        for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+        {
+          waterBinds.emplace_back(
+            2,
+            water->cascades[c].displacement.genBinding(
+              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+            uint32_t(c));
+          waterBinds.emplace_back(
+            3,
+            water->cascades[c].derivatives.genBinding(
+              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+            uint32_t(c));
+          waterBinds.emplace_back(
+            4,
+            water->cascades[c].turbulence.genBinding(
+              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+            uint32_t(c));
+        }
         return etna::create_descriptor_set(
           waterMeshPipeline->getProg(srpi.pass).getDescriptorLayoutId(0),
           cmd_buf,
-          {etna::Binding{0, sceneMgr->getBboxesBuf().genBinding()},
-           etna::Binding{1, srpi.vctx->culledInstancesBuf.genBinding()},
-           etna::Binding{6, water->source.genBinding()},
-           etna::Binding{8, constants->get().genBinding()},
-           etna::Binding{9, srpi.vctx->viewParamsBuf.get().genBinding()},
-           etna::Binding{10, srpi.vctx->viewDataBuf.genBinding()}});
+          std::move(waterBinds));
       }
       else
       {
