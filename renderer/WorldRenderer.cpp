@@ -256,6 +256,11 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
   defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
     .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
+  defaultWrapSampler = etna::Sampler(etna::Sampler::CreateInfo{
+    .addressMode = vk::SamplerAddressMode::eRepeat,
+    .name = "default_wrap_sampler",
+    .minLod = 0.f,
+    .maxLod = VK_LOD_CLAMP_NONE});
   defaultMirrorSampler = etna::Sampler(etna::Sampler::CreateInfo{
     .addressMode = vk::SamplerAddressMode::eMirroredRepeat,
     .name = "default_mirror_sampler",
@@ -1398,17 +1403,17 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
           waterBinds.emplace_back(
             2,
             water->cascades[c].displacement.genBinding(
-              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+              defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
             uint32_t(c));
           waterBinds.emplace_back(
             3,
             water->cascades[c].derivatives.genBinding(
-              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+              defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
             uint32_t(c));
           waterBinds.emplace_back(
             4,
             water->cascades[c].turbulence.genBinding(
-              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+              defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
             uint32_t(c));
         }
         return etna::create_descriptor_set(

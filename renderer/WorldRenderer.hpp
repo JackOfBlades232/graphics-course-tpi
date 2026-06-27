@@ -312,6 +312,7 @@ private:
   std::optional<SkyboxRenderingData> skybox{};
 
   etna::Sampler defaultSampler;
+  etna::Sampler defaultWrapSampler;
   etna::Sampler defaultMirrorSampler;
 
   etna::Buffer stubUniBuffer;

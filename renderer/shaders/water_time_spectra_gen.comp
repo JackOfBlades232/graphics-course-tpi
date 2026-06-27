@@ -36,7 +36,7 @@ void main(void)
     return;
 
   vec4 wave = imageLoad(wkTex[cascade], imCoord);
-  float phase = wave.w * constants.time;
+  float phase = wave.w * (constants.time + 1000.f);
   vec2 exponent = vec2(cos(phase), sin(phase));
   vec4 initSpectrum = imageLoad(spectraTex[cascade], imCoord);
 
