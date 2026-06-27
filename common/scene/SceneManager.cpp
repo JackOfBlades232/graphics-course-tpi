@@ -909,23 +909,23 @@ void SceneManager::selectScene(
   std::vector<vk::Format> requiredImageFormats{};
   requiredImageFormats.resize(model.images.size(), vk::Format::eUndefined);
 
+  auto setTexFmt = [&](int id, vk::Format fmt) {
+    if (id < 0)
+      return;
+    const auto& gtex = model.textures[id];
+    const int gid = gtex.source;
+    if (gid < 0)
+      return;
+    if (requiredImageFormats[gid] == fmt)
+      return;
+
+    ETNA_ASSERT(requiredImageFormats[gid] == vk::Format::eUndefined);
+    requiredImageFormats[gid] = fmt;
+  };
+
   {
     auto translateMaterial = [&](const tinygltf::Material& gmat) {
       Material mat{};
-
-      auto setTexFmt = [&](int id, vk::Format fmt) {
-        if (id < 0)
-          return;
-        const auto& gtex = model.textures[id];
-        const int gid = gtex.source;
-        if (gid < 0)
-          return;
-        if (requiredImageFormats[gid] == fmt)
-          return;
-
-        ETNA_ASSERT(requiredImageFormats[gid] == vk::Format::eUndefined);
-        requiredImageFormats[gid] = fmt;
-      };
 
       // @TODO: texcoord params from material textures
 
@@ -1166,6 +1166,7 @@ void SceneManager::selectScene(
     auto& data = skyboxData.emplace();
     cubemapLoadedId = skyboxExt->cubemap;
     data.cubemapTexSmp = idPairForTexture(cubemapLoadedId);
+    setTexFmt(cubemapLoadedId, vk::Format::eR8G8B8A8Srgb);
   }
 
   if (auto noiseExt = jb_noise_parse_desc(model))

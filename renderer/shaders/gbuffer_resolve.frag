@@ -369,7 +369,7 @@ void main(void)
     vec3 dirToSky = normalize(reconstructedPos - viewParams.viewPos); 
     if (constants.useSkybox != 0)
     {
-      skyColor = pow(sample_bindless_tex_cube(skybox.cubemapTexSmp, dirToSky).xyz, vec3(2.2f));
+      skyColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, dirToSky).xyz;
     }
     if (lights.directionalLightsCount > 0)
     {
