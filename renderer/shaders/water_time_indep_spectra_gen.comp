@@ -19,16 +19,91 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
-float sech(float v)
-{
-  return 1.f / cosh(v);
-}
-
 #include "bindless.glsl.inc"
+
+const float SHALLOW_CUTOFF = 20.f;
+const float G = 9.81f;
+const float H = 500.f;
+const float F = 100000.f;
+const float SCALE = 1.f;
+const float GAMMA = 3.3f;
 
 vec2 get_blue_noise(vec2 uv)
 {
   return 2.f * sample_bindless_tex_lod(constants.blueNoiseTexSmp, uv, 0.f).xy - 1.f;
+}
+
+// Thanks to https://github.com/gasgiant/FFT-Ocean and his intellectual ancestors.
+
+float dispersion(float k, float g, float h)
+{
+  return sqrt(g * k * tanh(min(k * h, SHALLOW_CUTOFF)));
+}
+
+float dispersion_ddk(float k, float g, float h)
+{
+  float th = tanh(min(k * h, SHALLOW_CUTOFF));
+  float ch = cosh(k * h);
+  return g * (h * k / ch / ch + th) / dispersion(k, g, h) / 2.f;
+}
+
+float tma(float omega, float g, float h)
+{
+  float omegaH = omega * sqrt(h / g);
+  if (omegaH <= 1.f)
+    return 0.5f * omegaH * omegaH;
+  if (omegaH < 2.f)
+    return 1.f - 0.5f * (2.f - omegaH) * (2.f - omegaH);
+  return 1.f;
+}
+
+float jonswap_alpha(float g, float f, float u)
+{
+  return 0.076f * pow(g * f / u / u, -0.22f);
+}
+
+float jonswap_peak_omega(float g, float f, float u)
+{
+  return 22.f * pow(u * f / g / g, -0.33f);
+}
+
+float jonswap(float omega, float g, float h, float f, float u, float scale)
+{
+  float peakOmega = jonswap_peak_omega(g, f, u);
+  float alpha = jonswap_alpha(g, f, u);
+
+  float sigma;
+  if (omega <= peakOmega)
+    sigma = 0.07f;
+  else
+    sigma = 0.09f;
+  float r = exp(
+    -(omega - peakOmega) * (omega - peakOmega) / 2.f / sigma / sigma / peakOmega / peakOmega);
+
+  float oneOverOmega = 1.f / omega;
+  float peakOmegaOverOmega = peakOmega / omega;
+  return scale * tma(omega, g, h) * alpha * g * g * oneOverOmega *
+    oneOverOmega * oneOverOmega * oneOverOmega * oneOverOmega *
+    exp(-1.25f * peakOmegaOverOmega * peakOmegaOverOmega * peakOmegaOverOmega * peakOmegaOverOmega) *
+    pow(abs(GAMMA), r);
+}
+
+float donlean_banner_beta_s(float x)
+{
+  if (x < 0.95f)
+    return 2.61f * pow(abs(x), 1.3f);
+  if (x < 1.6f)
+    return 2.28f * pow(abs(x), -1.3f);
+  float p = -0.4f + 0.8393f * exp(-0.567f * log(x * x));
+  return pow(10.f, p);
+}
+
+float donlean_banner(float theta, float omega, float g, float f, float u)
+{
+  float peakOmega = jonswap_peak_omega(g, f, u);
+  float betaS = donlean_banner_beta_s(omega / peakOmega);
+  float sech = 1.f / cosh(betaS * theta);
+  return betaS / 2.f / tanh(betaS * SHADER_PI) * sech * sech;
 }
 
 void main(void)
@@ -37,39 +112,37 @@ void main(void)
   if (cascade >= WATER_CASCADE_COUNT)
     return;
 
-  const ivec2 imSz    = imageSize(wkTex[cascade]);
+  const ivec2 imSz = imageSize(wkTex[cascade]);
   const ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
-  const vec2 imUv     = vec2(imCoord) / vec2(imSz);
-  
+  const vec2 imUv = vec2(imCoord) / vec2(imSz);
+
   if (imCoord.x >= imSz.x || imCoord.y >= imSz.y)
     return;
 
   float l = 0.f;
   switch (cascade)
   {
-  case 0:  l = source.l0; break;
-  case 1:  l = source.l1; break;
-  case 2:  l = source.l2; break;
-  default:                break;
+  case 0: l = source.l0; break;
+  case 1: l = source.l1; break;
+  case 2: l = source.l2; break;
+  default: break;
   }
 
-  // Phillips
-  const float g = 9.81f;
-  const float A = 0.00001f;
-  const float L = constants.windStrength * constants.windStrength / g;
 
   ivec2 offId = imCoord - (imSz / 2);
   float dk = SHADER_TWO_PI / l;
   vec2 k = dk * vec2(offId);
   float wavenumber = length(k);
+  float theta = atan(k.y, k.x);
 
-  float omega = sqrt(g * wavenumber);
+  float omega = dispersion(wavenumber, G, H);
+  float ddkOmega = dispersion_ddk(wavenumber, G, H);
 
-  float ph = A * exp(-1.f / wavenumber / wavenumber / L / L) / wavenumber / wavenumber / wavenumber / wavenumber;
-  float cosine = dot(normalize(k), normalize(constants.windDirection));
-  float phDir = ph * cosine * cosine * cosine * cosine * cosine * cosine;
+  float s =
+    jonswap(omega, G, H, F, constants.windStrength, SCALE) *
+    donlean_banner(theta, omega, G, F, constants.windStrength);
 
-  vec2 initialSpectrum = sqrt(0.5f) * get_blue_noise(imUv) * sqrt(phDir);
+  vec2 initialSpectrum = get_blue_noise(imUv) * sqrt(2.f * s * abs(ddkOmega) / wavenumber * dk * dk);
 
   // @TODO: ensure no overlap with other cascades
   float minWavenumberCascade = 0.0001f;
@@ -86,4 +159,3 @@ void main(void)
     imageStore(spectraTex[cascade], imCoord, vec4(initialSpectrum, 0.f, 0.f));
   }
 }
-

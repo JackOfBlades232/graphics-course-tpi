@@ -155,10 +155,10 @@ v Plan geometric implementation
     v Write placeholder material data to get visual in deferred pipeline
   - Finish geo implementation
     v Fix seams at cascade borders
-    - Fix normal artifacts (lowres/incorrect stuff)?
+    v Implement a better spectrum generator -- JONSWAP + TMA (currently -- phillips). Params in shader, easier that way.
+    v Fix normal artifacts (lowres/incorrect stuff) -- fixed by moving away from Phillips
     - Clamp frequencies in cascades to non-overlapping regions
     - Disable hires cascades at distance
-    - Implement a better spectrum generator -- JONSWAP + TMA (currently -- phillips). Params in shader, easier that way.
     - Do another examination of jacobian calc
     - Remove extraction pass
 - Plan lighting implementation
