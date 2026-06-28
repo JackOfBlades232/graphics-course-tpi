@@ -14,6 +14,10 @@ Bugs
 Performance
 - Figure out how to do Release build with spirv-opt. Sometimes it does nothing, sometimes it breaks me shaders.
 
+Upstream
+- Collect imho-better reference lists for HW-s
+- Go through task formulations and add to issues
+
 ScenePipeline
 - Add missing tangent generation via MikkTSpace
 - Add proper threadpool and move bfn and other heavy stuff there
