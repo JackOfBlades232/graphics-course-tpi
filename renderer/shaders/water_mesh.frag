@@ -97,15 +97,11 @@ void main(void)
     dydz += data.dydz;
     dxdx += data.dxdx;
     dzdz += data.dzdz;
-    turbulence += data.turbulence - 1.f;
+    turbulence += data.turbulence;
   }
 
   const vec2 slope = vec2(dydx / abs(1.f + dxdx), dydz / abs(1.f + dzdz));
   const vec3 wNormal = normalize(vec3(-slope.x, 1.f, -slope.y));
-
-  // @TEST
-  const float foamfactor = 0.f;
-  //const float foamfactor = turbulence + 0.002f;
 
   // @TEST
   vec4 waterColor = vec4(0.f, 0.4f, 1.f, 1.f);
@@ -114,8 +110,8 @@ void main(void)
   vec4 foamColor = vec4(1.f, 1.f, 1.f, 1.f);
   vec3 foamMatdata = vec3(float(MATERIAL_PBR), 0.f, 0.9f);
 
-  surfaceColor = foamfactor < 0.f ? foamColor : waterColor;
-  materialData = foamfactor < 0.f ? foamMatdata : waterMatdata;
+  surfaceColor = turbulence < 0.f ? foamColor : waterColor;
+  materialData = turbulence < 0.f ? foamMatdata : waterMatdata;
   normal = wNormal;
 
   out_fragAlbedo = surfaceColor;
