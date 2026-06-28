@@ -607,14 +607,16 @@ void WorldRenderer::loadScene(std::filesystem::path path)
           .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
           .name = fmt::format("wave_derivatives_{}", i),
           .format = vk::Format::eR32G32B32A32Sfloat,
-          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+          .mipLevels = mip_count_for_dims(WATER_CASCADE_RES, WATER_CASCADE_RES)});
       createManagedImage(
         cascade.turbulence,
         etna::Image::CreateInfo{
           .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
           .name = fmt::format("wave_turbulence_{}", i),
           .format = vk::Format::eR32Sfloat,
-          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+          .mipLevels = mip_count_for_dims(WATER_CASCADE_RES, WATER_CASCADE_RES)});
       ++i;
     }
   }
@@ -2086,6 +2088,12 @@ void WorldRenderer::renderWorld(
           get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
           get_linear_wg_count(WATER_CASCADE_RES, WATER_WORKGROUP_DIM),
           WATER_CASCADE_COUNT);
+      }
+
+      for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+      {
+        gen_mips(cmd_buf, water->cascades[c].derivatives);
+        gen_mips(cmd_buf, water->cascades[c].turbulence);
       }
     }
 

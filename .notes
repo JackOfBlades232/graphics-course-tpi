@@ -160,7 +160,6 @@ v Plan geometric implementation
     - Clamp frequencies in cascades to non-overlapping regions
     - Disable hires cascades at distance
     - Do another examination of jacobian calc
-    - Remove extraction pass
 - Plan lighting implementation
   - Transparent pass forward lighting
   - BRDF

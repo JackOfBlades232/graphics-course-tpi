@@ -67,12 +67,12 @@ Cascade sample_cascade(vec2 world_planar_pos, uint cid)
   vec2 uv = world_planar_pos / l;
 
   Cascade data;
-  vec4 derivatives = textureLod(derivatives[cid], uv, 0.f);
+  vec4 derivatives = texture(derivatives[cid], uv);
   data.dydx = derivatives.x;
   data.dydz = derivatives.y;
   data.dxdx = derivatives.z;
   data.dzdz = derivatives.w;
-  data.turbulence = textureLod(turbulence[cid], uv, 0.f).x;
+  data.turbulence = texture(turbulence[cid], uv).x;
 
   return data;
 }
