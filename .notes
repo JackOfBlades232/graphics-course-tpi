@@ -163,16 +163,32 @@ v Geometry
     v Fix normal artifacts (lowres/incorrect stuff) -- fixed by moving away from Phillips
     v Clamp frequencies in cascades to non-overlapping regions
     v Do another examination of jacobian calc
-- Plan lighting implementation
-  - Transparent pass forward lighting
-  - BRDF
-  - Proper foam
+- Lighting implementation
+  - Refactor lighting to be an includable set of functions
+    - Move BRDF-s to an inc file
+    - Move shadows to an inc file
+    - Look into separating light loops somehow
+  - Draw water in transparent pass
+    - Write a shader that uses brdf and shadow funcs for forward lighting
+    - Plug it into water fragment shader
+    - Add alpha blend to pipeline and alpha to shader
+    - Move to a separate renderpass
+    - Add reactive mask for TAA
+  - Plan BRDF
+    - Read Tessendorf of water lighting
+    - Look up water lighting models on the inet
+    - Formulate plan
+  - Foam
+    - Tune foam lighting (generation seems fine already)
   - Sky reflection
-  - Bottom refraction(or distortion?)
-  - Caustics
+    - Sample sky cubemap
+    - Add specular reflections with fresnel
 - Plan shore interaction implementation
   - How we create the shore outline data
   - How we factor it in -- probably just attenuation and foam?
+- Plan shore lighting features
+  - Bottom refraction(or distortion?)
+  - Caustics
 
 Fog
 - Gather task
