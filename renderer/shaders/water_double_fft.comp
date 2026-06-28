@@ -53,8 +53,10 @@ void main(void)
 {
   const bool vert = params.vert != 0;
   const bool inv = params.invert != 0;
-  const bool scl = params.scale != 0;
-  const bool prm = params.permute != 0;
+  const bool sclIn = params.scale != 0 && !inv;
+  const bool prmIn = params.permute != 0 && !inv;
+  const bool sclOut = params.scale != 0 && inv;
+  const bool prmOut = params.permute != 0 && inv;
 
   // these all are same as global
   const uint lane = gl_WorkGroupID.y;
@@ -71,7 +73,12 @@ void main(void)
   const ivec2 copyCursor = vert ? copyCursorBase : copyCursorBase.yx;
 
   // Read all elements to cache with bit-reverse index.
-  cache[0][bitrev_index(kId)] = imageLoad(buffers[bufferId], copyCursor);
+  vec4 inp = imageLoad(buffers[bufferId], copyCursor);
+  if (prmIn)
+    inp *= ((lane + kId) % 2 == 0 ? 1.f : -1.f);
+  if (sclIn)
+    inp = inp / float(WATER_CASCADE_RES) / float(WATER_CASCADE_RES);
+  cache[0][bitrev_index(kId)] = inp;
 
   barrier();
 
@@ -101,9 +108,9 @@ void main(void)
 
   // Store calculations back. No bit reversion needed.
   vec4 result = cache[WATER_CASCADE_RES_POW & 1][kId];
-  if (prm)
+  if (prmOut)
     result *= ((lane + kId) % 2 == 0 ? 1.f : -1.f);
-  if (scl)
+  if (sclOut)
     result = result / float(WATER_CASCADE_RES) / float(WATER_CASCADE_RES);
   imageStore(buffers[bufferId], copyCursor, result);
 }

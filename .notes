@@ -155,11 +155,10 @@ v Plan geometric implementation
     v Write placeholder material data to get visual in deferred pipeline
   - Finish geo implementation
     v Fix seams at cascade borders
-    v Fix normal artifacts (squares)
+    - Fix normal artifacts (lowres/incorrect stuff)?
     - Clamp frequencies in cascades to non-overlapping regions
     - Disable hires cascades at distance
     - Implement a better spectrum generator -- JONSWAP + TMA (currently -- phillips). Params in shader, easier that way.
-    - Restrict wavenumbers in different cascades
     - Do another examination of jacobian calc
     - Remove extraction pass
 - Plan lighting implementation
@@ -171,7 +170,7 @@ v Plan geometric implementation
   - Caustics
 - Plan shore interaction implementation
   - How we create the shore outline data
-  - How we factor it in
+  - How we factor it in -- probably just attenuation and foam?
 
 Fog
 - Gather task

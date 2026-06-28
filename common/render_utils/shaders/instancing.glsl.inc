@@ -36,7 +36,7 @@ BBox expand_bbox(BBox base, float addition)
 BBox get_inst_bbox(const CullableInstance inst)
 {
   if ((inst.flags & WATER_CHUNK_INSTANCE_FLAG) != 0)
-    return expand_bbox(bboxes[inst.instId], 0.5f);
+    return expand_bbox(bboxes[inst.instId], 1.f);
   if ((inst.flags & TERRAIN_CHUNK_INSTANCE_FLAG) != 0)
     return bboxes[inst.instId];
   else

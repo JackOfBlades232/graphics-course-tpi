@@ -77,12 +77,6 @@ Cascade sample_cascade(vec2 world_planar_pos, uint cid)
   return data;
 }
 
-// @TEST
-float K(uint cid)
-{
-  return 100.f * pow(10.f, cid);
-}
-
 void main(void)
 {
   vec4 surfaceColor;
@@ -99,10 +93,10 @@ void main(void)
   for (uint cid = 0; cid < WATER_CASCADE_COUNT; ++cid)
   {
     Cascade data = sample_cascade(surf.wInitPlanarPos, cid);
-    dydx += K(cid) * data.dydx;
-    dydz += K(cid) * data.dydz;
-    dxdx += K(cid) * data.dxdx;
-    dzdz += K(cid) * data.dzdz;
+    dydx += data.dydx;
+    dydz += data.dydz;
+    dxdx += data.dxdx;
+    dzdz += data.dzdz;
     turbulence += data.turbulence - 1.f;
   }
 

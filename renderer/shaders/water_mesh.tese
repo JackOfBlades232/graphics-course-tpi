@@ -49,12 +49,6 @@ vec3 sample_cascade(vec2 world_planar_pos, uint cid)
   return textureLod(displacement[cid], uv, 0.f).xyz;
 }
 
-// @TEST
-float K(uint cid)
-{
-  return 100.f * (cid + 1);
-}
-
 void main(void)
 {
   const vec2 baseXZ = gl_in[0].gl_Position.xz;
@@ -66,7 +60,7 @@ void main(void)
 
   // @TEST
   for (uint cid = 0; cid < WATER_CASCADE_COUNT; ++cid)
-    disp += K(cid) * sample_cascade(pointXZ, cid);
+    disp += sample_cascade(pointXZ, cid);
 
   teOut.wPos = vec3(pointXZ.x, source.waterLevel, pointXZ.y) + disp;
   teOut.wInitPlanarPos = pointXZ;

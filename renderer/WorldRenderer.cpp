@@ -2029,8 +2029,15 @@ void WorldRenderer::renderWorld(
 
         {
           ETNA_PROFILE_GPU(cmd_buf, waterFFTVertical);
-          fftPass(FFTPC{.vert = 1, .invert = 1, .scale = 1, .permute = 1});
+          // We don't scale by 1/N^2 due to spectra properties
+          fftPass(FFTPC{.vert = 1, .invert = 1, .scale = 0, .permute = 1});
         }
+
+        // Invertability test code
+        // fftMidBarriers();
+        // fftPass(FFTPC{.vert = 1, .invert = 0, .scale = 1, .permute = 1});
+        // fftMidBarriers();
+        // fftPass(FFTPC{.vert = 0, .invert = 0, .scale = 0, .permute = 0});
       }
 
       {
