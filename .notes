@@ -157,8 +157,7 @@ v Plan geometric implementation
     v Fix seams at cascade borders
     v Implement a better spectrum generator -- JONSWAP + TMA (currently -- phillips). Params in shader, easier that way.
     v Fix normal artifacts (lowres/incorrect stuff) -- fixed by moving away from Phillips
-    - Clamp frequencies in cascades to non-overlapping regions
-    - Disable hires cascades at distance
+    v Clamp frequencies in cascades to non-overlapping regions
     - Do another examination of jacobian calc
 - Plan lighting implementation
   - Transparent pass forward lighting

@@ -27,6 +27,7 @@ const float H = 500.f;
 const float F = 100000.f;
 const float SCALE = 1.f;
 const float GAMMA = 3.3f;
+const float CASCADE_WN_CUTOFF_SCALE = 6.f;
 
 vec2 get_blue_noise(vec2 uv)
 {
@@ -120,14 +121,28 @@ void main(void)
     return;
 
   float l = 0.f;
+  float minWavenumber = 0.0001f;
+  float maxWavenumber = 9999.f;
+  const float l1b = CASCADE_WN_CUTOFF_SCALE * SHADER_TWO_PI / source.l1;
+  const float l2b = CASCADE_WN_CUTOFF_SCALE * SHADER_TWO_PI / source.l2;
   switch (cascade)
   {
-  case 0: l = source.l0; break;
-  case 1: l = source.l1; break;
-  case 2: l = source.l2; break;
-  default: break;
+  case 0:
+    l = source.l0;
+    maxWavenumber = l1b;
+    break;
+  case 1:
+    l = source.l1;
+    minWavenumber = l1b;
+    maxWavenumber = l2b;
+    break;
+  case 2:
+    l = source.l2;
+    minWavenumber = l2b;
+    break;
+  default:
+    break;
   }
-
 
   ivec2 offId = imCoord - (imSz / 2);
   float dk = SHADER_TWO_PI / l;
@@ -144,11 +159,7 @@ void main(void)
 
   vec2 initialSpectrum = get_blue_noise(imUv) * sqrt(2.f * s * abs(ddkOmega) / wavenumber * dk * dk);
 
-  // @TODO: ensure no overlap with other cascades
-  float minWavenumberCascade = 0.0001f;
-  float maxWavenumberCascade = 9999.f;
-
-  if (wavenumber < minWavenumberCascade || wavenumber > maxWavenumberCascade)
+  if (wavenumber < minWavenumber || wavenumber > maxWavenumber)
   {
     imageStore(wkTex[cascade], imCoord, vec4(k.x, 1.f, k.y, 0.f));
     imageStore(spectraTex[cascade], imCoord, vec4(0.f));
