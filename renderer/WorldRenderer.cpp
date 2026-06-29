@@ -966,6 +966,13 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
            },
          },
        .logicOp = vk::LogicOp::eSet},
+    .depthConfig =
+      {
+        .depthTestEnable = vk::True,
+        .depthWriteEnable = vk::False,
+        .depthCompareOp = vk::CompareOp::eLessOrEqual,
+        .maxDepthBounds = 1.f,
+      },
     .fragmentShaderOutput =
       {
         .colorAttachmentFormats = {vk::Format::eR32G32B32A32Sfloat},
@@ -2871,7 +2878,8 @@ void WorldRenderer::renderWorld(
               .loadOp = vk::AttachmentLoadOp::eLoad}},
             {.image = mainViewDepth.get(),
              .view = mainViewDepth.getView({}),
-             .loadOp = vk::AttachmentLoadOp::eLoad}},
+             .loadOp = vk::AttachmentLoadOp::eLoad,
+             .storeOp = vk::AttachmentStoreOp::eNone}},
          .skipCulling = true});
     }
 

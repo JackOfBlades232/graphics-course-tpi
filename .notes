@@ -167,11 +167,12 @@ v Geometry
   v Refactor lighting to be an includable set of functions
     v Move BRDF-s to an inc file
     v Move shadows to an inc file
-  - Draw water in transparent pass
-    - Write a shader that uses brdf and shadow funcs for forward lighting
-    - Plug it into water fragment shader
-    - Add alpha blend to pipeline and alpha to shader
-    - Move to a separate renderpass
+  - Draw water in transparent-ish pass
+    v Write a shader that uses brdf and shadow funcs for forward lighting
+    v Plug it into water fragment shader
+    v Add alpha blend to pipeline and alpha to shader
+    v Move to a separate renderpass -- aand it's shit cuz of ordering
+    - Research how water fakes transparency
   - Plan BRDF
     - Read Tessendorf of water lighting
     - Look up water lighting models on the inet
