@@ -164,10 +164,9 @@ v Geometry
     v Clamp frequencies in cascades to non-overlapping regions
     v Do another examination of jacobian calc
 - Lighting implementation
-  - Refactor lighting to be an includable set of functions
-    - Move BRDF-s to an inc file
-    - Move shadows to an inc file
-    - Look into separating light loops somehow
+  v Refactor lighting to be an includable set of functions
+    v Move BRDF-s to an inc file
+    v Move shadows to an inc file
   - Draw water in transparent pass
     - Write a shader that uses brdf and shadow funcs for forward lighting
     - Plug it into water fragment shader

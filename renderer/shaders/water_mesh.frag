@@ -4,17 +4,12 @@
 
 #include "materials.h"
 #include "water.h"
+#include "skybox.h"
 #include "constants.h"
 #include "quantization.h"
 
 
-// @TODO: find an appropriate way to unify with static_mesh
-
-layout(location = 0) out vec4 out_fragAlbedo;
-layout(location = 1) out vec3 out_fragMaterial;
-layout(location = 2) out vec3 out_fragNormal;
-layout(location = 3) out vec4 out_fragTransmission;
-layout(location = 4) out vec2 out_motionVector;
+layout(location = 0) out vec4 out_fragColor;
 
 layout(binding = 3, set = 0) uniform sampler2D derivatives[WATER_CASCADE_COUNT];
 layout(binding = 4, set = 0) uniform sampler2D turbulence[WATER_CASCADE_COUNT];
@@ -35,6 +30,20 @@ layout(binding = 10, set = 0) readonly buffer view_data_t
 {
   ViewData viewData;
 };
+layout(binding = 11, set = 0) uniform skybox_t
+{
+  SkyboxSourceData skybox;
+};
+
+layout(binding = 12, set = 0) uniform light_data_t
+{
+  UniformLights lights;
+};
+
+layout(binding = 13, set = 0) readonly buffer light_mats_t
+{
+  LightMatrices mats;
+};
 
 layout(location = 0) in TE_OUT
 {
@@ -43,6 +52,9 @@ layout(location = 0) in TE_OUT
 } surf;
 
 #include "motion_vectors.glsl.inc"
+#include "bindless.glsl.inc"
+#include "brdf.glsl.inc"
+#include "lights.glsl.inc"
 
 struct Cascade
 {
@@ -79,10 +91,6 @@ Cascade sample_cascade(vec2 world_planar_pos, uint cid)
 
 void main(void)
 {
-  vec4 surfaceColor;
-  vec3 materialData;
-  vec3 normal;
-
   float dydx = 0.f;
   float dydz = 0.f;
   float dxdx = 0.f;
@@ -103,31 +111,78 @@ void main(void)
   const vec2 slope = vec2(dydx / abs(1.f + dxdx), dydz / abs(1.f + dzdz));
   const vec3 wNormal = normalize(vec3(-slope.x, 1.f, -slope.y));
 
+  const vec3 viewVec = normalize(viewParams.viewPos - surf.wPos);
+  const vec3 viewPos = (viewParams.mView * vec4(surf.wPos, 1.f)).xyz;
+
   // @TEST
-  vec4 waterColor = vec4(0.f, 0.4f, 1.f, 1.f);
-  vec3 waterMatdata = vec3(float(MATERIAL_PBR), 0.f, 0.2f);
+  vec3 waterColor = vec3(0.f, 0.4f, 1.f);
+  float waterRoughness = 0.2f;
+  float waterAlpha = 0.85f;
+  vec3 foamColor = vec3(1.f, 1.f, 1.f);
+  float foamRoughness = 0.9f;
+  float foamAlpha = 1.f;
+  vec3 albedo = turbulence < 0.f ? foamColor : waterColor;
+  float roughness = turbulence < 0.f ? foamRoughness : waterRoughness;
+  float alpha = turbulence < 0.f ? foamAlpha : waterAlpha;
+  vec3 normal = wNormal;
 
-  vec4 foamColor = vec4(1.f, 1.f, 1.f, 1.f);
-  vec3 foamMatdata = vec3(float(MATERIAL_PBR), 0.f, 0.9f);
+  // @TODO: pull out
+  vec3 ambientCol = constants.ambientLightCoeff;
+  if (constants.useSkybox != 0 && constants.useSkyboxForAmbient != 0)
+  {
+    float maxLod = floor(log2(bindless_tex_cube_size(skybox.cubemapTexSmp).x));
+    ambientCol *= sample_bindless_tex_cube_lod(skybox.cubemapTexSmp, vec3(0.f, 1.f, 0.f), maxLod).xyz;
+  }
+  const vec3 ambient = ambientCol * albedo;
 
-  surfaceColor = turbulence < 0.f ? foamColor : waterColor;
-  materialData = turbulence < 0.f ? foamMatdata : waterMatdata;
-  normal = wNormal;
+  CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);
 
-  out_fragAlbedo = surfaceColor;
-  out_fragMaterial = materialData;
-  out_fragNormal = normal;
-  out_fragTransmission = vec4(vec3(1.f), 0.f);
+  // @TODO: pull out
+  vec4 debugMultiplier = vec4(1.f);
+  if (constants.drawCascadesInSolidColor != 0)
+  {
+    const vec3 DEBUG_CASCADE_COLORS[4] = {
+      vec3(1.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 1.f)};
 
-  vec4 prevNdc = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(surf.wPos, 1.f);
-  vec2 prevNdcXy = prevNdc.xy / prevNdc.w;
+    debugMultiplier = csmd.cascade == CSM_CASCADE_COUNT
+      ? vec4(1.f, 0.f, 1.f, 1.f)
+      : vec4(DEBUG_CASCADE_COLORS[csmd.cascade & 3], 1.f);
+  }
 
-  get_static_pixel_motion_vector(
-    gl_FragCoord.xy,
-    constants.mainTargetResolution,
-    prevNdcXy,
-    get_subpixel_uv_jitter(viewParams),
-    viewParams.prevSubpixelUvJitter,
-    out_motionVector);
+  vec3 totDiff = vec3(0.f);
+  vec3 totSpec = vec3(0.f);
+
+  // @TODO: pull out
+  for (int i = 0; i < lights.directionalLightsCount; ++i)
+  {
+    const vec3 lightIntensity = 
+      lights.directionalLights[i].color * lights.directionalLights[i].intensity;
+    const vec3 lightDir = -normalize(lights.directionalLights[i].direction);
+
+    float shadow = 1.f;
+
+    if (constants.useDirectionalLightShadows != 0 && csmd.cascade < CSM_CASCADE_COUNT)
+    {
+      if (SHADOW_TECHNIQUE_IS_PCF(constants.directionalLightShadowsTechnique))
+      {
+        shadow = calculate_csm_shadow_pcf(
+          i, csmd.cascade, surf.wPos, csmd.zIntoCascadeStart / csmd.zCascadeSize, csmd.zIntoCascadeEnd / csmd.zNextCascadeSize);
+      }
+    }
+
+    vec3 diff = vec3(0.f);
+    vec3 spec = vec3(0.f);
+
+    // @TODO: proper brdf
+    calculate_pbr(normal, lightDir, viewVec, roughness, 0.f, albedo, 0.f, vec3(0.f), diff, spec);
+
+    totDiff += diff * shadow * lightIntensity;
+    totSpec += spec * shadow * lightIntensity;
+  }
+
+  // @TODO: point and spot lights?
+
+  vec3 color = ambient + totDiff + totSpec;
+  out_fragColor = vec4(debugMultiplier.xyz * color, alpha);
 }
 

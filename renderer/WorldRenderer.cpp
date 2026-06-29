@@ -254,53 +254,61 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32G32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
 
-  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
-    .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
-  defaultWrapSampler = etna::Sampler(etna::Sampler::CreateInfo{
-    .addressMode = vk::SamplerAddressMode::eRepeat,
-    .name = "default_wrap_sampler",
-    .minLod = 0.f,
-    .maxLod = VK_LOD_CLAMP_NONE});
-  defaultMirrorSampler = etna::Sampler(etna::Sampler::CreateInfo{
-    .addressMode = vk::SamplerAddressMode::eMirroredRepeat,
-    .name = "default_mirror_sampler",
-    .minLod = 0.f,
-    .maxLod = VK_LOD_CLAMP_NONE});
+  defaultSampler = etna::Sampler(
+    etna::Sampler::CreateInfo{
+      .name = "default_sampler", .minLod = 0.f, .maxLod = VK_LOD_CLAMP_NONE});
+  defaultWrapSampler = etna::Sampler(
+    etna::Sampler::CreateInfo{
+      .addressMode = vk::SamplerAddressMode::eRepeat,
+      .name = "default_wrap_sampler",
+      .minLod = 0.f,
+      .maxLod = VK_LOD_CLAMP_NONE});
+  defaultMirrorSampler = etna::Sampler(
+    etna::Sampler::CreateInfo{
+      .addressMode = vk::SamplerAddressMode::eMirroredRepeat,
+      .name = "default_mirror_sampler",
+      .minLod = 0.f,
+      .maxLod = VK_LOD_CLAMP_NONE});
 
   constants.emplace(wc, [](size_t) {
-    return create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(constantsData),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "constants"});
+    return create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(constantsData),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "constants"});
   });
   lights.emplace(wc, [](size_t) {
-    return create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getLights()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "lights"});
+    return create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getLights()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "lights"});
   });
   constants->iterate([](auto& buf) { buf.map(); });
   lights->iterate([](auto& buf) { buf.map(); });
   prevLights = {};
 
-  lightMatricesBuf = create_buffer(etna::Buffer::CreateInfo{
-    .size = sizeof(LightMatrices),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "light_matrices"});
+  lightMatricesBuf = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = sizeof(LightMatrices),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "light_matrices"});
 
-  stubUniBuffer = create_buffer(etna::Buffer::CreateInfo{
-    .size = 16,
-    .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-    .name = "stub_uniform"});
-  stubStorageBuffer = create_buffer(etna::Buffer::CreateInfo{
-    .size = 16,
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-    .name = "stub_storage"});
+  stubUniBuffer = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = 16,
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "stub_uniform"});
+  stubStorageBuffer = create_buffer(
+    etna::Buffer::CreateInfo{
+      .size = 16,
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "stub_storage"});
 
   createManagedImage(
     ssaoBuffer.curBuf(),
@@ -361,8 +369,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     pointLightViews.reserve(sceneMgr->getLights().pointLightsCount);
     for (size_t i = 0; i < sceneMgr->getLights().pointLightsCount; ++i)
     {
-      pointLightViews.emplace_back(array_make<ViewContext, 6>(
-        [this, i] { return viewCtxMgr->alloc(fmt::format("point{}", i).c_str()); }));
+      pointLightViews.emplace_back(array_make<ViewContext, 6>([this, i] {
+        return viewCtxMgr->alloc(fmt::format("point{}", i).c_str());
+      }));
     }
   }
   if (!cfg.disableSpotLightsShadowsFeature)
@@ -378,8 +387,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     directionalLightCascadeViews.reserve(sceneMgr->getLights().directionalLightsCount);
     for (size_t i = 0; i < sceneMgr->getLights().directionalLightsCount; ++i)
     {
-      directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>(
-        [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
+      directionalLightCascadeViews.emplace_back(
+        array_make<ViewContext, CSM_CASCADE_COUNT>(
+          [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
     }
   }
 
@@ -390,11 +400,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     terrain.emplace(TerrainRenderingData{});
 
     memcpy(&terrain->sourceData, &sceneMgr->getTerrainData(), sizeof(sceneMgr->getTerrainData()));
-    terrain->source = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getTerrainData()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "terrain_data"});
+    terrain->source = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getTerrainData()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "terrain_data"});
 
     memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
 
@@ -431,10 +442,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
         .layers = CLIPMAP_LEVEL_COUNT});
 
-    terrain->clipmapSampler = etna::Sampler(etna::Sampler::CreateInfo{
-      .filter = vk::Filter::eLinear,
-      .addressMode = vk::SamplerAddressMode::eRepeat,
-      .name = "terrain_clipmap_sampler"});
+    terrain->clipmapSampler = etna::Sampler(
+      etna::Sampler::CreateInfo{
+        .filter = vk::Filter::eLinear,
+        .addressMode = vk::SamplerAddressMode::eRepeat,
+        .name = "terrain_clipmap_sampler"});
 
     for (size_t i = 0; i < CLIPMAP_LEVEL_COUNT; ++i)
     {
@@ -488,11 +500,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
         uint32_t(i));
     }
 
-    terrain->chunkHeightBoundsBuf = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(ChunkHeightBoundsData),
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "terrain_chunk_height_bounds"});
+    terrain->chunkHeightBoundsBuf = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(ChunkHeightBoundsData),
+        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "terrain_chunk_height_bounds"});
 
     queueClipmapInvalidation();
   }
@@ -508,22 +521,25 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
     vegetation.emplace(VegetationRenderingData{});
 
-    vegetation->culledChunkBuffer = create_buffer(etna::Buffer::CreateInfo{
-      .size = vegChunkBufferSizeBytes(),
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "vegetation_chunk_buffer"});
-    vegetation->indirectDispatchBuffer = create_buffer(etna::Buffer::CreateInfo{
-      .size = terrain->sourceData.detailCount * sizeof(IndirectDispatchCommand),
-      .bufferUsage =
-        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "vegetation_indirect_dispatch_buffer"});
-    vegetation->grassInstancesBuffer = create_buffer(etna::Buffer::CreateInfo{
-      .size = vegInstBufferSizeBytes(),
-      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-      .name = "vegetation_instances_buffer"});
+    vegetation->culledChunkBuffer = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = vegChunkBufferSizeBytes(),
+        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "vegetation_chunk_buffer"});
+    vegetation->indirectDispatchBuffer = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = terrain->sourceData.detailCount * sizeof(IndirectDispatchCommand),
+        .bufferUsage =
+          vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "vegetation_indirect_dispatch_buffer"});
+    vegetation->grassInstancesBuffer = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = vegInstBufferSizeBytes(),
+        .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .name = "vegetation_instances_buffer"});
   }
   else
   {
@@ -537,11 +553,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     skybox.emplace(SkyboxRenderingData{});
 
     memcpy(&skybox->sourceData, &sceneMgr->getSkyboxData(), sizeof(sceneMgr->getSkyboxData()));
-    skybox->source = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getSkyboxData()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "skybox_data"});
+    skybox->source = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getSkyboxData()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "skybox_data"});
 
     memcpy(skybox->source.map(), &skybox->sourceData, sizeof(skybox->sourceData));
   }
@@ -557,11 +574,12 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     water.emplace(WaterRenderingData{});
 
     memcpy(&water->sourceData, &sceneMgr->getWaterData(), sizeof(sceneMgr->getWaterData()));
-    water->source = create_buffer(etna::Buffer::CreateInfo{
-      .size = sizeof(sceneMgr->getWaterData()),
-      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
-      .name = "water_data"});
+    water->source = create_buffer(
+      etna::Buffer::CreateInfo{
+        .size = sizeof(sceneMgr->getWaterData()),
+        .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .name = "water_data"});
     memcpy(water->source.map(), &water->sourceData, sizeof(water->sourceData));
 
     for (size_t i = 0; auto& cascade : water->cascades)
@@ -607,7 +625,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
           .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
           .name = fmt::format("wave_derivatives_{}", i),
           .format = vk::Format::eR32G32B32A32Sfloat,
-          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled |
+            vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
           .mipLevels = mip_count_for_dims(WATER_CASCADE_RES, WATER_CASCADE_RES)});
       createManagedImage(
         cascade.turbulence,
@@ -615,7 +634,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
           .extent = vk::Extent3D{WATER_CASCADE_RES, WATER_CASCADE_RES, 1},
           .name = fmt::format("wave_turbulence_{}", i),
           .format = vk::Format::eR32Sfloat,
-          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+          .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled |
+            vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
           .mipLevels = mip_count_for_dims(WATER_CASCADE_RES, WATER_CASCADE_RES)});
       ++i;
     }
@@ -646,8 +666,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     etna::Image::ViewParams vps{};
     if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
       vps.type = vk::ImageViewType::eCube;
-    texBindings.emplace_back(etna::Binding{
-      0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
+    texBindings.emplace_back(
+      etna::Binding{
+        0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(i)});
     registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", i, tex.getName()));
   }
   for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
@@ -919,59 +940,38 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
       };
 
   // @TODO: transparent pass
-  auto
-    waterPipelineCreateInfo =
-      etna::GraphicsPipeline::CreateInfo{
-        .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::ePatchList},
-        .tessellationConfig = {.patchControlPoints = 4},
-        .rasterizationConfig =
-          vk::PipelineRasterizationStateCreateInfo{
-            .polygonMode = vk::PolygonMode::eFill,
-            .cullMode = vk::CullModeFlagBits::eBack,
-            .frontFace = vk::FrontFace::eCounterClockwise,
-            .lineWidth = 1.f,
-          },
-        .blendingConfig =
-          {.attachments =
-             {
-               vk::PipelineColorBlendAttachmentState{
-                 .blendEnable = vk::False,
-                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-               },
-               vk::PipelineColorBlendAttachmentState{
-                 .blendEnable = vk::False,
-                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-               },
-               vk::PipelineColorBlendAttachmentState{
-                 .blendEnable = vk::False,
-                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-               },
-               vk::PipelineColorBlendAttachmentState{
-                 .blendEnable = vk::False,
-                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-               },
-               vk::PipelineColorBlendAttachmentState{
-                 .blendEnable = vk::False,
-                 .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                   vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-               },
-             },
-           .logicOp = vk::LogicOp::eSet},
-        .fragmentShaderOutput =
-          {
-            .colorAttachmentFormats = // @TODO: save these into vars
-            {vk::Format::eR32G32B32A32Sfloat,
-             vk::Format::eR32G32B32A32Sfloat,
-             vk::Format::eR32G32B32A32Sfloat,
-             vk::Format::eR32G32B32A32Sfloat,
-             vk::Format::eR32G32Sfloat},
-            .depthAttachmentFormat = vk::Format::eD32Sfloat,
-          },
-      };
+  auto waterPipelineCreateInfo = etna::GraphicsPipeline::CreateInfo{
+    .inputAssemblyConfig = {.topology = vk::PrimitiveTopology::ePatchList},
+    .tessellationConfig = {.patchControlPoints = 4},
+    .rasterizationConfig =
+      vk::PipelineRasterizationStateCreateInfo{
+        .polygonMode = vk::PolygonMode::eFill,
+        .cullMode = vk::CullModeFlagBits::eBack,
+        .frontFace = vk::FrontFace::eCounterClockwise,
+        .lineWidth = 1.f,
+      },
+    .blendingConfig =
+      {.attachments =
+         {
+           vk::PipelineColorBlendAttachmentState{
+             .blendEnable = vk::True,
+             .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+             .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+             .colorBlendOp = vk::BlendOp::eAdd,
+             .srcAlphaBlendFactor = vk::BlendFactor::eOne,
+             .dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+             .alphaBlendOp = vk::BlendOp::eAdd,
+             .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+               vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+           },
+         },
+       .logicOp = vk::LogicOp::eSet},
+    .fragmentShaderOutput =
+      {
+        .colorAttachmentFormats = {vk::Format::eR32G32B32A32Sfloat},
+        .depthAttachmentFormat = vk::Format::eD32Sfloat,
+      },
+  };
 
   staticMeshPipeline.emplace(
     pipelineManager,
@@ -1400,6 +1400,9 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         waterBinds.emplace_back(8, constants->get().genBinding());
         waterBinds.emplace_back(9, srpi.vctx->viewParamsBuf.get().genBinding());
         waterBinds.emplace_back(10, srpi.vctx->viewDataBuf.genBinding());
+        waterBinds.emplace_back(11, (skybox ? skybox->source : stubUniBuffer).genBinding());
+        waterBinds.emplace_back(12, lights->get().genBinding());
+        waterBinds.emplace_back(13, lightMatricesBuf.genBinding());
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
           waterBinds.emplace_back(
@@ -1508,12 +1511,13 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
 
       const auto& pipe = waterMeshPipeline->get(srpi.pass, bool(srpi.vparams.needReverseZ));
 
+      std::vector vkSets{waterDset->getVkSet()};
+      vkSets.push_back(materialParamsDsetFrag.getVkSet());
+      vkSets.push_back(bindlessTexturesDsetFrag.getVkSet());
+      vkSets.push_back(bindlessSamplersDsetFrag.getVkSet());
+
       cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
-        pipe.getVkPipelineLayout(),
-        0,
-        {waterDset->getVkSet()},
-        {});
+        vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, std::move(vkSets), {});
 
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
 
@@ -1575,8 +1579,9 @@ void WorldRenderer::renderWorld(
       etna::Image::ViewParams vps{};
       if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
         vps.type = vk::ImageViewType::eCube;
-      newBindings.emplace_back(etna::Binding{
-        0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(tid)});
+      newBindings.emplace_back(
+        etna::Binding{
+          0, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps), uint32_t(tid)});
       registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", size_t(tid), tex.getName()));
     }
 
@@ -2717,14 +2722,14 @@ void WorldRenderer::renderWorld(
          .skipCulling = zPrepass});
     }
 
-    if (zPrepass && (Z_PREPASS_OBJ_MASK & SRPO_ALL) != SRPO_ALL)
+    if (zPrepass && (Z_PREPASS_OBJ_MASK & SRPO_OPAQUE) != SRPO_OPAQUE)
     {
       ETNA_PROFILE_GPU(cmd_buf, deferredGpassNoZ);
 
       renderScene(
         cmd_buf,
         {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
-         .flags = ~Z_PREPASS_OBJ_MASK,
+         .flags = SRPO_OPAQUE & ~Z_PREPASS_OBJ_MASK,
          .vctx = &mainViewContext.value(),
          .vparams = mainViewParams,
          .rtargetInfo =
@@ -2846,6 +2851,28 @@ void WorldRenderer::renderWorld(
         {});
 
       gbufferResolver->render(cmd_buf, hdrTarget.get(), hdrTarget.getView({}));
+    }
+
+    const bool hasTransparentPass = water && enableWater;
+    if (hasTransparentPass)
+    {
+      ETNA_PROFILE_GPU(cmd_buf, transparentForwardPass);
+
+      renderScene(
+        cmd_buf,
+        {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
+         .flags = SRPO_TRANSPARENT,
+         .vctx = &mainViewContext.value(),
+         .vparams = mainViewParams,
+         .rtargetInfo =
+           {{{0, 0}, {resolution.x, resolution.y}},
+            {{.image = hdrTarget.get(),
+              .view = hdrTarget.getView({}),
+              .loadOp = vk::AttachmentLoadOp::eLoad}},
+            {.image = mainViewDepth.get(),
+             .view = mainViewDepth.getView({}),
+             .loadOp = vk::AttachmentLoadOp::eLoad}},
+         .skipCulling = true});
     }
 
     {
@@ -3897,9 +3924,8 @@ static void generate_random_trash(std::span<glm::vec2> out_samples)
   def_rng generator(42);
   std::ranges::copy(
     std::views::iota(0) //
-      | std::views::transform([&](auto) {
-          return glm::vec2{randomFloats(generator), randomFloats(generator)};
-        }) //
+      | std::views::transform(
+          [&](auto) { return glm::vec2{randomFloats(generator), randomFloats(generator)}; }) //
       | std::views::take(out_samples.size()),
     out_samples.begin());
 }
