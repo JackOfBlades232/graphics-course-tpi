@@ -51,6 +51,7 @@ layout(binding = 12, set = 0) uniform sampler2D aoBuffer;
 #include "bindless.glsl.inc"
 #include "brdf.glsl.inc"
 #include "lights.glsl.inc"
+#include "skybox.glsl.inc"
 
 layout(location = 0) in VS_OUT
 {
@@ -108,29 +109,12 @@ void main(void)
   
   // Calculate lighting
   
-  vec3 ambientCol = constants.ambientLightCoeff;
-  if (constants.useSkybox != 0 && constants.useSkyboxForAmbient != 0)
-  {
-    float maxLod = floor(log2(bindless_tex_cube_size(skybox.cubemapTexSmp).x));
-    ambientCol *= sample_bindless_tex_cube_lod(skybox.cubemapTexSmp, vec3(0.f, 1.f, 0.f), maxLod).xyz;
-  }
-
-  const vec3 ambient = ambientCol * ao * albedo;
-
-  vec4 debugMultiplier = vec4(1.f);
+  const vec3 ambient = albedo * constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox);
 
   // For directional shadows
   CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);
 
-  if (constants.drawCascadesInSolidColor != 0)
-  {
-    const vec3 DEBUG_CASCADE_COLORS[4] = {
-      vec3(1.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 1.f)};
-
-    debugMultiplier = csmd.cascade == CSM_CASCADE_COUNT
-      ? vec4(1.f, 0.f, 1.f, 1.f)
-      : vec4(DEBUG_CASCADE_COLORS[csmd.cascade & 3], 1.f);
-  }
+  vec4 debugMultiplier = get_csm_cascade_debug_multiplier(csmd);
 
   if (mat != MATERIAL_PBR && mat != MATERIAL_DIFFUSE)
   {
@@ -145,33 +129,21 @@ void main(void)
 
   for (int i = 0; i < lights.directionalLightsCount; ++i)
   {
-    const vec3 lightIntensity = 
-      lights.directionalLights[i].color * lights.directionalLights[i].intensity;
-    const vec3 lightDir = -normalize(lights.directionalLights[i].direction);
-
-    float shadow = 1.f;
-
-    if (constants.useDirectionalLightShadows != 0 && csmd.cascade < CSM_CASCADE_COUNT)
-    {
-      if (SHADOW_TECHNIQUE_IS_PCF(constants.directionalLightShadowsTechnique))
-      {
-        shadow = calculate_csm_shadow_pcf(
-          i, csmd.cascade, pos, csmd.zIntoCascadeStart / csmd.zCascadeSize, csmd.zIntoCascadeEnd / csmd.zNextCascadeSize);
-      }
-    }
+    const LightData ld = calculate_directional_light_data(i, pos, csmd);
 
     vec3 diff = vec3(0.f);
     vec3 spec = vec3(0.f);
 
     if (mat == MATERIAL_PBR)
-      calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, diff, spec);
+      calculate_pbr(normal, ld.direction, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, diff, spec);
     else if (mat == MATERIAL_DIFFUSE)
-      calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, diff, spec);
+      calculate_pbr_diff_spec_gloss(normal, ld.direction, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, diff, spec);
 
-    totDiff += diff * shadow * lightIntensity;
-    totSpec += spec * shadow * lightIntensity;
+    totDiff += diff * ld.shadow * ld.intensity;
+    totSpec += spec * ld.shadow * ld.intensity;
   }
 
+  // @TODO: refactor to LightData
   for (int i = 0; i < lights.pointLightsCount; ++i)
   {
     const vec3 lightIntensity = lights.pointLights[i].color * lights.pointLights[i].intensity;

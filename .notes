@@ -172,7 +172,6 @@ v Geometry
     - Plug it into water fragment shader
     - Add alpha blend to pipeline and alpha to shader
     - Move to a separate renderpass
-    - Add reactive mask for TAA
   - Plan BRDF
     - Read Tessendorf of water lighting
     - Look up water lighting models on the inet
@@ -182,6 +181,8 @@ v Geometry
   - Sky reflection
     - Sample sky cubemap
     - Add specular reflections with fresnel
+  - TAA
+    - Add reactive mask for TAA
 - Plan shore interaction implementation
   - How we create the shore outline data
   - How we factor it in -- probably just attenuation and foam?

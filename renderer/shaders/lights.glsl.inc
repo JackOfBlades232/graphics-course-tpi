@@ -1,5 +1,5 @@
-#ifndef CSM_H_INCLUDED
-#define CSM_H_INCLUDED
+#ifndef LIGHTSINC_H_INCLUDED
+#define LIGHTSINC_H_INCLUDED
 
 #include "cpp_glsl_compat.h"
 
@@ -141,6 +141,48 @@ CsmCascadeLightingData get_cascade_data_for_view_pos(vec3 view_pos, in ViewParam
   return data;
 }
 
-#endif // CSM_H_INCLUDED
+vec4 get_csm_cascade_debug_multiplier(CsmCascadeLightingData data)
+{
+  vec4 debugMultiplier = vec4(1.f);
+  if (constants.drawCascadesInSolidColor != 0)
+  {
+    const vec3 DEBUG_CASCADE_COLORS[4] = {
+      vec3(1.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 1.f)};
+
+    debugMultiplier = data.cascade == CSM_CASCADE_COUNT
+      ? vec4(1.f, 0.f, 1.f, 1.f)
+      : vec4(DEBUG_CASCADE_COLORS[data.cascade & 3], 1.f);
+  }
+  return debugMultiplier;
+}
+
+struct LightData
+{
+  vec3 intensity;
+  vec3 direction;
+  float shadow;
+};
+
+LightData calculate_directional_light_data(int lid, vec3 pos, in CsmCascadeLightingData data)
+{
+  LightData ld;
+  ld.intensity = lights.directionalLights[lid].color * lights.directionalLights[lid].intensity;
+  ld.direction = -normalize(lights.directionalLights[lid].direction);
+
+  ld.shadow = 1.f;
+
+  if (constants.useDirectionalLightShadows != 0 && data.cascade < CSM_CASCADE_COUNT)
+  {
+    if (SHADOW_TECHNIQUE_IS_PCF(constants.directionalLightShadowsTechnique))
+    {
+      ld.shadow = calculate_csm_shadow_pcf(
+        lid, data.cascade, pos, data.zIntoCascadeStart / data.zCascadeSize, data.zIntoCascadeEnd / data.zNextCascadeSize);
+    }
+  }
+
+  return ld;
+}
+
+#endif // LIGHTSINC_H_INCLUDED
 
 

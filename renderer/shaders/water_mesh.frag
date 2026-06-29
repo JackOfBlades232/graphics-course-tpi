@@ -55,6 +55,7 @@ layout(location = 0) in TE_OUT
 #include "bindless.glsl.inc"
 #include "brdf.glsl.inc"
 #include "lights.glsl.inc"
+#include "skybox.glsl.inc"
 
 struct Cascade
 {
@@ -126,28 +127,9 @@ void main(void)
   float alpha = turbulence < 0.f ? foamAlpha : waterAlpha;
   vec3 normal = wNormal;
 
-  // @TODO: pull out
-  vec3 ambientCol = constants.ambientLightCoeff;
-  if (constants.useSkybox != 0 && constants.useSkyboxForAmbient != 0)
-  {
-    float maxLod = floor(log2(bindless_tex_cube_size(skybox.cubemapTexSmp).x));
-    ambientCol *= sample_bindless_tex_cube_lod(skybox.cubemapTexSmp, vec3(0.f, 1.f, 0.f), maxLod).xyz;
-  }
-  const vec3 ambient = ambientCol * albedo;
+  const vec3 ambient = albedo * constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox);
 
   CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);
-
-  // @TODO: pull out
-  vec4 debugMultiplier = vec4(1.f);
-  if (constants.drawCascadesInSolidColor != 0)
-  {
-    const vec3 DEBUG_CASCADE_COLORS[4] = {
-      vec3(1.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 1.f)};
-
-    debugMultiplier = csmd.cascade == CSM_CASCADE_COUNT
-      ? vec4(1.f, 0.f, 1.f, 1.f)
-      : vec4(DEBUG_CASCADE_COLORS[csmd.cascade & 3], 1.f);
-  }
 
   vec3 totDiff = vec3(0.f);
   vec3 totSpec = vec3(0.f);
@@ -155,32 +137,18 @@ void main(void)
   // @TODO: pull out
   for (int i = 0; i < lights.directionalLightsCount; ++i)
   {
-    const vec3 lightIntensity = 
-      lights.directionalLights[i].color * lights.directionalLights[i].intensity;
-    const vec3 lightDir = -normalize(lights.directionalLights[i].direction);
-
-    float shadow = 1.f;
-
-    if (constants.useDirectionalLightShadows != 0 && csmd.cascade < CSM_CASCADE_COUNT)
-    {
-      if (SHADOW_TECHNIQUE_IS_PCF(constants.directionalLightShadowsTechnique))
-      {
-        shadow = calculate_csm_shadow_pcf(
-          i, csmd.cascade, surf.wPos, csmd.zIntoCascadeStart / csmd.zCascadeSize, csmd.zIntoCascadeEnd / csmd.zNextCascadeSize);
-      }
-    }
-
+    const LightData ld = calculate_directional_light_data(i, surf.wPos, csmd);
     vec3 diff = vec3(0.f);
     vec3 spec = vec3(0.f);
-
     // @TODO: proper brdf
-    calculate_pbr(normal, lightDir, viewVec, roughness, 0.f, albedo, 0.f, vec3(0.f), diff, spec);
-
-    totDiff += diff * shadow * lightIntensity;
-    totSpec += spec * shadow * lightIntensity;
+    calculate_pbr(normal, ld.direction, viewVec, roughness, 0.f, albedo, 0.f, vec3(0.f), diff, spec);
+    totDiff += diff * ld.shadow * ld.intensity;
+    totSpec += spec * ld.shadow * ld.intensity;
   }
 
   // @TODO: point and spot lights?
+
+  vec4 debugMultiplier = get_csm_cascade_debug_multiplier(csmd);
 
   vec3 color = ambient + totDiff + totSpec;
   out_fragColor = vec4(debugMultiplier.xyz * color, alpha);
