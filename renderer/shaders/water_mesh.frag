@@ -155,7 +155,7 @@ void main(void)
     vec3 diff = vec3(0.f);
     vec3 spec = vec3(0.f);
     // @TODO: proper brdf
-    calculate_pbr(normal, ld.direction, viewVec, roughness, 0.f, albedo, 0.f, vec3(0.f), diff, spec);
+    calculate_pbr(normal, ld.direction, viewVec, 0.f, roughness, albedo, 0.f, vec3(0.f), diff, spec);
     totDiff += diff * ld.shadow * ld.intensity;
     totSpec += spec * ld.shadow * ld.intensity;
   }
