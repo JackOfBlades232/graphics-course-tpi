@@ -198,7 +198,16 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "hdr_target",
       .format = vk::Format::eR32G32B32A32Sfloat,
-      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled});
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
+        vk::ImageUsageFlagBits::eTransferDst});
+  createManagedImage(
+    hdrOpaqueTarget,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "hdr_opaque_target",
+      .format = vk::Format::eR32G32B32A32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
+        vk::ImageUsageFlagBits::eTransferSrc});
 
   createManagedImage(
     mainViewDepth,
@@ -206,8 +215,16 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .extent = vk::Extent3D{resolution.x, resolution.y, 1},
       .name = "main_view_depth",
       .format = vk::Format::eD32Sfloat,
-      .imageUsage =
-        vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled});
+      .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment |
+        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst});
+  createManagedImage(
+    mainViewOpaqueDepth,
+    etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "main_view_opaque_depth",
+      .format = vk::Format::eD32Sfloat,
+      .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment |
+        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc});
 
   // @TODO: compact gbuffer
   createManagedImage(
@@ -954,25 +971,11 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
       {.attachments =
          {
            vk::PipelineColorBlendAttachmentState{
-             .blendEnable = vk::True,
-             .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
-             .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-             .colorBlendOp = vk::BlendOp::eAdd,
-             .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-             .dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-             .alphaBlendOp = vk::BlendOp::eAdd,
              .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
            },
          },
        .logicOp = vk::LogicOp::eSet},
-    .depthConfig =
-      {
-        .depthTestEnable = vk::True,
-        .depthWriteEnable = vk::False,
-        .depthCompareOp = vk::CompareOp::eLessOrEqual,
-        .maxDepthBounds = 1.f,
-      },
     .fragmentShaderOutput =
       {
         .colorAttachmentFormats = {vk::Format::eR32G32B32A32Sfloat},
@@ -1410,6 +1413,14 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         waterBinds.emplace_back(11, (skybox ? skybox->source : stubUniBuffer).genBinding());
         waterBinds.emplace_back(12, lights->get().genBinding());
         waterBinds.emplace_back(13, lightMatricesBuf.genBinding());
+        waterBinds.emplace_back(
+          14,
+          hdrOpaqueTarget.genBinding(
+            defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
+        waterBinds.emplace_back(
+          15,
+          mainViewOpaqueDepth.genBinding(
+            defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
           waterBinds.emplace_back(
@@ -2682,6 +2693,10 @@ void WorldRenderer::renderWorld(
         .buffer = lightMatricesBuf.get(),
         .size = sizeof(LightMatrices)}});
 
+    const bool hasDistortionPass = water && enableWater;
+    const auto& opaqueTarget = hasDistortionPass ? hdrOpaqueTarget : hdrTarget;
+    const auto& opaqueDepth = hasDistortionPass ? mainViewOpaqueDepth : mainViewDepth;
+
     constexpr auto Z_PREPASS_OBJ_MASK = SRPO_OPAQUE;
     static_assert(Z_PREPASS_OBJ_MASK != 0);
 
@@ -2699,7 +2714,7 @@ void WorldRenderer::renderWorld(
          .rtargetInfo = {
            {{0, 0}, {resolution.x, resolution.y}},
            {},
-           {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}}});
+           {.image = opaqueDepth.get(), .view = opaqueDepth.getView({})}}});
     }
 
     {
@@ -2723,8 +2738,8 @@ void WorldRenderer::renderWorld(
               {.image = gbufTransmission.get(), .view = gbufTransmission.getView({})},
               {.image = motionVectors.curBuf().get(), .view = motionVectors.curBuf().getView({})},
             },
-            {.image = mainViewDepth.get(),
-             .view = mainViewDepth.getView({}),
+            {.image = opaqueDepth.get(),
+             .view = opaqueDepth.getView({}),
              .loadOp = zPrepass ? vk::AttachmentLoadOp::eLoad : vk::AttachmentLoadOp::eClear}},
          .skipCulling = zPrepass});
     }
@@ -2756,8 +2771,8 @@ void WorldRenderer::renderWorld(
              {.image = motionVectors.curBuf().get(),
               .view = motionVectors.curBuf().getView({}),
               .loadOp = vk::AttachmentLoadOp::eLoad}},
-            {.image = mainViewDepth.get(),
-             .view = mainViewDepth.getView({}),
+            {.image = opaqueDepth.get(),
+             .view = opaqueDepth.getView({}),
              .loadOp = vk::AttachmentLoadOp::eLoad}},
          .skipCulling = true});
     }
@@ -2776,8 +2791,7 @@ void WorldRenderer::renderWorld(
              gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{
              1,
-             mainViewDepth.genBinding(
-               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+             opaqueDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{
              2,
              ssaoBuffer.prevBuf().genBinding(
@@ -2837,7 +2851,7 @@ void WorldRenderer::renderWorld(
              defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{
            7,
-           mainViewDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           opaqueDepth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
          etna::Binding{8, constants->get().genBinding()},
          etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
          etna::Binding{10, mainViewContext->viewDataBuf.genBinding()},
@@ -2857,30 +2871,92 @@ void WorldRenderer::renderWorld(
          bindlessSamplersDsetFrag.getVkSet()},
         {});
 
-      gbufferResolver->render(cmd_buf, hdrTarget.get(), hdrTarget.getView({}));
+      gbufferResolver->render(cmd_buf, opaqueTarget.get(), opaqueTarget.getView({}));
     }
 
-    const bool hasTransparentPass = water && enableWater;
-    if (hasTransparentPass)
+    if (hasDistortionPass)
     {
-      ETNA_PROFILE_GPU(cmd_buf, transparentForwardPass);
+      {
+        ETNA_PROFILE_GPU(cmd_buf, distortionCopyTarget);
 
-      renderScene(
-        cmd_buf,
-        {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
-         .flags = SRPO_TRANSPARENT,
-         .vctx = &mainViewContext.value(),
-         .vparams = mainViewParams,
-         .rtargetInfo =
-           {{{0, 0}, {resolution.x, resolution.y}},
-            {{.image = hdrTarget.get(),
-              .view = hdrTarget.getView({}),
-              .loadOp = vk::AttachmentLoadOp::eLoad}},
-            {.image = mainViewDepth.get(),
-             .view = mainViewDepth.getView({}),
-             .loadOp = vk::AttachmentLoadOp::eLoad,
-             .storeOp = vk::AttachmentStoreOp::eNone}},
-         .skipCulling = true});
+        ETNA_ASSERT(&opaqueTarget != &hdrTarget);
+        ETNA_ASSERT(&opaqueDepth != &mainViewDepth);
+
+        etna::set_state(
+          cmd_buf,
+          opaqueTarget.get(),
+          vk::PipelineStageFlagBits2::eTransfer,
+          vk::AccessFlagBits2::eTransferRead,
+          vk::ImageLayout::eTransferSrcOptimal,
+          vk::ImageAspectFlagBits::eColor);
+        etna::set_state(
+          cmd_buf,
+          opaqueDepth.get(),
+          vk::PipelineStageFlagBits2::eTransfer,
+          vk::AccessFlagBits2::eTransferRead,
+          vk::ImageLayout::eTransferSrcOptimal,
+          vk::ImageAspectFlagBits::eDepth);
+        etna::set_state(
+          cmd_buf,
+          hdrTarget.get(),
+          vk::PipelineStageFlagBits2::eTransfer,
+          vk::AccessFlagBits2::eTransferWrite,
+          vk::ImageLayout::eTransferDstOptimal,
+          vk::ImageAspectFlagBits::eColor);
+        etna::set_state(
+          cmd_buf,
+          mainViewDepth.get(),
+          vk::PipelineStageFlagBits2::eTransfer,
+          vk::AccessFlagBits2::eTransferWrite,
+          vk::ImageLayout::eTransferDstOptimal,
+          vk::ImageAspectFlagBits::eDepth);
+        etna::flush_barriers(cmd_buf);
+
+        vk::ImageCopy copies[] = {
+          {.srcSubresource = {.aspectMask = vk::ImageAspectFlagBits::eColor, .layerCount = 1},
+           .srcOffset = {0, 0, 0},
+           .dstSubresource = {.aspectMask = vk::ImageAspectFlagBits::eColor, .layerCount = 1},
+           .dstOffset = {0, 0, 0},
+           .extent = {resolution.x, resolution.y, 1}},
+          {.srcSubresource = {.aspectMask = vk::ImageAspectFlagBits::eDepth, .layerCount = 1},
+           .srcOffset = {0, 0, 0},
+           .dstSubresource = {.aspectMask = vk::ImageAspectFlagBits::eDepth, .layerCount = 1},
+           .dstOffset = {0, 0, 0},
+           .extent = {resolution.x, resolution.y, 1}}};
+
+        cmd_buf.copyImage(
+          opaqueTarget.get(),
+          vk::ImageLayout::eTransferSrcOptimal,
+          hdrTarget.get(),
+          vk::ImageLayout::eTransferDstOptimal,
+          {copies[0]});
+        cmd_buf.copyImage(
+          opaqueDepth.get(),
+          vk::ImageLayout::eTransferSrcOptimal,
+          mainViewDepth.get(),
+          vk::ImageLayout::eTransferDstOptimal,
+          {copies[1]});
+      }
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, distortionForwardPass);
+
+        renderScene(
+          cmd_buf,
+          {.pass = wireframe ? SceneRenderingPass::WIRE_COLOR : SceneRenderingPass::COLOR,
+           .flags = SRPO_DISTORTION,
+           .vctx = &mainViewContext.value(),
+           .vparams = mainViewParams,
+           .rtargetInfo =
+             {{{0, 0}, {resolution.x, resolution.y}},
+              {{.image = hdrTarget.get(),
+                .view = hdrTarget.getView({}),
+                .loadOp = vk::AttachmentLoadOp::eLoad}},
+              {.image = mainViewDepth.get(),
+               .view = mainViewDepth.getView({}),
+               .loadOp = vk::AttachmentLoadOp::eLoad}},
+           .skipCulling = true});
+      }
     }
 
     {

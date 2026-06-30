@@ -98,8 +98,9 @@ private:
     SRPO_WATER = 1 << 3,
 
     SRPO_OPAQUE = SRPO_STATIC | SRPO_TERRAIN | SRPO_VEGETATION,
-    SRPO_TRANSPARENT = SRPO_WATER,
-    SRPO_ALL = SRPO_OPAQUE | SRPO_WATER
+    SRPO_DISTORTION = SRPO_WATER,
+    SRPO_TRANSPARENT = 0,
+    SRPO_ALL = SRPO_OPAQUE | SRPO_DISTORTION | SRPO_TRANSPARENT
   };
 
   struct SceneRenderPassInfo
@@ -285,10 +286,10 @@ private:
   SrgbEncoder* srgbEncoder = nullptr;
 
   etna::Image ldrTarget;
-  etna::Image hdrTarget;
+  etna::Image hdrTarget, hdrOpaqueTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image gbufTransmission; // @SPEED piggy
-  etna::Image mainViewDepth;
+  etna::Image mainViewDepth, mainViewOpaqueDepth;
 
   etna::Buffer lightMatricesBuf;
 

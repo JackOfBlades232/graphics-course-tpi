@@ -32,6 +32,7 @@ layout(location = 0) out TE_OUT
 {
   vec3 wPos;
   vec2 wInitPlanarPos;
+  vec2 screenTc;
 } teOut;
 
 vec3 sample_cascade(vec2 world_planar_pos, uint cid)
@@ -66,4 +67,6 @@ void main(void)
   teOut.wInitPlanarPos = pointXZ;
 
   gl_Position = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(teOut.wPos, 1.f);
+
+  teOut.screenTc = 0.5f * gl_Position.xy / gl_Position.w + 0.5f;
 }

@@ -45,10 +45,14 @@ layout(binding = 13, set = 0) readonly buffer light_mats_t
   LightMatrices mats;
 };
 
+layout(binding = 14, set = 0) uniform sampler2D opaqueColor;
+layout(binding = 15, set = 0) uniform sampler2D opaqueDepth;
+
 layout(location = 0) in TE_OUT
 {
   vec3 wPos;
   vec2 wInitPlanarPos;
+  vec2 screenTc;
 } surf;
 
 #include "motion_vectors.glsl.inc"
@@ -92,6 +96,16 @@ Cascade sample_cascade(vec2 world_planar_pos, uint cid)
 
 void main(void)
 {
+  vec4 opaqueBgContrubution = vec4(0.f);
+
+  const float d = textureLod(opaqueDepth, surf.screenTc, 0.f).x;
+  if (d > 0.f)
+  {
+    // @TEST
+    const vec3 c = textureLod(opaqueColor, surf.screenTc, 0.f).xyz;
+    opaqueBgContrubution = vec4(c, 1.f);
+  }
+
   float dydx = 0.f;
   float dydz = 0.f;
   float dxdx = 0.f;
@@ -151,6 +165,11 @@ void main(void)
   vec4 debugMultiplier = get_csm_cascade_debug_multiplier(csmd);
 
   vec3 color = ambient + totDiff + totSpec;
-  out_fragColor = vec4(debugMultiplier.xyz * color, alpha);
+  out_fragColor = vec4(
+    mix(
+      debugMultiplier.xyz * color,
+      opaqueBgContrubution.xyz,
+      (1.f - alpha) * opaqueBgContrubution.w),
+    1.f);
 }
 
