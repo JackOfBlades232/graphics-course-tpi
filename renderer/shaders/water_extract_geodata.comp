@@ -28,7 +28,7 @@ void main(void)
 
   const ivec2 imSz    = imageSize(displacement[cascade]);
   const ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
-  
+
   if (imCoord.x >= imSz.x || imCoord.y >= imSz.y)
     return;
 

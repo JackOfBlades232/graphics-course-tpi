@@ -178,5 +178,4 @@ void main()
   occ = 1.f - occ / float(capSample - firstSample);
   occ = occ * (1.f - prevOccW) + prevOcc * prevOccW;
   out_ao = vec4(occ, fragDepth, float(validHistoryLength), normalizedKernelCull);
-  //out_ao = vec4(normalizedKernelCull, fragDepth, float(validHistoryLength), normalizedKernelCull);
 }

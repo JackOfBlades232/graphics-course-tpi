@@ -94,16 +94,29 @@ Cascade sample_cascade(vec2 world_planar_pos, uint cid)
   return data;
 }
 
+// @TODO: pull out
+vec3 depth_and_tc_to_pos(float depth, vec2 tc)
+{
+  const vec4 cameraToScreen = vec4(2.f * tc - 1.f, depth, 1.f); 
+  const vec4 posHom = inverse(calc_adjusted_viewproj_mat(viewParams, viewData)) * cameraToScreen;
+  return posHom.xyz / posHom.w;
+}
+
 void main(void)
 {
-  vec4 opaqueBgContrubution = vec4(0.f);
-
   const float d = textureLod(opaqueDepth, surf.screenTc, 0.f).x;
+  const vec3 reconstructedPos = depth_and_tc_to_pos(max(d, 0.f), surf.screenTc);
+
+  const vec3 waterRefractionColor = vec3(0.003f, 0.599f, 0.812f);
+  const vec3 waterRefractionCoeff = pow(waterRefractionColor, vec3(1.f/10.f));
+  const float waterRefractionHFactor = 10.f;
+  vec3 waterColor = waterRefractionColor;
   if (d > 0.f)
   {
-    // @TEST
-    const vec3 c = textureLod(opaqueColor, surf.screenTc, 0.f).xyz;
-    opaqueBgContrubution = vec4(c, 1.f);
+
+    const vec3 c = waterRefractionCoeff * textureLod(opaqueColor, surf.screenTc, 0.f).xyz;
+    const float depthDiff = surf.wPos.y - reconstructedPos.y; 
+    waterColor = mix(c, waterRefractionColor, clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
   }
 
   float dydx = 0.f;
@@ -130,7 +143,6 @@ void main(void)
   const vec3 viewPos = (viewParams.mView * vec4(surf.wPos, 1.f)).xyz;
 
   // @TEST
-  vec3 waterColor = vec3(0.f, 0.4f, 1.f);
   float waterRoughness = 0.1f;
   float waterAlpha = 0.85f;
   vec3 foamColor = vec3(1.f, 1.f, 1.f);
@@ -198,11 +210,6 @@ void main(void)
   vec4 debugMultiplier = get_csm_cascade_debug_multiplier(csmd);
 
   vec3 color = ambient + totDiff + totSpec;
-  out_fragColor = vec4(
-    mix(
-      debugMultiplier.xyz * color,
-      opaqueBgContrubution.xyz,
-      (1.f - alpha) * opaqueBgContrubution.w),
-    1.f);
+  out_fragColor = vec4(debugMultiplier.xyz * color, 1.f);
 }
 

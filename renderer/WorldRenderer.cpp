@@ -1415,7 +1415,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         waterBinds.emplace_back(13, lightMatricesBuf.genBinding());
         waterBinds.emplace_back(
           14,
-          hdrOpaqueTarget.genBinding(
+          gbufAlbedo.genBinding(
             defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
         waterBinds.emplace_back(
           15,
