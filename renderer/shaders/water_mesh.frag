@@ -104,20 +104,6 @@ vec3 depth_and_tc_to_pos(float depth, vec2 tc)
 
 void main(void)
 {
-  const float d = textureLod(opaqueDepth, surf.screenTc, 0.f).x;
-  const vec3 reconstructedPos = depth_and_tc_to_pos(max(d, 0.f), surf.screenTc);
-
-  const vec3 waterRefractionColor = vec3(0.003f, 0.599f, 0.812f);
-  const float waterRefractionHFactor = 10.f;
-  vec3 waterColor = waterRefractionColor;
-  if (d > 0.f)
-  {
-
-    const vec3 c = waterRefractionColor * textureLod(opaqueColor, surf.screenTc, 0.f).xyz;
-    const float depthDiff = surf.wPos.y - reconstructedPos.y; 
-    waterColor = mix(c, waterRefractionColor, clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
-  }
-
   float dydx = 0.f;
   float dydz = 0.f;
   float dxdx = 0.f;
@@ -141,6 +127,31 @@ void main(void)
   const vec3 viewVec = normalize(viewParams.viewPos - surf.wPos);
   const vec3 viewPos = (viewParams.mView * vec4(surf.wPos, 1.f)).xyz;
 
+  const float d = textureLod(opaqueDepth, surf.screenTc, 0.f).x;
+  const vec3 reconstructedPos = depth_and_tc_to_pos(max(d, 0.f), surf.screenTc);
+
+  const vec3 waterRefractionColor = vec3(0.003f, 0.599f, 0.812f);
+  const vec3 waterSurfaceColor = vec3(0.465f, 0.797f, 0.991f);
+  const float waterRefractionHFactor = 10.f;
+  
+  vec3 waterColor = waterRefractionColor;
+  
+  if (d > 0.f)
+  {
+    // @TEST simple distortion
+    const float distortionFactor = 0.04f;
+    const vec2 distortedTc = surf.screenTc + (wNormal.xy + wNormal.xz) * 0.5f * distortionFactor;
+    const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
+    const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
+    const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
+    const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
+    const float depthDiff = surf.wPos.y - reconstructedPos.y; 
+
+    waterColor = mix(
+      textureLod(opaqueColor, refractionTc, 0.f).xyz * waterRefractionColor,
+      waterRefractionColor,
+      clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
+  }
   // @TEST
   float waterRoughness = 0.1f;
   float waterAlpha = 0.85f;
@@ -181,7 +192,7 @@ void main(void)
     float nlu = dot(nn, ll);
     float nl = max(nlu, 0.f);
 
-    spec = waterColor * conductor_frensel_shlick(vec3(0.0615636836452032f), hv);
+    spec = waterSurfaceColor * conductor_frensel_shlick(vec3(0.0615636836452032f), hv);
 
     vec3 enviColor = sample_skybox(enviDir, skybox);
     totSpec += (1.f - foamFactor) * spec * enviColor;

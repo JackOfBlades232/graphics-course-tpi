@@ -286,7 +286,7 @@ private:
   SrgbEncoder* srgbEncoder = nullptr;
 
   etna::Image ldrTarget;
-  etna::Image hdrTarget;
+  etna::Image hdrTarget, hdrOpaqueTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image gbufTransmission; // @SPEED piggy
   etna::Image mainViewDepth, mainViewOpaqueDepth;
