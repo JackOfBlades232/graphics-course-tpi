@@ -180,7 +180,7 @@ v Geometry
     v Formulate plan
     v Pull out and adjust brdf
     v Add linear depth sampling and mixing with underwater color
-    - Add environment reflection from reflected view vector with 3x3 sampling kernel
+    v Add environment reflection from reflected view vector
     - Research how to do realistic distortion via Snells law and add it
   - Foam
     - Tune foam lighting (generation seems fine already)
@@ -190,7 +190,8 @@ v Geometry
 - Plan shore interaction implementation
   - How we create the shore outline data
   - How we factor it in -- probably just attenuation and foam?
-- Move all appropriate params to settings and scene from shaders
+- Move all appropriate params to settings and scene from shaders (wind as well)
+- Add a dedicated scene with only ocean
 
 Fog
 - Gather task

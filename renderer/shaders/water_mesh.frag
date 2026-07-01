@@ -108,13 +108,12 @@ void main(void)
   const vec3 reconstructedPos = depth_and_tc_to_pos(max(d, 0.f), surf.screenTc);
 
   const vec3 waterRefractionColor = vec3(0.003f, 0.599f, 0.812f);
-  const vec3 waterRefractionCoeff = pow(waterRefractionColor, vec3(1.f/10.f));
   const float waterRefractionHFactor = 10.f;
   vec3 waterColor = waterRefractionColor;
   if (d > 0.f)
   {
 
-    const vec3 c = waterRefractionCoeff * textureLod(opaqueColor, surf.screenTc, 0.f).xyz;
+    const vec3 c = waterRefractionColor * textureLod(opaqueColor, surf.screenTc, 0.f).xyz;
     const float depthDiff = surf.wPos.y - reconstructedPos.y; 
     waterColor = mix(c, waterRefractionColor, clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
   }
@@ -155,13 +154,38 @@ void main(void)
   float roughness = mix(waterRoughness, foamRoughness, foamFactor);
   float alpha = mix(waterAlpha, foamAlpha, foamFactor);
   vec3 normal = wNormal;
+  vec3 enviDir = 2.f * normal * dot(viewVec, normal) - viewVec;
 
-  const vec3 ambient = albedo * constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox);
+  const vec3 ambient = foamFactor * albedo * constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox);
 
   CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);
 
   vec3 totDiff = vec3(0.f);
   vec3 totSpec = vec3(0.f);
+
+  {
+    vec3 spec = vec3(0.f);
+
+    // @TODO: pull out
+    vec3 n = normal;
+    vec3 l = enviDir;
+    vec3 v = viewVec;
+
+    vec3 nn = normalize(n);
+    vec3 ll = normalize(l);
+    vec3 vv = normalize(v);
+    vec3 hh = normalize(ll + vv);
+    float nv = max(dot(nn, vv), 0.f);
+    float hv = max(dot(hh, vv), 0.f);
+
+    float nlu = dot(nn, ll);
+    float nl = max(nlu, 0.f);
+
+    spec = waterColor * conductor_frensel_shlick(vec3(0.0615636836452032f), hv);
+
+    vec3 enviColor = sample_skybox(enviDir, skybox);
+    totSpec += (1.f - foamFactor) * spec * enviColor;
+  }
 
   // @TODO: pull out
   for (int i = 0; i < lights.directionalLightsCount; ++i)

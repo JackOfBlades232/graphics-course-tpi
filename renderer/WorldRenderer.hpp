@@ -286,7 +286,7 @@ private:
   SrgbEncoder* srgbEncoder = nullptr;
 
   etna::Image ldrTarget;
-  etna::Image hdrTarget, hdrOpaqueTarget;
+  etna::Image hdrTarget;
   etna::Image gbufAlbedo, gbufMaterial, gbufNormal;
   etna::Image gbufTransmission; // @SPEED piggy
   etna::Image mainViewDepth, mainViewOpaqueDepth;
@@ -390,7 +390,7 @@ private:
   float vegetationRenderingDistance = 100.f;
   float vegetationRenderingDropoffDistance = 80.f;
   glm::vec2 windDirection = glm::normalize(glm::vec2{1.f, 1.f});
-  float windStrength = 25.f;
+  float windStrength = 1.f;
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;

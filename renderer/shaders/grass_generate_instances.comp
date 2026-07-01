@@ -77,10 +77,10 @@ vec2 random_dir_notrig(vec2 seed)
 }
 
 vec3 calc_wind_pos_offset(
-  float t, float relAmp, float strengthPeriod, vec3 grassPos, float strengthFalloff, vec2 wvn, float shrinkFactor, float strScale)
+  float t, float relAmp, float strengthPeriod, vec3 grassPos, float strengthFalloff, vec2 wvn, float shrinkFactor, float strScale, float strPow)
 {
   float strengthOscillation = relAmp * wind_oscillator(strengthPeriod * t, grassPos.xz);
-  float strengthBase = constants.windStrength * strScale;
+  float strengthBase = pow(constants.windStrength * strScale, strPow);
 
   float windInfluenceAmt = strengthBase * (1.f + strengthOscillation) * strengthFalloff;
   vec2 windInfluence = wvn * windInfluenceAmt;
@@ -162,15 +162,16 @@ void main(void)
       const float plambda = 0.5f;
       const float pscale = 5.f;
       const float relAmp = 0.4f;
-      const float strScale = 0.01f;
+      const float strScale = 0.02f;
+      const float strPow = 0.3f;
 
       float strengthFalloff = lambda + (1.f - lambda) / (1.f + dist);
       float strengthPeriod = pscale * (plambda + (1.f - plambda) / (1.f + dist));
 
       culledInstances[instId].windOffset = calc_wind_pos_offset(
-        constants.time, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor, strScale);
+        constants.time, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor, strScale, strPow);
       culledInstances[instId].prevWindOffset = calc_wind_pos_offset(
-        constants.time - constants.dt, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor, strScale);
+        constants.time - constants.dt, relAmp, strengthPeriod, grassPos, strengthFalloff, wvn, shrinkFactor, strScale, strPow);
     }
   }
 }

@@ -15,14 +15,18 @@ vec3 get_envi_ambient_from_skybox(in SkyboxSourceData sb)
   return ambientCol;
 }
 
+vec3 sample_skybox(vec3 dir, in SkyboxSourceData sb)
+{
+  if (constants.useSkybox != 0)
+    return sample_bindless_tex_cube(skybox.cubemapTexSmp, dir).xyz;
+  else
+    return vec3(0.f);
+}
+
 vec3 sample_sky_light(vec3 dir, in SkyboxSourceData sb)
 {
-  vec3 skyColor = vec3(0.f);
+  vec3 skyColor = sample_skybox(dir, sb);
   vec3 sunColor = vec3(0.f);
-  if (constants.useSkybox != 0)
-  {
-    skyColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, dir).xyz;
-  }
   if (lights.directionalLightsCount > 0)
   {
     vec3 dirToSun = -normalize(lights.directionalLights[0].direction);

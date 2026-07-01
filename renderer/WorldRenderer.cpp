@@ -200,14 +200,6 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
         vk::ImageUsageFlagBits::eTransferDst});
-  createManagedImage(
-    hdrOpaqueTarget,
-    etna::Image::CreateInfo{
-      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-      .name = "hdr_opaque_target",
-      .format = vk::Format::eR32G32B32A32Sfloat,
-      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
-        vk::ImageUsageFlagBits::eTransferSrc});
 
   createManagedImage(
     mainViewDepth,
@@ -2694,7 +2686,7 @@ void WorldRenderer::renderWorld(
         .size = sizeof(LightMatrices)}});
 
     const bool hasDistortionPass = water && enableWater;
-    const auto& opaqueTarget = hasDistortionPass ? hdrOpaqueTarget : hdrTarget;
+    const auto& opaqueTarget = hdrTarget;
     const auto& opaqueDepth = hasDistortionPass ? mainViewOpaqueDepth : mainViewDepth;
 
     constexpr auto Z_PREPASS_OBJ_MASK = SRPO_OPAQUE;
@@ -2879,16 +2871,8 @@ void WorldRenderer::renderWorld(
       {
         ETNA_PROFILE_GPU(cmd_buf, distortionCopyTarget);
 
-        ETNA_ASSERT(&opaqueTarget != &hdrTarget);
         ETNA_ASSERT(&opaqueDepth != &mainViewDepth);
 
-        etna::set_state(
-          cmd_buf,
-          opaqueTarget.get(),
-          vk::PipelineStageFlagBits2::eTransfer,
-          vk::AccessFlagBits2::eTransferRead,
-          vk::ImageLayout::eTransferSrcOptimal,
-          vk::ImageAspectFlagBits::eColor);
         etna::set_state(
           cmd_buf,
           opaqueDepth.get(),
@@ -2896,13 +2880,6 @@ void WorldRenderer::renderWorld(
           vk::AccessFlagBits2::eTransferRead,
           vk::ImageLayout::eTransferSrcOptimal,
           vk::ImageAspectFlagBits::eDepth);
-        etna::set_state(
-          cmd_buf,
-          hdrTarget.get(),
-          vk::PipelineStageFlagBits2::eTransfer,
-          vk::AccessFlagBits2::eTransferWrite,
-          vk::ImageLayout::eTransferDstOptimal,
-          vk::ImageAspectFlagBits::eColor);
         etna::set_state(
           cmd_buf,
           mainViewDepth.get(),
@@ -2913,11 +2890,6 @@ void WorldRenderer::renderWorld(
         etna::flush_barriers(cmd_buf);
 
         vk::ImageCopy copies[] = {
-          {.srcSubresource = {.aspectMask = vk::ImageAspectFlagBits::eColor, .layerCount = 1},
-           .srcOffset = {0, 0, 0},
-           .dstSubresource = {.aspectMask = vk::ImageAspectFlagBits::eColor, .layerCount = 1},
-           .dstOffset = {0, 0, 0},
-           .extent = {resolution.x, resolution.y, 1}},
           {.srcSubresource = {.aspectMask = vk::ImageAspectFlagBits::eDepth, .layerCount = 1},
            .srcOffset = {0, 0, 0},
            .dstSubresource = {.aspectMask = vk::ImageAspectFlagBits::eDepth, .layerCount = 1},
@@ -2925,17 +2897,11 @@ void WorldRenderer::renderWorld(
            .extent = {resolution.x, resolution.y, 1}}};
 
         cmd_buf.copyImage(
-          opaqueTarget.get(),
-          vk::ImageLayout::eTransferSrcOptimal,
-          hdrTarget.get(),
-          vk::ImageLayout::eTransferDstOptimal,
-          {copies[0]});
-        cmd_buf.copyImage(
           opaqueDepth.get(),
           vk::ImageLayout::eTransferSrcOptimal,
           mainViewDepth.get(),
           vk::ImageLayout::eTransferDstOptimal,
-          {copies[1]});
+          {copies[0]});
       }
 
       {
