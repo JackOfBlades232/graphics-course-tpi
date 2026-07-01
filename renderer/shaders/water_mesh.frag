@@ -131,14 +131,17 @@ void main(void)
 
   // @TEST
   vec3 waterColor = vec3(0.f, 0.4f, 1.f);
-  float waterRoughness = 0.2f;
+  float waterRoughness = 0.1f;
   float waterAlpha = 0.85f;
   vec3 foamColor = vec3(1.f, 1.f, 1.f);
   float foamRoughness = 0.9f;
   float foamAlpha = 1.f;
-  vec3 albedo = turbulence < 0.f ? foamColor : waterColor;
-  float roughness = turbulence < 0.f ? foamRoughness : waterRoughness;
-  float alpha = turbulence < 0.f ? foamAlpha : waterAlpha;
+
+  float foamFactor = smoothstep(0.f, 1.f, clamp(0.5f - turbulence, 0.f, 1.f));
+
+  vec3 albedo = mix(waterColor, foamColor, foamFactor);
+  float roughness = mix(waterRoughness, foamRoughness, foamFactor);
+  float alpha = mix(waterAlpha, foamAlpha, foamFactor);
   vec3 normal = wNormal;
 
   const vec3 ambient = albedo * constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox);
@@ -154,8 +157,38 @@ void main(void)
     const LightData ld = calculate_directional_light_data(i, surf.wPos, csmd);
     vec3 diff = vec3(0.f);
     vec3 spec = vec3(0.f);
-    // @TODO: proper brdf
-    calculate_pbr(normal, ld.direction, viewVec, 0.f, roughness, albedo, 0.f, vec3(0.f), diff, spec);
+
+    // @TODO: pull out
+    vec3 n = normal;
+    vec3 l = ld.direction;
+    vec3 v = viewVec;
+
+    vec3 nn = normalize(n);
+    vec3 ll = normalize(l);
+    vec3 vv = normalize(v);
+    vec3 hh = normalize(ll + vv);
+    float nv = max(dot(nn, vv), 0.f);
+    float hl = max(dot(hh, ll), 0.f);
+    float hv = max(dot(hh, vv), 0.f);
+    float nh = max(dot(nn, hh), 0.f);
+
+    float nlu = dot(nn, ll);
+    float nl = max(nlu, 0.f);
+
+    if (nv < SHADER_EPSILON || nl < SHADER_EPSILON)
+    {
+      continue;
+    }
+
+    float a = roughness * roughness;
+    float a2 = a * a;
+    vec3 f = conductor_frensel_shlick(vec3(0.0615636836452032f), hv);
+    vec3 spec_bsdf = vec3(nl * specular_brdf(nl, nv, hl, hv, nh, a2));
+    vec3 diff_bsdf = vec3(nl * diffuse_brdf());
+
+    diff = (1.f - f) * diff_bsdf * albedo;
+    spec = f * spec_bsdf;
+
     totDiff += diff * ld.shadow * ld.intensity;
     totSpec += spec * ld.shadow * ld.intensity;
   }

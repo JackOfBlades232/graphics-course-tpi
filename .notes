@@ -175,22 +175,22 @@ v Geometry
     v Research how water fakes transparency
     v Set up fake transparent pass with opaque color resampling
   - Plan BRDF
-    - Read Tessendorf of water lighting
-    - Look up water lighting models on the inet
-    - Formulate plan
+    v Read Tessendorf of water lighting
+    v Look up water lighting models on the inet
+    v Formulate plan
+    v Pull out and adjust brdf
+    - Add linear depth sampling and mixing with underwater color
+    - Add environment reflection from reflected view vector with 3x3 sampling kernel
+    - Research how to do realistic distortion via Snells law and add it
   - Foam
     - Tune foam lighting (generation seems fine already)
-  - Sky reflection
-    - Sample sky cubemap
-    - Add specular reflections with fresnel
+  - Research caustics technique
   - TAA
     - Add reactive mask for TAA
 - Plan shore interaction implementation
   - How we create the shore outline data
   - How we factor it in -- probably just attenuation and foam?
-- Plan shore lighting features
-  - Bottom refraction(or distortion?)
-  - Caustics
+- Move all appropriate params to settings and scene from shaders
 
 Fog
 - Gather task

@@ -77,22 +77,8 @@ void main(void)
 
   if (depth <= 0.f)
   {
-    vec3 skyColor = vec3(0.f);
-    vec3 sunColor = vec3(0.f);
     // @TODO: unjitter skybox UV
-    vec3 dirToSky = normalize(reconstructedPos - viewParams.viewPos); 
-    if (constants.useSkybox != 0)
-    {
-      skyColor = sample_bindless_tex_cube(skybox.cubemapTexSmp, dirToSky).xyz;
-    }
-    if (lights.directionalLightsCount > 0)
-    {
-      vec3 dirToSun = -normalize(lights.directionalLights[0].direction);
-      vec3 sunCol = lights.directionalLights[0].intensity * lights.directionalLights[0].color;
-      float cosToSky = clamp(dot(dirToSky, dirToSun), 0.f, 1.f);
-      sunColor = sunCol * pow(cosToSky, 3500.f);
-    }
-    out_fragColor = vec4(skyColor + sunColor, 1.f);
+    out_fragColor = vec4(sample_sky_light(normalize(reconstructedPos - viewParams.viewPos), skybox), 1.f);
     return;
   }
 
