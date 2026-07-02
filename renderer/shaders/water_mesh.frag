@@ -132,25 +132,29 @@ void main(void)
 
   const vec3 waterRefractionColor = vec3(0.003f, 0.599f, 0.812f);
   const vec3 waterSurfaceColor = vec3(0.465f, 0.797f, 0.991f);
-  const float waterRefractionHFactor = 10.f;
+  const float waterRefractionHFactor = 5.f;
   
-  vec3 waterColor = waterRefractionColor;
+  vec3 waterRefractedLight = waterRefractionColor;
   
   if (d > 0.f)
   {
     // @TEST simple distortion
-    const float distortionFactor = 0.04f;
-    const vec2 distortedTc = surf.screenTc + (wNormal.xy + wNormal.xz) * 0.5f * distortionFactor;
+    const float distortionFactor = 0.1f;
+    const float wd = length(surf.wPos - viewParams.viewPos);
+    const vec2 distortedTc = surf.screenTc + (wNormal.xy + wNormal.xz) * 0.5f * distortionFactor / wd;
     const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
     const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
-    const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
-    const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
-    const float depthDiff = surf.wPos.y - reconstructedPos.y; 
+    if (distortedPos.y < surf.wPos.y)
+    {
+      const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
+      const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
+      const float depthDiff = surf.wPos.y - refractionPos.y; 
 
-    waterColor = mix(
-      textureLod(opaqueColor, refractionTc, 0.f).xyz * waterRefractionColor,
-      waterRefractionColor,
-      clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
+      waterRefractedLight = mix(
+        textureLod(opaqueColor, refractionTc, 0.f).xyz * waterRefractionColor,
+        waterRefractionColor,
+        clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
+    }
   }
   // @TEST
   float waterRoughness = 0.1f;
@@ -161,13 +165,13 @@ void main(void)
 
   float foamFactor = smoothstep(0.f, 1.f, clamp(0.5f - turbulence, 0.f, 1.f));
 
-  vec3 albedo = mix(waterColor, foamColor, foamFactor);
+  vec3 albedo = mix(waterSurfaceColor, foamColor, foamFactor);
   float roughness = mix(waterRoughness, foamRoughness, foamFactor);
   float alpha = mix(waterAlpha, foamAlpha, foamFactor);
   vec3 normal = wNormal;
   vec3 enviDir = 2.f * normal * dot(viewVec, normal) - viewVec;
 
-  const vec3 ambient = foamFactor * albedo * constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox);
+  const vec3 ambient = constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox) * mix(waterRefractedLight, albedo, foamFactor);
 
   CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);
 
