@@ -156,23 +156,26 @@ void main(void)
     const vec4 instersectionNdc = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(intersection, 1.f);
     const vec2 intersectionUv = (instersectionNdc.xy / instersectionNdc.w) * 0.5f + 0.5f;
 
-    const float wd = length(surf.wPos - viewParams.viewPos);
-    const vec2 distortedTc = clamp(intersectionUv, vec2(0.f), vec2(1.f));
+    const vec2 distortedTc = intersectionUv;
     const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
     const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
     const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
-    const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
 
-    const float rd = textureLod(opaqueDepth, refractionTc, 0.f).x;
-    const vec3 rc = textureLod(opaqueColor, refractionTc, 0.f).xyz;
-    const vec3 rp = depth_and_tc_to_pos(max(rd, 0.f), refractionTc);
+    if (refractionTc.x >= 0.f && refractionTc.x <= 1.f && refractionTc.y >= 0.f && refractionTc.y <= 1.f)
+    {
+      const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
 
-    const float depthDiff = surf.wPos.y - rp.y; 
+      const float rd = textureLod(opaqueDepth, refractionTc, 0.f).x;
+      const vec3 rc = textureLod(opaqueColor, refractionTc, 0.f).xyz;
+      const vec3 rp = depth_and_tc_to_pos(max(rd, 0.f), refractionTc);
 
-    waterRefractedLight = mix(
-      rc * waterRefractionColor,
-      waterRefractionColor,
-      clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
+      const float depthDiff = surf.wPos.y - rp.y; 
+
+      waterRefractedLight = mix(
+        rc * waterRefractionColor,
+        waterRefractionColor,
+        clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
+    }
   }
 
   float waterRoughness = 0.1f;
