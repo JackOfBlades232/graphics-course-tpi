@@ -147,6 +147,7 @@ struct NeighbourhoodData
   vec3 clampBoxMin;
   vec3 clampBoxMax;
   vec2 dilatedMotionVector;
+  float reactiveMask;
   float closestDepth;
 };
 
@@ -183,6 +184,7 @@ NeighbourhoodData sample_neighbourhood(vec2 uv, in ViewParams params)
   vec3 sigma = sqrt(abs((m2 / 9.f) - (mu * mu)));
   const float gamma = 1.f;
   nd.dilatedMotionVector = textureLod(motionVectors, closestDepthUv, 0).xy;
+  nd.reactiveMask = textureLod(motionVectors, uv, 0).z;
   nd.clampBoxMin = minCol;
   nd.clampBoxMax = maxCol;
   nd.clipBoxMin = mu - gamma * sigma;
@@ -225,8 +227,8 @@ void main(void)
       prevCol = clamp(prevCol, neiData.clampBoxMin, neiData.clampBoxMax);
       prevCol = clip_to_aabb_center(prevCol, neiData.clipBoxMin, neiData.clipBoxMax);
 
-      float sourceW = constants.taaEmaCoeff;
-      float histW = 1.f - sourceW;
+      float histW = (1.f - constants.taaEmaCoeff) * (1.f - neiData.reactiveMask);
+      float sourceW = 1.f - histW;
       vec3 curCompressed = curCol / (max(curCol.x, max(curCol.y, curCol.z)) + 1.f);
       vec3 prevCompressed = prevCol / (max(prevCol.x, max(prevCol.y, prevCol.z)) + 1.f);
       float curLuminance = ldr_luminance(curCompressed);

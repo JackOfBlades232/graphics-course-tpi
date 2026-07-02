@@ -10,6 +10,7 @@
 
 
 layout(location = 0) out vec4 out_fragColor;
+layout(location = 1) out vec3 out_motionVector;
 
 layout(binding = 3, set = 0) uniform sampler2D derivatives[WATER_CASCADE_COUNT];
 layout(binding = 4, set = 0) uniform sampler2D turbulence[WATER_CASCADE_COUNT];
@@ -250,5 +251,18 @@ void main(void)
 
   vec3 color = ambient + totDiff + totSpec;
   out_fragColor = vec4(debugMultiplier.xyz * color, 1.f);
+
+  vec4 prevNdc = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(surf.wPos, 1.f);
+  vec2 prevNdcXy = prevNdc.xy / prevNdc.w;
+
+  get_static_pixel_motion_vector(
+    gl_FragCoord.xy,
+    constants.mainTargetResolution,
+    prevNdcXy,
+    get_subpixel_uv_jitter(viewParams),
+    viewParams.prevSubpixelUvJitter,
+    out_motionVector);
+
+  out_motionVector.z = 0.9f;
 }
 

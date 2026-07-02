@@ -181,10 +181,10 @@ v Geometry
     v Pull out and adjust brdf
     v Add linear depth sampling and mixing with underwater color
     v Add environment reflection from reflected view vector
-    - Add simple normal-based distortion
+    v Add simple normal-based distortion
     - Research how to do realistic distortion via Snells law and add it
-  - TAA
-    - Add reactive mask for TAA
+  v TAA
+    v Add reactive mask for TAA
   - Research and add caustics
 - Plan shore interaction implementation
   - How we create the shore outline data

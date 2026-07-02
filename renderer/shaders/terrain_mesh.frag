@@ -13,7 +13,7 @@ layout(location = 0) out vec4 out_fragAlbedo;
 layout(location = 1) out vec3 out_fragMaterial;
 layout(location = 2) out vec3 out_fragNormal;
 layout(location = 3) out vec4 out_fragTransmission;
-layout(location = 4) out vec2 out_motionVector;
+layout(location = 4) out vec3 out_motionVector;
 
 layout(binding = 8, set = 0) uniform constants_t
 {
