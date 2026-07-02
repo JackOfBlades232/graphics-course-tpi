@@ -183,6 +183,7 @@ v Geometry
     v Add environment reflection from reflected view vector
     v Add simple normal-based distortion
     v Research how to do a more realistic distortion via Snells law and add it
+    - Fix SSRR issues with biases and wrong sampling
   v TAA
     v Add reactive mask for TAA
   - Caustics

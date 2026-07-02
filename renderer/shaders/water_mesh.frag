@@ -156,28 +156,20 @@ void main(void)
     const vec4 instersectionNdc = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(intersection, 1.f);
     const vec2 intersectionUv = (instersectionNdc.xy / instersectionNdc.w) * 0.5f + 0.5f;
 
-    if (
-      intersectionUv.x <= 1.f && intersectionUv.x >= 0.f && 
-      intersectionUv.y <= 1.f && intersectionUv.y >= 0.f)
-    {
-      const float wd = length(surf.wPos - viewParams.viewPos);
-      const vec2 distortedTc = intersectionUv;
-      const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
-      const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
-      const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
-      const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
-      const float depthDiff = surf.wPos.y - refractionPos.y; 
+    const float wd = length(surf.wPos - viewParams.viewPos);
+    const vec2 distortedTc = clamp(intersectionUv, vec2(0.f), vec2(1.f));
+    const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
+    const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
+    const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
+    const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
+    const float depthDiff = surf.wPos.y - refractionPos.y; 
 
-      if (length(distortedPos - viewParams.viewPos) + refractionScreenDepth > length(surf.wPos - viewParams.viewPos))
-      {
-        waterRefractedLight = mix(
-          textureLod(opaqueColor, refractionTc, 0.f).xyz * waterRefractionColor,
-          waterRefractionColor,
-          clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
-      }
-    }
+    waterRefractedLight = mix(
+      textureLod(opaqueColor, refractionTc, 0.f).xyz * waterRefractionColor,
+      waterRefractionColor,
+      clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
   }
-  // @TEST
+
   float waterRoughness = 0.1f;
   float waterAlpha = 0.85f;
   vec3 foamColor = vec3(1.f, 1.f, 1.f);
@@ -283,6 +275,6 @@ void main(void)
     viewParams.prevSubpixelUvJitter,
     out_motionVector);
 
-  out_motionVector.z = 0.9f;
+  out_motionVector.z = 0.25f;
 }
 
