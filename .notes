@@ -183,9 +183,9 @@ v Geometry
     v Add environment reflection from reflected view vector
     v Add simple normal-based distortion
     v Research how to do a more realistic distortion via Snells law and add it
-    - Fix SSRR issues with biases and wrong sampling
+    v Fix SSRR issues with biases and wrong sampling
       v Depth attenuation
-      - Screen edge bands
+      x Screen edge bands -- leaving it in, that's screenspace for you
   v TAA
     v Add reactive mask for TAA -- not great (accelerated convergence on all water), but enough I guess
   - Caustics
