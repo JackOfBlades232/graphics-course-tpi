@@ -162,10 +162,15 @@ void main(void)
     const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
     const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
     const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
-    const float depthDiff = surf.wPos.y - refractionPos.y; 
+
+    const float rd = textureLod(opaqueDepth, refractionTc, 0.f).x;
+    const vec3 rc = textureLod(opaqueColor, refractionTc, 0.f).xyz;
+    const vec3 rp = depth_and_tc_to_pos(max(rd, 0.f), refractionTc);
+
+    const float depthDiff = surf.wPos.y - rp.y; 
 
     waterRefractedLight = mix(
-      textureLod(opaqueColor, refractionTc, 0.f).xyz * waterRefractionColor,
+      rc * waterRefractionColor,
       waterRefractionColor,
       clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
   }
@@ -275,6 +280,6 @@ void main(void)
     viewParams.prevSubpixelUvJitter,
     out_motionVector);
 
-  out_motionVector.z = 0.25f;
+  out_motionVector.z = 0.5f;
 }
 
