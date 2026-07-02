@@ -139,22 +139,42 @@ void main(void)
   
   if (d > 0.f)
   {
-    // @TEST simple distortion
-    const float distortionFactor = 0.1f;
-    const float wd = length(surf.wPos - viewParams.viewPos);
-    const vec2 distortedTc = surf.screenTc + (wNormal.xy + wNormal.xz) * 0.5f * distortionFactor / wd;
-    const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
-    const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
-    if (distortedPos.y < surf.wPos.y)
+    const float refractionIndex = 1.333f;
+    const float outgoingCosine = dot(wNormal, viewVec);
+    const float outgoingSine = sqrt(1.f - outgoingCosine * outgoingCosine);
+    const float incomingSine = outgoingSine / refractionIndex;
+    const float incomingCosine = sqrt(1.f - incomingSine * incomingSine);
+    const vec3 tangent = normalize(viewVec - wNormal * dot(viewVec, wNormal));
+    const vec3 refractedVector = -(wNormal * incomingCosine + tangent * incomingSine);
+    
+    const float refractionScreenDepth = 0.5f;
+    const float linz = dot(surf.wPos - viewParams.viewPos, viewParams.viewDir);
+    const float screenZ = linz + refractionScreenDepth;
+
+    const float t = (screenZ - linz) / dot(refractedVector, viewParams.viewDir);
+    const vec3 intersection = surf.wPos + t * refractedVector;
+    const vec4 instersectionNdc = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(intersection, 1.f);
+    const vec2 intersectionUv = (instersectionNdc.xy / instersectionNdc.w) * 0.5f + 0.5f;
+
+    if (
+      intersectionUv.x <= 1.f && intersectionUv.x >= 0.f && 
+      intersectionUv.y <= 1.f && intersectionUv.y >= 0.f)
     {
+      const float wd = length(surf.wPos - viewParams.viewPos);
+      const vec2 distortedTc = intersectionUv;
+      const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
+      const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
       const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
       const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
       const float depthDiff = surf.wPos.y - refractionPos.y; 
 
-      waterRefractedLight = mix(
-        textureLod(opaqueColor, refractionTc, 0.f).xyz * waterRefractionColor,
-        waterRefractionColor,
-        clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
+      if (length(distortedPos - viewParams.viewPos) + refractionScreenDepth > length(surf.wPos - viewParams.viewPos))
+      {
+        waterRefractedLight = mix(
+          textureLod(opaqueColor, refractionTc, 0.f).xyz * waterRefractionColor,
+          waterRefractionColor,
+          clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
+      }
     }
   }
   // @TEST

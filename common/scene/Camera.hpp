@@ -128,6 +128,7 @@ inline ViewParams view_params_for_cam(
     params.viewPos =
       glm::vec3(params.mInverseView[3][0], params.mInverseView[3][1], params.mInverseView[3][2]) /
       params.mInverseView[3][3];
+    params.viewDir = glm::normalize(glm::mat3(params.mInverseView) * glm::vec3(0.f, 0.f, 1.f));
   }
 
   // pass jitter
@@ -208,6 +209,7 @@ inline ViewParams view_params_for_cam(
     params.viewPos =
       glm::vec3(params.mInverseView[3][0], params.mInverseView[3][1], params.mInverseView[3][2]) /
       params.mInverseView[3][3];
+    params.viewDir = glm::normalize(glm::mat3(params.mInverseView) * glm::vec3(0.f, 0.f, 1.f));
   }
 
   // pass jitter

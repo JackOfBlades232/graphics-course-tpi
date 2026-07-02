@@ -82,6 +82,8 @@ struct ViewParams
   shader_uint pad2_;
   shader_vec2 prevSubpixelUvJitter;
   shader_vec2 pad3_;
+  shader_vec3 viewDir;
+  shader_uint pad4_;
 };
 
 shader_inline shader_vec2 get_subpixel_uv_jitter(ViewParams params)
