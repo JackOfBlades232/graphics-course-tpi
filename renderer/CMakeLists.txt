@@ -45,4 +45,8 @@ target_add_shaders(renderer
   shaders/water_time_spectra_gen.comp
   shaders/water_double_fft.comp
   shaders/water_extract_geodata.comp
+  shaders/water_generate_caustic_map.comp
+  shaders/water_clear_caustic_map.comp
+  shaders/water_caustics_debug.frag
+  shaders/quad.vert
 )

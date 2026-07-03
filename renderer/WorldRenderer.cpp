@@ -581,6 +581,41 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .name = "water_data"});
     memcpy(water->source.map(), &water->sourceData, sizeof(water->sourceData));
 
+    water->caustics = create_buffer(etna::Buffer::CreateInfo{
+      .size = WATER_CAUSTIC_MAP_RES * WATER_CAUSTIC_MAP_RES * sizeof(uint32_t),
+      .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "caustics_accum"});
+
+    debugDrawers["water_caustics*vis"] = DebugDrawer{
+      [this](vk::CommandBuffer cb, vk::Image ti, vk::ImageView tiv) {
+        if (water && enableWater)
+        {
+          auto programInfo = etna::get_shader_program("water_caustics_debug");
+          auto set = etna::create_descriptor_set(
+            programInfo.getDescriptorLayoutId(0),
+            cb,
+            {etna::Binding{0, water->caustics.genBinding()}});
+
+          etna::RenderTargetState renderTargets(
+            cb,
+            {{0, 0}, {(resolution.y / 2), resolution.y / 2}},
+            {{.image = ti, .view = tiv, .loadOp = vk::AttachmentLoadOp::eLoad}},
+            {});
+
+          cb.bindDescriptorSets(
+            vk::PipelineBindPoint::eGraphics,
+            waterCausticMapDebug.getVkPipelineLayout(),
+            0,
+            {set.getVkSet()},
+            {});
+          cb.bindPipeline(
+            vk::PipelineBindPoint::eGraphics, waterCausticMapDebug.getVkPipeline());
+          cb.draw(3, 1, 0, 0);
+        }
+      },
+      [] {}};
+
     for (size_t i = 0; auto& cascade : water->cascades)
     {
       createManagedImage(
@@ -754,6 +789,14 @@ void WorldRenderer::loadShaders()
   etna::create_program("water_double_fft", {RENDERER_SHADERS_ROOT "water_double_fft.comp.spv"});
   etna::create_program(
     "water_extract_geodata", {RENDERER_SHADERS_ROOT "water_extract_geodata.comp.spv"});
+  etna::create_program(
+    "water_generate_caustic_map", {RENDERER_SHADERS_ROOT "water_generate_caustic_map.comp.spv"});
+  etna::create_program(
+    "water_clear_caustic_map", {RENDERER_SHADERS_ROOT "water_clear_caustic_map.comp.spv"});
+  etna::create_program(
+    "water_caustics_debug",
+    {RENDERER_SHADERS_ROOT "water_caustics_debug.frag.spv",
+     RENDERER_SHADERS_ROOT "quad.vert.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -964,7 +1007,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
          .logicOp = vk::LogicOp::eSet},
       .fragmentShaderOutput =
         {
-          .colorAttachmentFormats = {vk::Format::eR32G32B32A32Sfloat, vk::Format::eR32G32B32A32Sfloat},
+          .colorAttachmentFormats =
+            {vk::Format::eR32G32B32A32Sfloat, vk::Format::eR32G32B32A32Sfloat},
           .depthAttachmentFormat = vk::Format::eD32Sfloat,
         },
     };
@@ -1025,6 +1069,32 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
   waterTimeSpectraGenerate = pipelineManager.createComputePipeline("water_time_spectra_gen", {});
   waterDoubleFFT = pipelineManager.createComputePipeline("water_double_fft", {});
   waterExtractGeodata = pipelineManager.createComputePipeline("water_extract_geodata", {});
+  waterClearCausticMap = pipelineManager.createComputePipeline("water_clear_caustic_map", {});
+  waterGenerateCausticMap = pipelineManager.createComputePipeline("water_generate_caustic_map", {});
+  waterCausticMapDebug = pipelineManager.createGraphicsPipeline(
+    "water_caustics_debug",
+    {
+      .blendingConfig =
+        {.attachments =
+           {
+             vk::PipelineColorBlendAttachmentState{
+               .blendEnable = vk::True,
+               .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+               .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+               .colorBlendOp = vk::BlendOp::eAdd,
+               .srcAlphaBlendFactor = vk::BlendFactor::eSrcAlpha,
+               .dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+               .alphaBlendOp = vk::BlendOp::eAdd,
+               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+             },
+           },
+         .logicOp = vk::LogicOp::eClear},
+      .fragmentShaderOutput =
+        {
+          .colorAttachmentFormats = {swapchain_format},
+        },
+    });
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -1847,7 +1917,7 @@ void WorldRenderer::renderWorld(
         {
           ETNA_PROFILE_GPU(cmd_buf, waterIndepGenCalc);
           auto programInfo = etna::get_shader_program("water_time_indep_spectra_gen");
-          std::vector<etna::Binding> binds{}; // @SPEED piggy
+          std::vector<etna::Binding> binds{};
           for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
           {
             binds.emplace_back(
@@ -1884,7 +1954,7 @@ void WorldRenderer::renderWorld(
         {
           ETNA_PROFILE_GPU(cmd_buf, waterIndepGenConjugate);
           auto programInfo = etna::get_shader_program("water_time_indep_spectra_conjugate");
-          std::vector<etna::Binding> binds{}; // @SPEED piggy
+          std::vector<etna::Binding> binds{};
           for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
           {
             binds.emplace_back(
@@ -1915,7 +1985,7 @@ void WorldRenderer::renderWorld(
       {
         ETNA_PROFILE_GPU(cmd_buf, waterTimeDepGen);
         auto programInfo = etna::get_shader_program("water_time_spectra_gen");
-        std::vector<etna::Binding> binds{}; // @SPEED piggy
+        std::vector<etna::Binding> binds{};
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
           binds.emplace_back(
@@ -1958,7 +2028,7 @@ void WorldRenderer::renderWorld(
       {
         ETNA_PROFILE_GPU(cmd_buf, waterFFT);
         auto programInfo = etna::get_shader_program("water_double_fft");
-        std::vector<etna::Binding> binds{}; // @SPEED piggy
+        std::vector<etna::Binding> binds{};
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
           binds.emplace_back(
@@ -2053,7 +2123,7 @@ void WorldRenderer::renderWorld(
       {
         ETNA_PROFILE_GPU(cmd_buf, waterExtract);
         auto programInfo = etna::get_shader_program("water_extract_geodata");
-        std::vector<etna::Binding> binds{}; // @SPEED piggy
+        std::vector<etna::Binding> binds{};
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
           binds.emplace_back(
@@ -2102,6 +2172,104 @@ void WorldRenderer::renderWorld(
       {
         gen_mips(cmd_buf, water->cascades[c].derivatives);
         gen_mips(cmd_buf, water->cascades[c].turbulence);
+      }
+
+      // @TODO: optional feature
+      {
+        ETNA_PROFILE_GPU(cmd_buf, waterCaustics);
+
+        emit_barriers(
+          cmd_buf,
+          {vk::BufferMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .srcAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+            .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .dstAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+            .buffer = water->caustics.get(),
+            .size = WATER_CAUSTIC_MAP_RES * WATER_CAUSTIC_MAP_RES * sizeof(uint32_t)}});
+
+        {
+          ETNA_PROFILE_GPU(cmd_buf, waterCausticsClear);
+          auto programInfo = etna::get_shader_program("water_clear_caustic_map");
+          auto set = etna::create_descriptor_set(
+            programInfo.getDescriptorLayoutId(0),
+            cmd_buf,
+            {etna::Binding{0, water->caustics.genBinding()}});
+          cmd_buf.bindDescriptorSets(
+            vk::PipelineBindPoint::eCompute,
+            waterClearCausticMap.getVkPipelineLayout(),
+            0,
+            {set.getVkSet()},
+            {});
+          cmd_buf.bindPipeline(
+            vk::PipelineBindPoint::eCompute, waterClearCausticMap.getVkPipeline());
+          cmd_buf.dispatch(
+            get_linear_wg_count(WATER_CAUSTIC_MAP_RES, WATER_WORKGROUP_DIM),
+            get_linear_wg_count(WATER_CAUSTIC_MAP_RES, WATER_WORKGROUP_DIM),
+            1);
+        }
+
+        emit_barriers(
+          cmd_buf,
+          {vk::BufferMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+            .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .dstAccessMask =
+              vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+            .buffer = water->caustics.get(),
+            .size = WATER_CAUSTIC_MAP_RES * WATER_CAUSTIC_MAP_RES * sizeof(uint32_t)}});
+
+        {
+          ETNA_PROFILE_GPU(cmd_buf, waterCausticsGen);
+          auto programInfo = etna::get_shader_program("water_generate_caustic_map");
+          std::vector<etna::Binding> binds{};
+          binds.emplace_back(0, water->caustics.genBinding());
+          for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
+          {
+            binds.emplace_back(
+              1,
+              water->cascades[c].displacement.genBinding(
+                defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+              uint32_t(c));
+            binds.emplace_back(
+              2,
+              water->cascades[c].derivatives.genBinding(
+                defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+              uint32_t(c));
+            binds.emplace_back(
+              3,
+              water->cascades[c].turbulence.genBinding(
+                defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+              uint32_t(c));
+          }
+          auto set = etna::create_descriptor_set(
+            programInfo.getDescriptorLayoutId(0), cmd_buf, std::move(binds));
+          etna::flush_barriers(cmd_buf);
+          cmd_buf.bindDescriptorSets(
+            vk::PipelineBindPoint::eCompute,
+            waterGenerateCausticMap.getVkPipelineLayout(),
+            0,
+            {set.getVkSet()},
+            {});
+          cmd_buf.bindPipeline(
+            vk::PipelineBindPoint::eCompute, waterGenerateCausticMap.getVkPipeline());
+          cmd_buf.dispatch(
+            get_linear_wg_count(WATER_CAUSTIC_MAP_RES, WATER_WORKGROUP_DIM),
+            get_linear_wg_count(WATER_CAUSTIC_MAP_RES, WATER_WORKGROUP_DIM),
+            1);
+        }
+
+        emit_barriers(
+          cmd_buf,
+          {vk::BufferMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .srcAccessMask =
+              vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+            .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+            .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
+            .buffer = water->caustics.get(),
+            .size = WATER_CAUSTIC_MAP_RES * WATER_CAUSTIC_MAP_RES * sizeof(uint32_t)}});
       }
     }
 

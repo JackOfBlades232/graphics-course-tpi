@@ -27,6 +27,8 @@
 
 #define WATER_TESSHQUAD_CHUNK_TESSELLATION_FACTOR 64
 
+#define WATER_CAUSTIC_MAP_RES 512
+
 struct WaterSourceData
 {
   float waterLevel;

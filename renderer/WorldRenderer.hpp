@@ -192,9 +192,9 @@ private:
       etna::Image displacement;
       etna::Image derivatives;
       etna::Image turbulence;
-      // @TODO: cascade L and other params
     } cascades[WATER_CASCADE_COUNT]{};
-    etna::Buffer source{};
+    etna::Buffer source;
+    etna::Buffer caustics;
     WaterSourceData sourceData{};
   };
 
@@ -277,6 +277,10 @@ private:
   etna::ComputePipeline waterTimeSpectraGenerate{};
   etna::ComputePipeline waterDoubleFFT{};
   etna::ComputePipeline waterExtractGeodata{};
+  etna::ComputePipeline waterGenerateCausticMap{};
+  etna::ComputePipeline waterClearCausticMap{};
+
+  etna::GraphicsPipeline waterCausticMapDebug{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};
 
