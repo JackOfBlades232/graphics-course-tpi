@@ -131,9 +131,9 @@ void main(void)
   const float d = textureLod(opaqueDepth, surf.screenTc, 0.f).x;
   const vec3 reconstructedPos = depth_and_tc_to_pos(max(d, 0.f), surf.screenTc);
 
-  const vec3 waterRefractionColor = vec3(0.003f, 0.599f, 0.812f);
-  const vec3 waterSurfaceColor = vec3(0.465f, 0.797f, 0.991f);
-  const float waterRefractionHFactor = 5.f;
+  const vec3 waterRefractionColor = vec3(0.001f, 0.099f, 0.212f);
+  const vec3 waterSurfaceColor = vec3(0.265f, 0.597f, 0.791f);
+  const float waterRefractionHFactor = 10.f;
   
   vec3 waterRefractedLight = waterRefractionColor;
   
@@ -170,9 +170,9 @@ void main(void)
     const float depthDiff = surf.wPos.y - rp.y; 
 
     waterRefractedLight = mix(
-      rc * waterRefractionColor,
+      rc,
       waterRefractionColor,
-      clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f));
+      smoothstep(0.f, 1.f, clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f)));
   }
 
   float waterRoughness = 0.1f;
@@ -221,7 +221,7 @@ void main(void)
     totSpec += (1.f - foamFactor) * spec * enviColor;
   }
 
-  const vec3 ambient = constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox) * mix((1.f - fresnel) * waterRefractedLight, albedo, foamFactor);
+  const vec3 ambient = mix((1.f - fresnel) * waterRefractedLight, constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox) * albedo, foamFactor);
 
   // @TODO: pull out
   for (int i = 0; i < lights.directionalLightsCount; ++i)
