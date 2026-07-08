@@ -131,9 +131,9 @@ void main(void)
   const float d = textureLod(opaqueDepth, surf.screenTc, 0.f).x;
   const vec3 reconstructedPos = depth_and_tc_to_pos(max(d, 0.f), surf.screenTc);
 
-  const vec3 waterRefractionColor = vec3(0.001f, 0.099f, 0.212f);
-  const vec3 waterSurfaceColor = vec3(0.265f, 0.597f, 0.791f);
-  const float waterRefractionHFactor = 10.f;
+  const vec3 waterRefractionColor = vec3(0.001f, 0.05f, 0.05f);
+  const vec3 waterSurfaceColor = vec3(0.165f, 0.397f, 0.491f);
+  const float waterRefractionHFactor = 5.f;
   
   vec3 waterRefractedLight = waterRefractionColor;
   
@@ -191,7 +191,6 @@ void main(void)
 
   CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);
 
-  vec3 totDiff = vec3(0.f);
   vec3 totSpec = vec3(0.f);
 
   vec3 fresnel;
@@ -227,7 +226,6 @@ void main(void)
   for (int i = 0; i < lights.directionalLightsCount; ++i)
   {
     const LightData ld = calculate_directional_light_data(i, surf.wPos, csmd);
-    vec3 diff = vec3(0.f);
     vec3 spec = vec3(0.f);
 
     // @TODO: pull out
@@ -258,10 +256,8 @@ void main(void)
     vec3 spec_bsdf = vec3(nl * specular_brdf(nl, nv, hl, hv, nh, a2));
     vec3 diff_bsdf = vec3(nl * diffuse_brdf());
 
-    diff = (1.f - f) * diff_bsdf * albedo;
     spec = f * spec_bsdf;
 
-    totDiff += diff * ld.shadow * ld.intensity;
     totSpec += spec * ld.shadow * ld.intensity;
   }
 
@@ -269,7 +265,7 @@ void main(void)
 
   vec4 debugMultiplier = get_csm_cascade_debug_multiplier(csmd);
 
-  vec3 color = ambient + totDiff + totSpec;
+  vec3 color = ambient + totSpec;
   out_fragColor = vec4(debugMultiplier.xyz * color, 1.f);
 
   vec4 prevNdc = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(surf.wPos, 1.f);
