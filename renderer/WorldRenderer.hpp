@@ -195,6 +195,7 @@ private:
     } cascades[WATER_CASCADE_COUNT]{};
     etna::Buffer source;
     etna::Buffer caustics;
+    etna::Image causticMap;
     WaterSourceData sourceData{};
   };
 
@@ -280,6 +281,7 @@ private:
   etna::ComputePipeline waterGenerateCausticMap{};
   etna::ComputePipeline waterClearCausticMap{};
 
+  etna::GraphicsPipeline waterCausticMapConvert{};
   etna::GraphicsPipeline waterCausticMapDebug{};
 
   std::vector<std::unique_ptr<IComponent>> rcomponents{};

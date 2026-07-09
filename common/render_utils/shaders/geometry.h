@@ -234,6 +234,17 @@ vec3 depth_and_tc_to_pos_with_mat(float depth, vec2 tc, mat4 ivpm)
   return posHom.xyz / posHom.w;
 }
 
+vec3 refract_vector(vec3 incoming, vec3 normal, float ior)
+{
+  const float outgoingCosine = dot(normal, -incoming);
+  const float outgoingSine = sqrt(1.f - outgoingCosine * outgoingCosine);
+  const float incomingSine = outgoingSine / ior;
+  const float incomingCosine = sqrt(1.f - incomingSine * incomingSine);
+  const vec3 tangent = normalize(normal * dot(incoming, normal) - incoming);
+  const vec3 refractedVector = -(normal * incomingCosine + tangent * incomingSine);
+  return refractedVector;
+}
+
 #endif
 
 #endif // GEOMETRY_H_INCLUDED

@@ -3,6 +3,7 @@
 #include <etna/Vulkan.hpp>
 #include <etna/Image.hpp>
 #include <etna/Buffer.hpp>
+#include <etna/ComputePipeline.hpp>
 
 #include <variant>
 

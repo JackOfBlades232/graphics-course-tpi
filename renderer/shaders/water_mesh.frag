@@ -15,6 +15,8 @@ layout(location = 1) out vec3 out_motionVector;
 layout(binding = 3, set = 0) uniform sampler2D derivatives[WATER_CASCADE_COUNT];
 layout(binding = 4, set = 0) uniform sampler2D turbulence[WATER_CASCADE_COUNT];
 
+layout(binding = 5, set = 0) uniform sampler2D caustics;
+
 layout(binding = 6, set = 0) uniform water_source_t
 {
   WaterSourceData source;
@@ -111,7 +113,6 @@ void main(void)
   float dzdz = 0.f;
   float turbulence = 0.f;
 
-  // @TEST
   for (uint cid = 0; cid < WATER_CASCADE_COUNT; ++cid)
   {
     Cascade data = sample_cascade(surf.wInitPlanarPos, cid);
@@ -139,13 +140,7 @@ void main(void)
   
   if (d > 0.f)
   {
-    const float refractionIndex = 1.333f;
-    const float outgoingCosine = dot(wNormal, viewVec);
-    const float outgoingSine = sqrt(1.f - outgoingCosine * outgoingCosine);
-    const float incomingSine = outgoingSine / refractionIndex;
-    const float incomingCosine = sqrt(1.f - incomingSine * incomingSine);
-    const vec3 tangent = normalize(viewVec - wNormal * dot(viewVec, wNormal));
-    const vec3 refractedVector = -(wNormal * incomingCosine + tangent * incomingSine);
+    const vec3 refractedVector = refract_vector(-viewVec, wNormal, 1.333f);
     
     const float refractionScreenDepth = 0.5f;
     const float linz = dot(surf.wPos - viewParams.viewPos, viewParams.viewDir);
@@ -164,10 +159,28 @@ void main(void)
     const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
 
     const float rd = textureLod(opaqueDepth, refractionTc, 0.f).x;
-    const vec3 rc = textureLod(opaqueColor, refractionTc, 0.f).xyz;
     const vec3 rp = depth_and_tc_to_pos(max(rd, 0.f), refractionTc);
 
     const float depthDiff = surf.wPos.y - rp.y; 
+    const float dist = length(viewParams.viewPos - rp);
+
+    vec3 rc = textureLod(opaqueColor, refractionTc, 0.f).xyz;
+
+    float causticFadeout = smoothstep(0.f, 1.f, clamp((150.f - dist) / 20.f, 0.f, 1.f));
+
+    if (lights.directionalLightsCount > 0 && causticFadeout > 0.f)
+    {
+      const vec2 causticTexelWorldSize = vec2(0.02f); // @TODO: dedup
+      const float causticApron = 0.05f;
+      const float causticBody = 1.f - 2.f * causticApron;
+      vec2 planarTOff = rp.xz - constants.toroidalUpdatePlayerWorldPos.xy;
+      vec2 cuv = fract(vec2(0.5f) + (1.f / causticBody) * (planarTOff / causticTexelWorldSize / vec2(WATER_CAUSTIC_MAP_RES)));
+      float caustic = texture(caustics, vec2(causticApron) + cuv * causticBody).x;
+      rc = mix(
+        rc,
+        lights.directionalLights[0].color * lights.directionalLights[0].intensity * 3.f * rc,
+        caustic * causticFadeout);
+    }
 
     waterRefractedLight = mix(
       rc,

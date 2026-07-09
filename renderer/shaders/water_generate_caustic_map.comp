@@ -4,6 +4,8 @@
 
 #include "water.h"
 #include "constants.h"
+#include "lights.h"
+#include "geometry.h"
 
 layout(local_size_x = WATER_WORKGROUP_DIM, local_size_y = WATER_WORKGROUP_DIM, local_size_z = 1) in;
 
@@ -16,15 +18,148 @@ layout(binding = 1, set = 0) uniform sampler2D displacement[WATER_CASCADE_COUNT]
 layout(binding = 2, set = 0) uniform sampler2D derivatives[WATER_CASCADE_COUNT];
 layout(binding = 3, set = 0) uniform sampler2D turbulence[WATER_CASCADE_COUNT];
 
+layout(binding = 6, set = 0) uniform water_source_t
+{
+  WaterSourceData source;
+};
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+layout(binding = 9, set = 0) uniform view_params_t
+{
+  ViewParams viewParams;
+};
+layout(binding = 10, set = 0) readonly buffer view_data_t
+{
+  ViewData viewData;
+};
+layout(binding = 11, set = 0) uniform light_data_t
+{
+  UniformLights lights;
+};
+layout(binding = 12, set = 0) readonly buffer light_mats_t
+{
+  LightMatrices mats;
+};
+
+#include "bindless.glsl.inc"
+#include "brdf.glsl.inc"
+#include "lights.glsl.inc"
+
+struct Cascade
+{
+  vec3 disp;
+  float dydx;
+  float dydz;
+  float dxdx;
+  float dzdz;
+  float turbulence;
+};
+
+Cascade sample_cascade(vec2 world_planar_pos, uint cid)
+{
+  float l = 0.f;
+  switch (cid)
+  {
+  case 0:  l = source.l0; break;
+  case 1:  l = source.l1; break;
+  case 2:  l = source.l2; break;
+  default:                break;
+  }
+
+  vec2 uv = world_planar_pos / l;
+
+  Cascade data;
+  data.disp = texture(displacement[cid], uv).xyz;
+  vec4 derivatives = texture(derivatives[cid], uv);
+  data.dydx = derivatives.x;
+  data.dydz = derivatives.y;
+  data.dxdx = derivatives.z;
+  data.dzdz = derivatives.w;
+  data.turbulence = texture(turbulence[cid], uv).x;
+
+  return data;
+}
+
 void main(void)
 {
+  const float causticFloorDepth = 0.5f;
+  const vec2 causticTexelWorldSize = vec2(0.02f);
+
   ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 imOffset = imCoord - ivec2(WATER_CAUSTIC_MAP_RES / 2);
 
   if (imCoord.x >= WATER_CAUSTIC_MAP_RES || imCoord.y >= WATER_CAUSTIC_MAP_RES)
     return;
-  
-  // @TEST
-  uint add = ((imCoord.x + imCoord.y) % 2 == 1) ? 100 : 0;
-  imCoord = imCoord / 2 * 2;
-  atomicAdd(accum[imCoord.x + WATER_CAUSTIC_MAP_RES * imCoord.y], add);
+
+  vec3 disp = vec3(0.f);
+  float dydx = 0.f;
+  float dydz = 0.f;
+  float dxdx = 0.f;
+  float dzdz = 0.f;
+  float turbulence = 0.f;
+
+  vec2 planarPos = constants.toroidalUpdatePlayerWorldPos.xy;
+  planarPos += vec2(imOffset) * causticTexelWorldSize;
+
+  for (uint cid = 0; cid < WATER_CASCADE_COUNT; ++cid)
+  {
+    Cascade data = sample_cascade(planarPos, cid);
+    disp += data.disp;
+    dydx += data.dydx;
+    dydz += data.dydz;
+    dxdx += data.dxdx;
+    dzdz += data.dzdz;
+    turbulence += data.turbulence;
+  }
+
+  float foamFactor = smoothstep(0.f, 1.f, clamp(0.5f - turbulence, 0.f, 1.f));
+  if (foamFactor >= 0.99f)
+    return;
+
+  // No water level involved -- caustics are in "centered" coords for simplicity
+  vec3 pos = vec3(planarPos.x, 0.f, planarPos.y) + disp;
+  vec2 slope = vec2(dydx / abs(1.f + dxdx), dydz / abs(1.f + dzdz));
+  vec3 normal = normalize(vec3(-slope.x, 1.f, -slope.y));
+
+  vec3 viewPos = (viewParams.mView * vec4(pos, 1.f)).xyz;
+  CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);
+
+  for (int i = 0; i < lights.directionalLightsCount; ++i)
+  {
+    LightData ld = calculate_directional_light_data(i, pos, csmd);
+    // if (ld.shadow <= 0.01f)
+    //   continue;
+    if (dot(ld.direction, normal) <= 0.f)
+      continue;
+
+    vec3 refractedVector = refract_vector(-ld.direction, normal, 1.333f);
+    float t = (-causticFloorDepth - pos.y) / refractedVector.y;
+    if (t < 0.f)
+      continue;
+
+    vec3 ray = refractedVector * t; 
+    vec3 intersection = pos + ray; 
+
+    float intensity =
+      luminance_bt601(ld.intensity) *
+      //ld.shadow *
+      (1.f - foamFactor) *
+      clamp(causticFloorDepth / t, 0.f, 1.f) *
+      abs(refractedVector.y);
+
+    uint encoded = uint(intensity * 255.f);
+
+    vec2 destOffset = intersection.xz - constants.toroidalUpdatePlayerWorldPos.xy;
+    ivec2 destCoord = ivec2(destOffset / causticTexelWorldSize) + ivec2(WATER_CAUSTIC_MAP_RES / 2);
+    if (
+      destCoord.x < 0 || destCoord.x >= WATER_CAUSTIC_MAP_RES ||
+      destCoord.y < 0 || destCoord.y >= WATER_CAUSTIC_MAP_RES)
+    {
+      continue;
+    }
+
+    atomicAdd(accum[destCoord.x + WATER_CAUSTIC_MAP_RES * destCoord.y], encoded);
+  }
 }

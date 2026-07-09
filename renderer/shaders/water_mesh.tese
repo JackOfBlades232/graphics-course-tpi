@@ -59,7 +59,6 @@ void main(void)
 
   vec3 disp = vec3(0.f);
 
-  // @TEST
   for (uint cid = 0; cid < WATER_CASCADE_COUNT; ++cid)
     disp += sample_cascade(pointXZ, cid);
 

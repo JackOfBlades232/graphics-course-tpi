@@ -1,10 +1,13 @@
 #include "Common.hpp"
 
+#include "shaders/draw.h"
+
 #include <utils/Common.hpp>
 
 #include <etna/Vulkan.hpp>
 #include <etna/Etna.hpp>
 #include <etna/GlobalContext.hpp>
+#include <etna/PipelineManager.hpp>
 
 
 void emit_barriers(
@@ -30,13 +33,12 @@ void emit_barriers(
       },
       barrier);
   }
-  cmd_buf.pipelineBarrier2(
-    vk::DependencyInfo{
-      .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-      .bufferMemoryBarrierCount = uint32_t(bufferBarriers.size()),
-      .pBufferMemoryBarriers = bufferBarriers.data(),
-      .imageMemoryBarrierCount = uint32_t(imageBarriers.size()),
-      .pImageMemoryBarriers = imageBarriers.data()});
+  cmd_buf.pipelineBarrier2(vk::DependencyInfo{
+    .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+    .bufferMemoryBarrierCount = uint32_t(bufferBarriers.size()),
+    .pBufferMemoryBarriers = bufferBarriers.data(),
+    .imageMemoryBarrierCount = uint32_t(imageBarriers.size()),
+    .pImageMemoryBarriers = imageBarriers.data()});
 }
 
 void gen_mips(vk::CommandBuffer cmd_buf, etna::Image& img)

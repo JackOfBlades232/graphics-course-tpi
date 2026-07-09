@@ -27,6 +27,8 @@ PBR/Bindless
 
 Terrain
 - Fix blurry details: seems like I f-d up and mipped twice (or, maybe, it's just lack of aniso).
+- Terrain last clip
+  - Research how it is done
 
 CSM
 v Prepare the frustum split
@@ -42,10 +44,11 @@ v Stabilize visuals
   v Fixed cascade pix size
   v Artifacts
   v Reverse Z to help zfighting
-- Soft shadows, perspective aliasing, far shadows
+- Soft shadows, perspective aliasing
   v Try hardware-style pcf
   v Try PCF blending for cascades
   v Try separate shadow pass with downsample + upsample for blur
+- Far shadows
   - VSM option for far cascade (last-inf)
   - ESM option for far cascade
   - VSM option for all
@@ -188,9 +191,9 @@ v Geometry
       x Screen edge bands -- leaving it in, that's screenspace for you
   v TAA
     v Add reactive mask for TAA -- not great (accelerated convergence on all water), but enough I guess
-  - Caustics
-    - Research
-    - Implement
+  v Caustics
+    v Research
+    v Implement -- quite shitty in terms of perf & has seams artifacts on fast movement, but works
 - Shore interaction
   - Research how a shore sdf is created
   - Add attenuation of wave amp near shore
@@ -200,6 +203,14 @@ v Geometry
   - Separate window for non-persistent scene param tuning
   - Turning off and tweaking features like screenspace refraction, caustics, etc
 - Add a dedicated scene with only ocean
+- Ocean last clip
+  - Research how it is done
+- Better caustics -- current impl is slow and has toroidal snapping artifacts
+  - Read up on how games do caustics now
+  - Check out dagor engine caustics code
+  - Test replacing with vertical backwards monte-carlo (GPU gems)
+  - Test using one cascade an matching tiling to avoid seams
+  - Test enabling shadows
 
 Fog
 - Gather task
