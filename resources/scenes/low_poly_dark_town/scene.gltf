@@ -3385,7 +3385,8 @@
     "JB_terrain",
     "JB_water",
     "JB_skybox",
-    "JB_noise"
+    "JB_noise",
+    "JB_wind"
   ],
   "images": [
     {
@@ -4054,9 +4055,56 @@
         }
       }
     },
-    "JB_water" : {
+    "JB_wind": {
+      "direction": [1.0, 1.0],
+      "strength": 2.0
+    },
+    "JB_water": {
       "level": -0.5,
-      "cascades": [250.0, 17.0, 5.0]
+      "cascades": [250.0, 17.0, 5.0],
+      "spectrum": {
+        "shallowCutoff": 20.0,
+        "depth": 500.0,
+        "fetch": 100000.0,
+        "scale": 1.0,
+        "gamma": 3.3,
+        "cascadeCutoffScale": 6.0
+      },
+      "shore": {
+        "depth": 4.0,
+        "shallowPow": 2.0,
+        "steepMaxCoeff": 0.3,
+        "steepWeight": 0.8,
+        "permanentFoamWeight": 0.5,
+        "permanentFoamDepth": 2.0,
+        "permanentFoamF": 1.15,
+        "cyclicFoamWeight": 1.0,
+        "cyclicFoamDepth": 15.0,
+        "cyclicFoamF": 3.0,
+        "cyclicFoamSpeed": 3.14
+      },
+      "lighting": {
+        "surfaceColor": [0.165, 0.397, 0.491],
+        "refraction": {
+          "color": [0.001, 0.05, 0.05],
+          "depth": 5.0,
+          "screen": 0.5,
+          "caustics": {
+            "projectionFloorDepth": 0.5,
+            "tilelWorldSize": 20.48,
+            "tileApronUvSize": 0.05,
+            "lightScale": 3.0,
+            "renderDistance": 150.0,
+            "renderFadeout": 20.0
+          }
+        },
+        "foam": {
+          "color": [1.0, 1.0, 1.0],
+          "roughness": 0.9,
+          "turbulenceBaseline": 2.5,
+          "turbulenceFadeout": 0.5
+        }
+      }
     },
     "JB_terrain" : {
       "heightmap" : {

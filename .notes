@@ -166,7 +166,7 @@ v Geometry
     v Fix normal artifacts (lowres/incorrect stuff) -- fixed by moving away from Phillips
     v Clamp frequencies in cascades to non-overlapping regions
     v Do another examination of jacobian calc
-- Lighting implementation
+v Lighting implementation
   v Refactor lighting to be an includable set of functions
     v Move BRDF-s to an inc file
     v Move shadows to an inc file
@@ -194,10 +194,10 @@ v Geometry
   v Caustics
     v Research
     v Implement -- quite shitty in terms of perf & has seams artifacts on fast movement, but works
-- Shore interaction
-  - Research how a shore sdf is created
-  - Add attenuation of wave amp near shore
-  - Add foam increase near shore
+v Shore interaction
+  v Research how a shore sdf is created
+  v Add attenuation of wave amp near shore
+  v Add foam increase near shore
 - Move all appropriate params to settings and scene from shaders (wind as well)
   - Spectre & color & foam & wind params to scene
   - Separate window for non-persistent scene param tuning
@@ -205,12 +205,6 @@ v Geometry
 - Add a dedicated scene with only ocean
 - Ocean last clip
   - Research how it is done
-- Better caustics -- current impl is slow and has toroidal snapping artifacts
-  - Read up on how games do caustics now
-  - Check out dagor engine caustics code
-  - Test replacing with vertical backwards monte-carlo (GPU gems)
-  - Test using one cascade an matching tiling to avoid seams
-  - Test enabling shadows
 
 Fog
 - Gather task

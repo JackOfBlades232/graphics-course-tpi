@@ -190,10 +190,8 @@ void main(void)
   }
 
   float waterRoughness = 0.1f;
-  float waterAlpha = 0.85f;
   vec3 foamColor = vec3(1.f, 1.f, 1.f);
   float foamRoughness = 0.9f;
-  float foamAlpha = 1.f;
 
   const float foamBaseline = 2.5f;
   turbulence -= foamBaseline;
@@ -202,7 +200,6 @@ void main(void)
 
   vec3 albedo = mix(waterSurfaceColor, foamColor, foamFactor);
   float roughness = mix(waterRoughness, foamRoughness, foamFactor);
-  float alpha = mix(waterAlpha, foamAlpha, foamFactor);
   vec3 normal = wNormal;
   vec3 enviDir = 2.f * normal * dot(viewVec, normal) - viewVec;
 
