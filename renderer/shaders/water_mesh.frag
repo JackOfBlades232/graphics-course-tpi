@@ -194,6 +194,8 @@ void main(void)
   float foamRoughness = 0.9f;
   float foamAlpha = 1.f;
 
+  const float foamBaseline = 2.5f;
+  turbulence -= foamBaseline;
   float foamFactor = smoothstep(0.f, 1.f, clamp(0.5f - turbulence, 0.f, 1.f));
 
   vec3 albedo = mix(waterSurfaceColor, foamColor, foamFactor);

@@ -38,9 +38,7 @@ void main(void)
   const vec3 disp = vec3(xzyDxz.x, xzyDxz.z, xzyDxz.y);
   const vec4 der = dYXdYZdXXdZZ;
 
-  const float lambda = 4.f;
-
-  const float j = (1.f + lambda * dYXdYZdXXdZZ.z) * (1.f + lambda * dYXdYZdXXdZZ.w) - lambda * lambda * xzyDxz.w * xzyDxz.w;
+  const float j = (1.f + dYXdYZdXXdZZ.z) * (1.f + dYXdYZdXXdZZ.w) - xzyDxz.w * xzyDxz.w;
   const float prevTurbulence = imageLoad(turbulence[cascade], imCoord).x;
   const float integratedTurbulence = prevTurbulence + constants.dt * 0.5f / max(j, 0.5f);
   const float newTurbulence = min(j, integratedTurbulence);

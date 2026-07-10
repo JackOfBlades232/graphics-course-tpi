@@ -396,7 +396,7 @@ private:
   float vegetationRenderingDistance = 100.f;
   float vegetationRenderingDropoffDistance = 80.f;
   glm::vec2 windDirection = glm::normalize(glm::vec2{1.f, 1.f});
-  float windStrength = 1.f;
+  float windStrength = 2.f;
   float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
   // @TODO: find a way to deal with jittering from lum outliers?
   float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
