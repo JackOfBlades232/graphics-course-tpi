@@ -1491,6 +1491,8 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
           water->causticMap.genBinding(
             defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
         waterBinds.emplace_back(6, water->source.genBinding());
+        waterBinds.emplace_back(
+          7, terrain ? terrain->source.genBinding() : stubUniBuffer.genBinding());
         waterBinds.emplace_back(8, constants->get().genBinding());
         waterBinds.emplace_back(9, srpi.vctx->viewParamsBuf.get().genBinding());
         waterBinds.emplace_back(10, srpi.vctx->viewDataBuf.genBinding());
@@ -1522,6 +1524,39 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
             water->cascades[c].turbulence.genBinding(
               defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
             uint32_t(c));
+        }
+        if (terrain)
+        {
+          for (const auto& b : terrain->geometryLevelsSamplerBindings)
+          {
+            waterBinds.push_back(b);
+            waterBinds.back().binding = 16;
+          }
+          for (const auto& b : terrain->normalLevelsSamplerBindings)
+          {
+            waterBinds.push_back(b);
+            waterBinds.back().binding = 17;
+          }
+          for (const auto& b : terrain->albedoLevelsSamplerBindings)
+          {
+            waterBinds.push_back(b);
+            waterBinds.back().binding = 18;
+          }
+          for (const auto& b : terrain->matdataLevelsSamplerBindings)
+          {
+            waterBinds.push_back(b);
+            waterBinds.back().binding = 19;
+          }
+        }
+        else
+        {
+          for (int i = 0; i < CLIPMAP_LEVEL_COUNT * 4; ++i)
+          {
+            waterBinds.emplace_back(
+              16 + i / CLIPMAP_LEVEL_COUNT,
+              sceneMgr->getPlanarTexStub().genBinding(
+                defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
+          }
         }
         return etna::create_descriptor_set(
           waterMeshPipeline->getProg(srpi.pass).getDescriptorLayoutId(0),

@@ -56,6 +56,7 @@ layout(location = 0) in TE_OUT
   vec3 wPos;
   vec2 wInitPlanarPos;
   vec2 screenTc;
+  float shoreFoamFactor;
 } surf;
 
 #include "motion_vectors.glsl.inc"
@@ -196,6 +197,7 @@ void main(void)
 
   const float foamBaseline = 2.5f;
   turbulence -= foamBaseline;
+  turbulence -= surf.shoreFoamFactor;
   float foamFactor = smoothstep(0.f, 1.f, clamp(0.5f - turbulence, 0.f, 1.f));
 
   vec3 albedo = mix(waterSurfaceColor, foamColor, foamFactor);

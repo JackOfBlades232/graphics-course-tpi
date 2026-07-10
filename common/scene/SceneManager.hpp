@@ -227,6 +227,9 @@ public:
   }
   const etna::Sampler& getSmp(SmpId sid) const { return samplers[size_t(sid)]; }
 
+  const etna::Image& getPlanarTexStub() const { return planarTexStub; }
+  const etna::Image& getCubeTexStub() const { return cubeTexStub; }
+
   std::span<const etna::Image> getPointLightMaps() const { return pointLightMaps; }
   std::span<const etna::Image> getSpotLightMaps() const { return spotLightMaps; }
   std::span<const etna::Image> getDirectionalLightCsmCascades() const

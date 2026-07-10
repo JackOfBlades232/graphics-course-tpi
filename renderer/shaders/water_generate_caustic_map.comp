@@ -118,6 +118,9 @@ void main(void)
   if (foamFactor >= 0.99f)
     return;
 
+  if (disp.y < -causticFloorDepth + 0.01f)
+    disp.y = 2.f * (-causticFloorDepth) + 0.02f - disp.y;
+
   // No water level involved -- caustics are in "centered" coords for simplicity
   vec3 pos = vec3(planarPos.x, 0.f, planarPos.y) + disp;
   vec2 slope = vec2(dydx / abs(1.f + dxdx), dydz / abs(1.f + dzdz));

@@ -9,6 +9,16 @@
 
 layout(quads, fractional_even_spacing, ccw) in;
 
+layout(binding = 2, set = 0) uniform sampler2D geomClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 3, set = 0) uniform sampler2D normalClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 4, set = 0) uniform sampler2D albedoClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 5, set = 0) uniform sampler2D matdataClipmap[CLIPMAP_LEVEL_COUNT];
+
+layout(binding = 7, set = 0) uniform terrain_source_t
+{
+  TerrainSourceData terrainSource;
+};
+
 layout(binding = 8, set = 0) uniform constants_t
 {
   Constants constants;
