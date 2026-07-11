@@ -30,8 +30,11 @@ PBR/Bindless
 
 Terrain
 - Fix blurry details: seems like I f-d up and mipped twice (or, maybe, it's just lack of aniso).
+
+Last clips (req for VSM/ESM)
+- Research how it is done
 - Terrain last clip
-  - Research how it is done
+- Water last clip
 
 CSM
 v Prepare the frustum split
@@ -206,8 +209,6 @@ v Move all appropriate params to settings and scene from shaders (wind as well)
   v Separate window for non-persistent scene param tuning
   v Turning off and tweaking features like screenspace refraction, caustics, etc
 v Add a dedicated scene with only ocean
-- Ocean last clip
-  - Research how it is done
 
 Fog
 - Gather task
