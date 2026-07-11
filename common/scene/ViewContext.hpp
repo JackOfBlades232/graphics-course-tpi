@@ -25,8 +25,6 @@ struct ViewContext
   void update(const ViewParams& params)
   {
     auto& buf = viewParamsBuf.get();
-    if (!buf.data())
-      buf.map();
     memcpy(buf.data(), &params, sizeof(params));
   }
 };

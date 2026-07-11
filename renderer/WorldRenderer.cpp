@@ -289,6 +289,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .size = sizeof(constantsData),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
       .name = "constants"});
   });
   lights.emplace(wc, [](size_t) {
@@ -296,10 +297,9 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .size = sizeof(sceneMgr->getLights()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
       .name = "lights"});
   });
-  constants->iterate([](auto& buf) { buf.map(); });
-  lights->iterate([](auto& buf) { buf.map(); });
   prevLights = {};
 
   lightMatricesBuf = create_buffer(etna::Buffer::CreateInfo{
@@ -312,6 +312,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     .size = 16,
     .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
     .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+    .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
     .name = "stub_uniform"});
   stubStorageBuffer = create_buffer(etna::Buffer::CreateInfo{
     .size = 16,
@@ -416,9 +417,10 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .size = sizeof(sceneMgr->getTerrainData()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
       .name = "terrain_data"});
 
-    memcpy(terrain->source.map(), &terrain->sourceData, sizeof(terrain->sourceData));
+    memcpy(terrain->source.data(), &terrain->sourceData, sizeof(terrain->sourceData));
 
     createManagedImage(
       terrain->geometryClipmap,
@@ -563,9 +565,10 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .size = sizeof(sceneMgr->getSkyboxData()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
       .name = "skybox_data"});
 
-    memcpy(skybox->source.map(), &skybox->sourceData, sizeof(skybox->sourceData));
+    memcpy(skybox->source.data(), &skybox->sourceData, sizeof(skybox->sourceData));
   }
   else
   {
@@ -583,8 +586,9 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .size = sizeof(sceneMgr->getWaterData()),
       .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
       .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
       .name = "water_data"});
-    memcpy(water->source.map(), &water->sourceData, sizeof(water->sourceData));
+    memcpy(water->source.data(), &water->sourceData, sizeof(water->sourceData));
 
     water->caustics = create_buffer(etna::Buffer::CreateInfo{
       .size = WATER_CAUSTIC_MAP_RES * WATER_CAUSTIC_MAP_RES * sizeof(uint32_t),

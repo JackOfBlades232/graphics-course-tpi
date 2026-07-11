@@ -55,6 +55,7 @@ ViewContext ViewContextManager::alloc(const char* tag)
             .size = sizeof(ViewParams),
             .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
             .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+            .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
             .name = std::string{"viewParams-"} + tag});
         }},
     .prepared = false};
