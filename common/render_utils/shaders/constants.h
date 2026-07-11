@@ -6,6 +6,7 @@
 #include "lights.h"
 #include "materials.h"
 #include "ssao.h"
+#include "wind.h"
 
 #define BIG_EPSILON 0.001f
 
@@ -53,12 +54,12 @@ struct Constants
   float csmSplitLambda;
   float csmBlendingBeltSize;
 
-  float windStrength;
-
-  shader_vec2 windDirection;
+  float padx_;
 
   float time;
   float dt;
+
+  float pady_, padz_;
 
   shader_vec3 ambientLightCoeff;
 
@@ -98,6 +99,8 @@ struct Constants
   TexSmpIdPair blueNoiseTexSmp;
 
   float pad0_, pad1_, pad2_;
+
+  WindSourceData windData;
 
   SsaoConstData ssaoData;
 };

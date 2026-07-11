@@ -91,7 +91,7 @@ vec3 calc_wind_pos_offset(
   float t, float relAmp, float strengthPeriod, vec3 grassPos, float strengthFalloff, vec2 wvn, float shrinkFactor, float strScale, float strPow)
 {
   float strengthOscillation = relAmp * wind_oscillator(strengthPeriod * t, grassPos.xz);
-  float strengthBase = pow(constants.windStrength * strScale, strPow);
+  float strengthBase = pow(constants.windData.strength * strScale, strPow);
 
   float windInfluenceAmt = strengthBase * (1.f + strengthOscillation) * strengthFalloff;
   vec2 windInfluence = wvn * windInfluenceAmt;
@@ -163,9 +163,9 @@ void main(void)
     culledInstances[instId].prevWindOffset = vec3(0.f);
     culledInstances[instId].dirQuantized = ((rotDirQ.x & 0xFFFF) << 16) | (rotDirQ.y & 0xFFFF);
 
-    if (constants.windStrength >= 0.001f)
+    if (constants.windData.strength >= 0.001f)
     {
-      vec2 wvn = constants.windDirection;
+      vec2 wvn = constants.windData.direction;
       float tAlongDir = dot(wvn, grassPos.xz);
       float dist = 5.f + fast_quad_sine_fake(130.f * tAlongDir);
 

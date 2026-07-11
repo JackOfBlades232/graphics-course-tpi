@@ -7,6 +7,7 @@
 #include <JB_skybox/JbSkybox.hpp>
 #include <JB_water/JbWater.hpp>
 #include <JB_noise/JbNoise.hpp>
+#include <JB_wind/JbWind.hpp>
 
 #include <render_utils/Common.hpp>
 #include <render_utils/GrassUtils.hpp>
@@ -1232,6 +1233,13 @@ void SceneManager::selectScene(
         sceneDataUpload.cubeStubGpuUpload[j] =
           streamer.initUploadImageAsync(cubeTexStub, 0, j, STUB_COLOR);
     }
+  }
+
+  if (auto windExt = jb_wind_parse_desc(model))
+  {
+    auto &data = windData.emplace();
+    data.direction = windExt->direction;
+    data.strength = windExt->strength;
   }
 
   if (auto waterExt = jb_water_parse_desc(model))

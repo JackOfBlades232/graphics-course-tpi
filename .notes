@@ -21,6 +21,9 @@ Upstream
 ScenePipeline
 - Add missing tangent generation via MikkTSpace
 - Add proper threadpool and move bfn and other heavy stuff there
+- Move source datas from separate constbuffers into main one (so they can be modified uniformly)
+- Add rudimentary non-saveable scene editing
+- Implement scene reload
 
 PBR/Bindless
 - Add anisotropic samplers and a setting to use them (maybe as a JB extension?)

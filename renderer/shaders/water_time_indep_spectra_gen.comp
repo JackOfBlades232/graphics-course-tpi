@@ -154,8 +154,8 @@ void main(void)
   float ddkOmega = dispersion_ddk(wavenumber, G, H);
 
   float s =
-    jonswap(omega, G, H, F, constants.windStrength, SCALE) *
-    donlean_banner(theta, omega, G, F, constants.windStrength);
+    jonswap(omega, G, H, F, constants.windData.strength, SCALE) *
+    donlean_banner(theta, omega, G, F, constants.windData.strength);
 
   vec2 initialSpectrum = get_blue_noise(imUv) * sqrt(2.f * s * abs(ddkOmega) / wavenumber * dk * dk);
 

@@ -24,29 +24,29 @@ struct Attribute
   std::string error;
 };
 
-static Attribute<const tinygltf::Object*> get_subobject(
-  const tinygltf::Object& obj, const char* name)
+static Attribute<const tinygltf::Value*> get_subobject(
+  const tinygltf::Value& obj, const char* name)
 {
-  if (elem.Has(name))
+  if (obj.Has(name))
     return {&obj.Get(name), {}};
   else
     return {nullptr, fmt::format("Missing attribute \"{}\"", name)};
 }
 
-static Attribute<glm::vec2> get_vec2(const tinygltf::Object& obj, const char* name)
+static Attribute<glm::vec2> get_vec2(const tinygltf::Value& obj, const char* name)
 {
   auto attr = get_subobject(obj, name);
-  if (const auto* obj = attr.value)
+  if (const auto* vec = attr.value)
   {
-    if (!obj.IsArray() || obj.ArrayLen() != 2)
-      return {nullptr, fmt::format("\"{}\" must be a 2d array", name)};
+    if (!vec->IsArray() || vec->ArrayLen() != 2)
+      return {{}, fmt::format("\"{}\" must be a 2d array", name)};
     glm::vec2 v{};
     float* p = (float*)&v;
     for (int i = 0; i < 2; ++i, ++p)
     {
-      const auto& elem = obj.Get(i);
+      const auto& elem = vec->Get(i);
       if (!elem.IsNumber())
-        return {nullptr, fmt::format("\"{}\" must be a vector of doubles", name)};
+        return {{}, fmt::format("\"{}\" must be a vector of doubles", name)};
       *p = float(elem.GetNumberAsDouble());
     }
     return {v, {}};
@@ -57,14 +57,14 @@ static Attribute<glm::vec2> get_vec2(const tinygltf::Object& obj, const char* na
   }
 }
 
-static Attribute<float> get_float(const tinygltf::Object& obj, const char* name)
+static Attribute<float> get_float(const tinygltf::Value& obj, const char* name)
 {
   auto attr = get_subobject(obj, name);
-  if (const auto* obj = attr.value)
+  if (const auto* num = attr.value)
   {
-    if (!obj.IsNumber())
-      return {nullptr, fmt::format("\"{}\" must be a double", name)};
-    return {float(obj.GetNumberAsDouble()), {}};
+    if (!num->IsNumber())
+      return {{}, fmt::format("\"{}\" must be a double", name)};
+    return {float(num->GetNumberAsDouble()), {}};
   }
   else
   {
@@ -86,7 +86,7 @@ std::optional<JbWindExtData> jb_wind_parse_desc(const tinygltf::Model& model)
     FAIL("{}", dir.error);
   if (!str.error.empty())
     FAIL("{}", str.error);
-  data.direction = dir.value;
+  data.direction = glm::normalize(dir.value);
   data.strength = str.value;
 
   return data;

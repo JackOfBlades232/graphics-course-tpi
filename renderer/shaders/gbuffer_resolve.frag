@@ -95,7 +95,7 @@ void main(void)
   
   // Calculate lighting
   
-  const vec3 ambient = albedo * constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox);
+  const vec3 ambient = ao * albedo * constants.ambientLightCoeff * get_envi_ambient_from_skybox(skybox);
 
   // For directional shadows
   CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);

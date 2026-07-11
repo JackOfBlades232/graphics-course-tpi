@@ -26,6 +26,7 @@
 #include <terrain.h>
 #include <skybox.h>
 #include <water.h>
+#include <wind.h>
 
 struct RenderElement
 {
@@ -185,6 +186,18 @@ public:
 
   const UniformLights& getLights() const { return *lightsData; }
 
+  bool hasWind() const { return windData.has_value(); }
+  const WindSourceData& getWind() const
+  {
+    ETNA_ASSERT(hasWind());
+    return *windData;
+  }
+  WindSourceData& getWindRW()
+  {
+    ETNA_ASSERT(hasWind());
+    return *windData;
+  }
+
   std::span<const glm::vec2> getVegetationTemplateData() const
   {
     return vegetationTemplateBufferData;
@@ -313,7 +326,7 @@ public:
   // For imgui, kinda hacky
   UniformLights& lightsRW() { return *lightsData; }
 
-  static constexpr std::array<std::string_view, 8> SUPPORTED_EXTENSIONS = {
+  static constexpr std::array<std::string_view, 9> SUPPORTED_EXTENSIONS = {
     "KHR_lights_punctual",
     "KHR_materials_pbrSpecularGlossiness",
     "KHR_materials_diffuse_transmission",
@@ -321,7 +334,8 @@ public:
     "JB_terrain",
     "JB_skybox",
     "JB_water",
-    "JB_noise"};
+    "JB_noise",
+    "JB_wind"};
 
   std::vector<TexId> tickTransfer(vk::CommandBuffer cmd_buf);
 
@@ -421,6 +435,7 @@ private:
   std::optional<TerrainSourceData> terrainData{};
   std::optional<SkyboxSourceData> skyboxData{};
   std::optional<WaterSourceData> waterData{};
+  std::optional<WindSourceData> windData{};
 
   // @TODO: do we support reentrability in selectScene?
   std::vector<etna::Image> textures{};

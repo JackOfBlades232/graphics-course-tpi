@@ -400,6 +400,11 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     }
   }
 
+  if (sceneMgr->hasWind())
+    spdlog::info("JB_wind: wind loaded!");
+  else
+    spdlog::info("JB_wind: wind not present");
+
   if (sceneMgr->hasTerrain())
   {
     spdlog::info("JB_terrain: terrain loaded!");
@@ -684,7 +689,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
   }
   else
   {
-    spdlog::info("JB_skybox: skybox not present");
+    spdlog::info("JB_water: water not present");
   }
 
   auto fragProgInfo = etna::get_shader_program("static_mesh");
@@ -1226,6 +1231,13 @@ void WorldRenderer::update(const FramePacket& packet)
     directionalLightShadowsSettings.enable = false;
 
   {
+    if (sceneMgr->hasWind())
+      constantsData.windData = sceneMgr->getWind();
+    else
+      constantsData.windData = {{1.f, 0.f}, 0.f}; // Avoid issues with 0-length dir
+  }
+
+  {
     constantsData.cullingMode = doSatCulling ? CullingMode::SAT : CullingMode::PER_VERTEX;
 
     constantsData.useSkybox = skybox.has_value() && enableSkybox;
@@ -1245,9 +1257,6 @@ void WorldRenderer::update(const FramePacket& packet)
 
     constantsData.vegetationRenderingDistance = vegetationRenderingDistance;
     constantsData.vegetationRenderingDropoffDistance = vegetationRenderingDropoffDistance;
-
-    constantsData.windDirection = windDirection;
-    constantsData.windStrength = windStrength;
 
     constantsData.useTonemapping = doTonemapping;
     constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
@@ -3450,7 +3459,7 @@ void WorldRenderer::drawGui()
       ImGui::End();
     }
     {
-      ImGui::Begin("Scene");
+      ImGui::Begin("Render");
 
       ImGui::Checkbox("Draw scene", &drawScene);
       ImGui::Checkbox("Draw terrain", &drawTerrain);
@@ -3486,11 +3495,6 @@ void WorldRenderer::drawGui()
           vegetationRenderingDistance);
       }
       ImGui::Checkbox("Show vegetation debug", &showGrassChunkDebug);
-      auto prevWindDir = windDirection;
-      auto prevWindStr = windStrength;
-      ImGui::SliderFloat2("Wind direction", (float*)&windDirection, -1.f, 1.f);
-      windDirection = glm::normalize(windDirection);
-      ImGui::SliderFloat("Wind strengh", &windStrength, 0.f, 150.f);
       ImGui::Checkbox("Use SAT culling", &doSatCulling);
       ImGui::Checkbox("Perform Z Prepass", &zPrepass);
       ImGui::Checkbox("Enable skybox", &enableSkybox);
@@ -3504,8 +3508,7 @@ void WorldRenderer::drawGui()
         ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
       bool prevEnableWater = false;
       ImGui::Checkbox("Draw water", &enableWater);
-      waterSettingsDirty |= prevEnableWater != enableWater || prevWindDir != windDirection ||
-        prevWindStr != windStrength;
+      waterSettingsDirty |= prevEnableWater != enableWater;
       ImGui::Checkbox("Use SSAO", &useSsao);
       if (useSsao)
       {
@@ -3795,6 +3798,22 @@ void WorldRenderer::drawGui()
 
       ImGui::End();
     }
+    {
+      ImGui::Begin("Scene");
+
+      if (sceneMgr->hasWind())
+      {
+        auto& wind = sceneMgr->getWindRW();
+        auto prevWindDir = wind.direction;
+        auto prevWindStr = wind.strength;
+        ImGui::SliderFloat2("Wind direction", (float*)&wind.direction, -1.f, 1.f);
+        wind.direction = glm::normalize(wind.direction);
+        ImGui::SliderFloat("Wind strengh", &wind.strength, 0.f, 150.f);
+        waterSettingsDirty |= prevWindDir != wind.direction || prevWindStr != wind.strength;
+      }
+
+      ImGui::End();
+    }
   }
 
   if (showGrassChunkDebug && terrain && terrain->sourceData.vegetationTypeCount > 0)
@@ -4062,8 +4081,6 @@ void WorldRenderer::loadDebugConfig()
   terrainNoisePeriod = unwrap(reader.read<float>());
   vegetationRenderingDistance = unwrap(reader.read<float>());
   vegetationRenderingDropoffDistance = unwrap(reader.read<float>());
-  windDirection = unwrap(reader.read<glm::vec2>());
-  windStrength = unwrap(reader.read<float>());
   histEqTonemappingRegW = unwrap(reader.read<float>());
   histEqTonemappingRefinedW = unwrap(reader.read<float>());
   histEqTonemappingMinAdmissibleLum = unwrap(reader.read<float>());
@@ -4160,8 +4177,6 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(terrainNoisePeriod));
   ETNA_VERIFY(writer.write(vegetationRenderingDistance));
   ETNA_VERIFY(writer.write(vegetationRenderingDropoffDistance));
-  ETNA_VERIFY(writer.write(windDirection));
-  ETNA_VERIFY(writer.write(windStrength));
   ETNA_VERIFY(writer.write(histEqTonemappingRegW));
   ETNA_VERIFY(writer.write(histEqTonemappingRefinedW));
   ETNA_VERIFY(writer.write(histEqTonemappingMinAdmissibleLum));
