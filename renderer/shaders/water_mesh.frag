@@ -289,10 +289,10 @@ void main(void)
 
     totSpec += spec * ld.shadow * ld.intensity;
 
-    if (foamFactor > 0.f)
+    if (foamFactor > 0.5f)
     {
       vec3 diff_bsdf = vec3(nl * diffuse_brdf());
-      totDiff += foamFactor * (1.f - f) * diff_bsdf * source.lightingFoamColor * ld.shadow * ld.intensity;
+      totDiff += 2.f * (foamFactor - 0.5f) * (1.f - f) * diff_bsdf * source.lightingFoamColor * ld.shadow * ld.intensity;
     }
   }
 

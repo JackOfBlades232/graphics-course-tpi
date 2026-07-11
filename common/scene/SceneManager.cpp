@@ -1242,78 +1242,6 @@ void SceneManager::selectScene(
     data.strength = windExt->strength;
   }
 
-  if (auto waterExt = jb_water_parse_desc(model))
-  {
-    auto& data = waterData.emplace();
-    memset(&data, 0, sizeof(data));
-    data.waterLevel = waterExt->waterLevel;
-    ETNA_ASSERTF(
-      waterExt->cascades.size() == WATER_CASCADE_COUNT,
-      "Invalid cascade count in scene {} != {}",
-      waterExt->cascades.size(),
-      WATER_CASCADE_COUNT);
-    data.l0 = waterExt->cascades[0];
-    data.l1 = waterExt->cascades[1];
-    data.l2 = waterExt->cascades[2];
-
-    data.spectrumShallowCutoff = waterExt->spectrum.shallowCutoff;
-    data.spectrumDepth = waterExt->spectrum.depth;
-    data.spectrumFetch = waterExt->spectrum.fetch;
-    data.spectrumScale = waterExt->spectrum.scale;
-    data.spectrumGamma = waterExt->spectrum.gamma;
-    data.spectrumCascadeCutoffScale = waterExt->spectrum.cascadeCutoffScale;
-
-    data.lightingSurfaceColor = waterExt->lighting.surfaceColor;
-
-    data.hasRefraction = waterExt->lighting.refraction.has_value();
-    if (data.hasRefraction)
-    {
-      data.lightingRefractionColor = waterExt->lighting.refraction->color;
-      data.lightingRefractionDepth = waterExt->lighting.refraction->depth;
-      data.lightingRefractionScreen = waterExt->lighting.refraction->screen;
-
-      data.hasCaustics = waterExt->lighting.refraction->caustics.has_value();
-      if (data.hasCaustics)
-      {
-        data.lightingCausticsProjectionFloorDepth =
-          waterExt->lighting.refraction->caustics->projectionFloorDepth;
-        data.lightingCausticsTilelWorldSize =
-          waterExt->lighting.refraction->caustics->tilelWorldSize;
-        data.lightingCausticsTileApronUvSize =
-          waterExt->lighting.refraction->caustics->tileApronUvSize;
-        data.lightingCausticsLightScale = waterExt->lighting.refraction->caustics->lightScale;
-        data.lightingCausticsRenderDistance =
-          waterExt->lighting.refraction->caustics->renderDistance;
-        data.lightingCausticsRenderFadeout = waterExt->lighting.refraction->caustics->renderFadeout;
-      }
-    }
-
-    data.hasFoam = waterExt->lighting.foam.has_value();
-    if (data.hasFoam)
-    {
-      data.lightingFoamColor = waterExt->lighting.foam->color;
-      data.foamRoughness = waterExt->lighting.foam->roughness;
-      data.foamTurbulenceBaseline = waterExt->lighting.foam->turbulenceBaseline;
-      data.foamTurbulenceFadeout = waterExt->lighting.foam->turbulenceFadeout;
-    }
-
-    data.hasShore = waterExt->shore.has_value();
-    if (data.hasShore)
-    {
-      data.shoreDepth = waterExt->shore->depth;
-      data.shoreShallowPow = waterExt->shore->shallowPow;
-      data.shoreSteepMaxCoeff = waterExt->shore->steepMaxCoeff;
-      data.shoreSteepWeight = waterExt->shore->steepWeight;
-      data.shorePermanentFoamWeight = waterExt->shore->permanentFoamWeight;
-      data.shorePermanentFoamDepth = waterExt->shore->permanentFoamDepth;
-      data.shorePermanentFoamF = waterExt->shore->permanentFoamF;
-      data.shoreCyclicFoamWeight = waterExt->shore->cyclicFoamWeight;
-      data.shoreCyclicFoamDepth = waterExt->shore->cyclicFoamDepth;
-      data.shoreCyclicFoamF = waterExt->shore->cyclicFoamF;
-      data.shoreCyclicFoamSpeed = waterExt->shore->cyclicFoamSpeed;
-    }
-  }
-
   // @TODO: make terrain also use a material?
   if (auto terrainExt = jb_terrain_parse_desc(model))
   {
@@ -1382,6 +1310,78 @@ void SceneManager::selectScene(
         else
           detailMat.emplace(materialParams[size_t(dst.matId)].mat);
       }
+    }
+  }
+
+  if (auto waterExt = jb_water_parse_desc(model))
+  {
+    auto& data = waterData.emplace();
+    memset(&data, 0, sizeof(data));
+    data.waterLevel = waterExt->waterLevel;
+    ETNA_ASSERTF(
+      waterExt->cascades.size() == WATER_CASCADE_COUNT,
+      "Invalid cascade count in scene {} != {}",
+      waterExt->cascades.size(),
+      WATER_CASCADE_COUNT);
+    data.l0 = waterExt->cascades[0];
+    data.l1 = waterExt->cascades[1];
+    data.l2 = waterExt->cascades[2];
+
+    data.spectrumShallowCutoff = waterExt->spectrum.shallowCutoff;
+    data.spectrumDepth = waterExt->spectrum.depth;
+    data.spectrumFetch = waterExt->spectrum.fetch;
+    data.spectrumScale = waterExt->spectrum.scale;
+    data.spectrumGamma = waterExt->spectrum.gamma;
+    data.spectrumCascadeCutoffScale = waterExt->spectrum.cascadeCutoffScale;
+
+    data.lightingSurfaceColor = waterExt->lighting.surfaceColor;
+
+    data.hasRefraction = waterExt->lighting.refraction.has_value();
+    if (data.hasRefraction)
+    {
+      data.lightingRefractionColor = waterExt->lighting.refraction->color;
+      data.lightingRefractionDepth = waterExt->lighting.refraction->depth;
+      data.lightingRefractionScreen = waterExt->lighting.refraction->screen;
+
+      data.hasCaustics = waterExt->lighting.refraction->caustics.has_value();
+      if (data.hasCaustics)
+      {
+        data.lightingCausticsProjectionFloorDepth =
+          waterExt->lighting.refraction->caustics->projectionFloorDepth;
+        data.lightingCausticsTilelWorldSize =
+          waterExt->lighting.refraction->caustics->tilelWorldSize;
+        data.lightingCausticsTileApronUvSize =
+          waterExt->lighting.refraction->caustics->tileApronUvSize;
+        data.lightingCausticsLightScale = waterExt->lighting.refraction->caustics->lightScale;
+        data.lightingCausticsRenderDistance =
+          waterExt->lighting.refraction->caustics->renderDistance;
+        data.lightingCausticsRenderFadeout = waterExt->lighting.refraction->caustics->renderFadeout;
+      }
+    }
+
+    data.hasFoam = waterExt->lighting.foam.has_value();
+    if (data.hasFoam)
+    {
+      data.lightingFoamColor = waterExt->lighting.foam->color;
+      data.foamRoughness = waterExt->lighting.foam->roughness;
+      data.foamTurbulenceBaseline = waterExt->lighting.foam->turbulenceBaseline;
+      data.foamTurbulenceFadeout = waterExt->lighting.foam->turbulenceFadeout;
+    }
+
+    data.hasShore = waterExt->shore.has_value() && hasTerrain();
+    if (data.hasShore)
+    {
+      data.shoreDepth = waterExt->shore->depth;
+      data.shoreShallowPow = waterExt->shore->shallowPow;
+      data.shoreSteepMaxCoeff = waterExt->shore->steepMaxCoeff;
+      data.shoreSteepWeight = waterExt->shore->steepWeight;
+      data.shorePermanentFoamWeight = waterExt->shore->permanentFoamWeight;
+      data.shorePermanentFoamDepth = waterExt->shore->permanentFoamDepth;
+      data.shorePermanentFoamF = waterExt->shore->permanentFoamF;
+      data.shoreCyclicFoamWeight = waterExt->shore->cyclicFoamWeight;
+      data.shoreCyclicFoamDepth = waterExt->shore->cyclicFoamDepth;
+      data.shoreCyclicFoamF = waterExt->shore->cyclicFoamF;
+      data.shoreCyclicFoamSpeed = waterExt->shore->cyclicFoamSpeed;
     }
   }
 

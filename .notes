@@ -201,11 +201,11 @@ v Shore interaction
   v Research how a shore sdf is created
   v Add attenuation of wave amp near shore
   v Add foam increase near shore
-- Move all appropriate params to settings and scene from shaders (wind as well)
-  - Spectre & color & foam & wind params to scene
-  - Separate window for non-persistent scene param tuning
-  - Turning off and tweaking features like screenspace refraction, caustics, etc
-- Add a dedicated scene with only ocean
+v Move all appropriate params to settings and scene from shaders (wind as well)
+  v Spectre & color & foam & wind params to scene
+  v Separate window for non-persistent scene param tuning
+  v Turning off and tweaking features like screenspace refraction, caustics, etc
+v Add a dedicated scene with only ocean
 - Ocean last clip
   - Research how it is done
 

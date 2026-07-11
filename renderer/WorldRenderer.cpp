@@ -1194,20 +1194,20 @@ void WorldRenderer::update(const FramePacket& packet)
         terrain->invalidateClipmapRequested = false;
       }
 
-      const auto toroidalOffsetRaw =
-        XZ(constantsData.playerWorldPos) - constantsData.toroidalUpdatePlayerWorldPos;
-      const float disp = std::max(glm::abs(toroidalOffsetRaw.x), glm::abs(toroidalOffsetRaw.y));
-      if (disp >= CLIMPAP_UPDATE_GRID_SIZE)
-      {
-        const auto oldToroidalUpdatePos = std::exchange(
-          constantsData.toroidalUpdatePlayerWorldPos,
-          snap_to_toroidal_update_grid(
-            constantsData.toroidalUpdatePlayerWorldPos + toroidalOffsetRaw));
-        constantsData.toroidalOffset =
-          constantsData.toroidalUpdatePlayerWorldPos - oldToroidalUpdatePos;
+      terrain->needToroidalUpdate = true;
+    }
 
-        terrain->needToroidalUpdate = true;
-      }
+    const auto toroidalOffsetRaw =
+      XZ(constantsData.playerWorldPos) - constantsData.toroidalUpdatePlayerWorldPos;
+    const float disp = std::max(glm::abs(toroidalOffsetRaw.x), glm::abs(toroidalOffsetRaw.y));
+    if (disp >= CLIMPAP_UPDATE_GRID_SIZE)
+    {
+      const auto oldToroidalUpdatePos = std::exchange(
+        constantsData.toroidalUpdatePlayerWorldPos,
+        snap_to_toroidal_update_grid(
+          constantsData.toroidalUpdatePlayerWorldPos + toroidalOffsetRaw));
+      constantsData.toroidalOffset =
+        constantsData.toroidalUpdatePlayerWorldPos - oldToroidalUpdatePos;
     }
   }
 
@@ -1564,7 +1564,8 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
             waterBinds.emplace_back(
               16 + i / CLIPMAP_LEVEL_COUNT,
               sceneMgr->getPlanarTexStub().genBinding(
-                defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
+                defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
+              uint32_t(i % CLIPMAP_LEVEL_COUNT));
           }
         }
         return etna::create_descriptor_set(
@@ -1587,6 +1588,9 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         srpi.depthBiasConstantFactor, srpi.depthBiasClamp, srpi.depthBiasSlopeFactor);
     }
 
+    cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
+    cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
+
     if (needToDrawScene)
     {
       ETNA_PROFILE_GPU(cmd_buf, sceneMeshes);
@@ -1605,9 +1609,6 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
         vk::PipelineBindPoint::eGraphics, pipe.getVkPipelineLayout(), 0, vkSets, {});
 
       cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipe.getVkPipeline());
-
-      cmd_buf.bindVertexBuffers(0, {sceneMgr->getVertexBuffer()}, {0});
-      cmd_buf.bindIndexBuffer(sceneMgr->getIndexBuffer(), 0, vk::IndexType::eUint32);
 
       auto [offset, count] = sceneMgr->getSceneObjectsIndirectCommandsSubrange();
 
@@ -3298,17 +3299,14 @@ void WorldRenderer::drawGui()
       constantsData.playerWorldPos.x,
       constantsData.playerWorldPos.y,
       constantsData.playerWorldPos.z);
-    if (drawTerrain)
-    {
-      ImGui::Text(
-        "Last toroidal update pos: [%.3f, %.3f]",
-        constantsData.toroidalUpdatePlayerWorldPos.x,
-        constantsData.toroidalUpdatePlayerWorldPos.y);
-      ImGui::Text(
-        "Toroidal offset: [%.3f, %.3f]",
-        constantsData.toroidalOffset.x,
-        constantsData.toroidalOffset.y);
-    }
+    ImGui::Text(
+      "Last toroidal update pos: [%.3f, %.3f]",
+      constantsData.toroidalUpdatePlayerWorldPos.x,
+      constantsData.toroidalUpdatePlayerWorldPos.y);
+    ImGui::Text(
+      "Toroidal offset: [%.3f, %.3f]",
+      constantsData.toroidalOffset.x,
+      constantsData.toroidalOffset.y);
     if (directionalLightShadowsSettings.enable)
     {
       std::string text = fmt::format("Csm splits: [{}]{{{}", CSM_CASCADE_COUNT, mainCam.zNear);

@@ -1,0 +1,148 @@
+{
+  "asset": {
+    "extras": {
+      "author": "Me",
+      "license": "lol",
+      "source": "---",
+      "title": "Ocean demo"
+    },
+    "version": "1.0"
+  },
+  "extensionsRequired": [
+    "KHR_lights_punctual",
+    "JB_water",
+    "JB_skybox",
+    "JB_noise",
+    "JB_wind"
+  ],
+  "extensionsUsed": [
+    "KHR_lights_punctual",
+    "JB_water",
+    "JB_skybox",
+    "JB_noise",
+    "JB_wind"
+  ],
+  "images": [
+    {
+      "uri": "textures/skybox.png"
+    },
+    {
+      "uri": "../../textures/BlueNoise256x256.png"
+    }
+  ],
+  "extensions": {
+    "KHR_lights_punctual": {
+      "lights": [
+        {
+          "color": [
+            1.0,
+            0.8,
+            0.9
+          ],
+          "intensity": 1.0,
+          "type": "directional"
+        }
+      ]
+    },
+    "JB_noise" : {
+      "blue": {
+        "tex": {
+          "index": 1
+        }
+      }
+    },
+    "JB_wind": {
+      "direction": [1.0, 0.0],
+      "strength": 25.0
+    },
+    "JB_water": {
+      "level": 0.0,
+      "cascades": [357.0, 37.0, 5.0],
+      "spectrum": {
+        "shallowCutoff": 20.0,
+        "depth": 5000.0,
+        "fetch": 100000.0,
+        "scale": 1.5,
+        "gamma": 3.3,
+        "cascadeCutoffScale": 6.0
+      },
+      "lighting": {
+        "surfaceColor": [0.165, 0.397, 0.491],
+        "refraction": {
+          "color": [0.001, 0.05, 0.05],
+          "depth": 5.0,
+          "screen": 0.5
+        },
+        "foam": {
+          "color": [1.0, 1.0, 1.0],
+          "roughness": 0.9,
+          "turbulenceBaseline": 2.5,
+          "turbulenceFadeout": 0.5
+        }
+      }
+    },
+    "JB_skybox": {
+      "cubemap": {
+        "index": 0
+      }
+    }
+  },
+  "nodes": [
+    {
+      "children": [],
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+        2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "root"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 33071,
+      "wrapT": 33071
+    },
+    {
+      "magFilter": 9728,
+      "minFilter": 9984,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Sketchfab_Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 1,
+      "source": 1
+    }
+  ]
+}
+
