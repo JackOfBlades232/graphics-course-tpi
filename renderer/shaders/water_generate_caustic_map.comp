@@ -84,8 +84,8 @@ Cascade sample_cascade(vec2 world_planar_pos, uint cid)
 
 void main(void)
 {
-  const float causticFloorDepth = 0.5f;
-  const vec2 causticTexelWorldSize = vec2(0.02f);
+  const vec2 causticTexelWorldSize =
+    vec2(source.lightingCausticsTilelWorldSize / float(WATER_CAUSTIC_MAP_RES));
 
   ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
   ivec2 imOffset = imCoord - ivec2(WATER_CAUSTIC_MAP_RES / 2);
@@ -114,12 +114,14 @@ void main(void)
     turbulence += data.turbulence;
   }
 
-  float foamFactor = smoothstep(0.f, 1.f, clamp(0.5f - turbulence, 0.f, 1.f));
+  float foamFactor = 0.f;
+  if (source.hasFoam != 0)
+    foamFactor = smoothstep(0.f, 1.f, clamp(source.foamTurbulenceFadeout - turbulence, 0.f, 1.f));
   if (foamFactor >= 0.99f)
     return;
 
-  if (disp.y < -causticFloorDepth + 0.01f)
-    disp.y = 2.f * (-causticFloorDepth) + 0.02f - disp.y;
+  if (disp.y < -source.lightingCausticsProjectionFloorDepth + 0.01f)
+    disp.y = 2.f * (-source.lightingCausticsProjectionFloorDepth) + 0.02f - disp.y;
 
   // No water level involved -- caustics are in "centered" coords for simplicity
   vec3 pos = vec3(planarPos.x, 0.f, planarPos.y) + disp;
@@ -138,7 +140,7 @@ void main(void)
       continue;
 
     vec3 refractedVector = refract_vector(-ld.direction, normal, 1.333f);
-    float t = (-causticFloorDepth - pos.y) / refractedVector.y;
+    float t = (-source.lightingCausticsProjectionFloorDepth - pos.y) / refractedVector.y;
     if (t < 0.f)
       continue;
 
@@ -149,7 +151,7 @@ void main(void)
       luminance_bt601(ld.intensity) *
       //ld.shadow *
       (1.f - foamFactor) *
-      clamp(causticFloorDepth / t, 0.f, 1.f) *
+      clamp(source.lightingCausticsProjectionFloorDepth / t, 0.f, 1.f) *
       abs(refractedVector.y);
 
     uint encoded = uint(intensity * 255.f);

@@ -2246,7 +2246,7 @@ void WorldRenderer::renderWorld(
         gen_mips(cmd_buf, water->cascades[c].turbulence);
       }
 
-      // @TODO: optional feature
+      if (sceneMgr->getWaterData().hasCaustics)
       {
         ETNA_PROFILE_GPU(cmd_buf, waterCaustics);
 

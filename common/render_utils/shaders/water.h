@@ -35,6 +35,55 @@ struct WaterSourceData
   float l0;
   float l1;
   float l2;
+
+  float spectrumShallowCutoff;
+  float spectrumDepth;
+  float spectrumFetch;
+  float spectrumScale;
+  float spectrumGamma;
+  float spectrumCascadeCutoffScale;
+
+  float lightingRefractionDepth;
+  float lightingRefractionScreen;
+
+  float lightingCausticsProjectionFloorDepth;
+  float lightingCausticsTilelWorldSize;
+  float lightingCausticsTileApronUvSize;
+  float lightingCausticsLightScale;
+  float lightingCausticsRenderDistance;
+  float lightingCausticsRenderFadeout;
+
+  float shoreDepth;
+  float shoreShallowPow;
+  float shoreSteepMaxCoeff;
+  float shoreSteepWeight;
+  float shorePermanentFoamWeight;
+  float shorePermanentFoamDepth;
+  float shorePermanentFoamF;
+  float shoreCyclicFoamWeight;
+  float shoreCyclicFoamDepth;
+  float shoreCyclicFoamF;
+  float shoreCyclicFoamSpeed;
+
+  float foamRoughness;
+  float foamTurbulenceBaseline;
+  float foamTurbulenceFadeout;
+
+  shader_vec3 lightingSurfaceColor;
+
+  shader_uint hasShore;
+
+  shader_vec3 lightingRefractionColor;
+
+  shader_uint hasRefraction;
+
+  shader_vec3 lightingFoamColor;
+
+  shader_uint hasFoam;
+
+  shader_uint hasCaustics;
+
+  shader_uint pad0_, pad1_, pad2_;
 };
 
 #endif // WATER_H_INCLUDED

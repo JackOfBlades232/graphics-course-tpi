@@ -133,79 +133,95 @@ void main(void)
   const float d = textureLod(opaqueDepth, surf.screenTc, 0.f).x;
   const vec3 reconstructedPos = depth_and_tc_to_pos(max(d, 0.f), surf.screenTc);
 
-  const vec3 waterRefractionColor = vec3(0.001f, 0.05f, 0.05f);
-  const vec3 waterSurfaceColor = vec3(0.165f, 0.397f, 0.491f);
-  const float waterRefractionHFactor = 5.f;
+  vec3 waterRefractedLight = source.lightingSurfaceColor;
   
-  vec3 waterRefractedLight = waterRefractionColor;
-  
-  if (d > 0.f)
+  if (source.hasRefraction != 0)
   {
-    const vec3 refractedVector = refract_vector(-viewVec, wNormal, 1.333f);
-    
-    const float refractionScreenDepth = 0.5f;
-    const float linz = dot(surf.wPos - viewParams.viewPos, viewParams.viewDir);
-    const float screenZ = linz + refractionScreenDepth;
-
-    const float t = (screenZ - linz) / dot(refractedVector, viewParams.viewDir);
-    const vec3 intersection = surf.wPos + t * refractedVector;
-    const vec4 instersectionNdc = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(intersection, 1.f);
-    const vec2 intersectionUv = (instersectionNdc.xy / instersectionNdc.w) * 0.5f + 0.5f;
-
-    const vec2 distortedTc = clamp(intersectionUv, 0.f, 1.f);
-    const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
-    const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
-    const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
-
-    const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
-
-    const float rd = textureLod(opaqueDepth, refractionTc, 0.f).x;
-    const vec3 rp = depth_and_tc_to_pos(max(rd, 0.f), refractionTc);
-
-    const float depthDiff = surf.wPos.y - rp.y; 
-    const float dist = length(viewParams.viewPos - rp);
-
-    vec3 rc = textureLod(opaqueColor, refractionTc, 0.f).xyz;
-
-    float causticFadeout = smoothstep(0.f, 1.f, clamp((150.f - dist) / 20.f, 0.f, 1.f));
-
-    if (lights.directionalLightsCount > 0 && causticFadeout > 0.f)
+    waterRefractedLight = source.lightingRefractionColor;
+    if (d > 0.f)
     {
-      const vec2 causticTexelWorldSize = vec2(0.02f); // @TODO: dedup
-      const float causticApron = 0.05f;
-      const float causticBody = 1.f - 2.f * causticApron;
-      vec2 planarTOff = rp.xz - constants.toroidalUpdatePlayerWorldPos.xy;
-      vec2 cuv = fract(vec2(0.5f) + (1.f / causticBody) * (planarTOff / causticTexelWorldSize / vec2(WATER_CAUSTIC_MAP_RES)));
-      float caustic = texture(caustics, vec2(causticApron) + cuv * causticBody).x;
-      rc = mix(
-        rc,
-        lights.directionalLights[0].color * lights.directionalLights[0].intensity * 3.f * rc,
-        caustic * causticFadeout);
-    }
+      const vec3 refractedVector = refract_vector(-viewVec, wNormal, 1.333f);
+      
+      const float linz = dot(surf.wPos - viewParams.viewPos, viewParams.viewDir);
+      const float screenZ = linz + source.lightingRefractionScreen;
 
-    waterRefractedLight = mix(
-      rc,
-      waterRefractionColor,
-      smoothstep(0.f, 1.f, clamp(depthDiff / waterRefractionHFactor, 0.f, 1.f)));
+      const float t = (screenZ - linz) / dot(refractedVector, viewParams.viewDir);
+      const vec3 intersection = surf.wPos + t * refractedVector;
+      const vec4 instersectionNdc = calc_adjusted_viewproj_mat(viewParams, viewData) * vec4(intersection, 1.f);
+      const vec2 intersectionUv = (instersectionNdc.xy / instersectionNdc.w) * 0.5f + 0.5f;
+
+      const vec2 distortedTc = clamp(intersectionUv, 0.f, 1.f);
+      const float dd = textureLod(opaqueDepth, distortedTc, 0.f).x;
+      const vec3 distortedPos = depth_and_tc_to_pos(max(dd, 0.f), distortedTc);
+      const vec2 refractionTc = distortedPos.y < surf.wPos.y ? distortedTc : surf.screenTc;
+
+      const vec3 refractionPos = distortedPos.y < surf.wPos.y ? distortedPos : surf.wPos;
+
+      const float rd = textureLod(opaqueDepth, refractionTc, 0.f).x;
+      const vec3 rp = depth_and_tc_to_pos(max(rd, 0.f), refractionTc);
+
+      const float depthDiff = surf.wPos.y - rp.y; 
+      const float dist = length(viewParams.viewPos - rp);
+
+      vec3 rc = textureLod(opaqueColor, refractionTc, 0.f).xyz;
+
+      if (source.hasCaustics != 0)
+      {
+        float causticFadeout =
+          smoothstep(0.f, 1.f,
+            clamp(
+              (source.lightingCausticsRenderDistance - dist) / source.lightingCausticsRenderFadeout,
+              0.f, 1.f));
+
+        if (lights.directionalLightsCount > 0 && causticFadeout > 0.f)
+        {
+          const vec2 causticTexelWorldSize =
+            vec2(source.lightingCausticsTilelWorldSize / float(WATER_CAUSTIC_MAP_RES));
+          const float causticBody = 1.f - 2.f * source.lightingCausticsTileApronUvSize;
+          vec2 planarTOff = rp.xz - constants.toroidalUpdatePlayerWorldPos.xy;
+          vec2 cuv = fract(vec2(0.5f) + (1.f / causticBody) * (planarTOff / causticTexelWorldSize / vec2(WATER_CAUSTIC_MAP_RES)));
+          float caustic = texture(caustics, vec2(source.lightingCausticsTileApronUvSize) + cuv * causticBody).x;
+          rc = mix(
+            rc,
+            lights.directionalLights[0].color *
+              lights.directionalLights[0].intensity *
+              source.lightingCausticsLightScale *
+              rc,
+            caustic * causticFadeout);
+        }
+      }
+
+      waterRefractedLight = mix(
+        rc,
+        source.lightingRefractionColor,
+        smoothstep(0.f, 1.f, clamp(depthDiff / source.lightingRefractionDepth, 0.f, 1.f)));
+    }
   }
 
-  float waterRoughness = 0.1f;
-  vec3 foamColor = vec3(1.f, 1.f, 1.f);
-  float foamRoughness = 0.9f;
+  // @NOTE: considered moving to scene, but nah, not really something to tweak
+  const float waterRoughness = 0.1f;
 
-  const float foamBaseline = 2.5f;
-  turbulence -= foamBaseline;
-  turbulence -= surf.shoreFoamFactor;
-  float foamFactor = smoothstep(0.f, 1.f, clamp(0.5f - turbulence, 0.f, 1.f));
+  vec3 albedo = source.lightingSurfaceColor;
+  float roughness = waterRoughness;
+  float foamFactor = 0.f;
 
-  vec3 albedo = mix(waterSurfaceColor, foamColor, foamFactor);
-  float roughness = mix(waterRoughness, foamRoughness, foamFactor);
+  if (source.hasFoam != 0)
+  {
+    turbulence -= source.foamTurbulenceBaseline;
+    turbulence -= surf.shoreFoamFactor;
+    foamFactor = smoothstep(0.f, 1.f, clamp(source.foamTurbulenceFadeout - turbulence, 0.f, 1.f));
+
+    albedo = mix(source.lightingSurfaceColor, source.lightingFoamColor, foamFactor);
+    roughness = mix(waterRoughness, source.foamRoughness, foamFactor);
+  }
+
   vec3 normal = wNormal;
   vec3 enviDir = 2.f * normal * dot(viewVec, normal) - viewVec;
 
   CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(viewPos, viewParams);
 
   vec3 totSpec = vec3(0.f);
+  vec3 totDiff = vec3(0.f);
 
   vec3 fresnel;
 
@@ -228,7 +244,7 @@ void main(void)
     float nl = max(nlu, 0.f);
 
     fresnel = conductor_frensel_shlick(vec3(0.0615636836452032f), hv);
-    spec = waterSurfaceColor * fresnel;
+    spec = source.lightingSurfaceColor * fresnel;
 
     vec3 enviColor = sample_skybox(enviDir, skybox);
     totSpec += (1.f - foamFactor) * spec * enviColor;
@@ -268,18 +284,23 @@ void main(void)
     float a2 = a * a;
     vec3 f = conductor_frensel_shlick(vec3(0.0615636836452032f), hv);
     vec3 spec_bsdf = vec3(nl * specular_brdf(nl, nv, hl, hv, nh, a2));
-    vec3 diff_bsdf = vec3(nl * diffuse_brdf());
 
     spec = f * spec_bsdf;
 
     totSpec += spec * ld.shadow * ld.intensity;
+
+    if (foamFactor > 0.f)
+    {
+      vec3 diff_bsdf = vec3(nl * diffuse_brdf());
+      totDiff += foamFactor * (1.f - f) * diff_bsdf * source.lightingFoamColor * ld.shadow * ld.intensity;
+    }
   }
 
   // @TODO: point and spot lights?
 
   vec4 debugMultiplier = get_csm_cascade_debug_multiplier(csmd);
 
-  vec3 color = ambient + totSpec;
+  vec3 color = ambient + totSpec + totDiff;
   out_fragColor = vec4(debugMultiplier.xyz * color, 1.f);
 
   vec4 prevNdc = calc_prev_adjusted_viewproj_mat(viewParams, viewData) * vec4(surf.wPos, 1.f);

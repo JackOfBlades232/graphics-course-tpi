@@ -21,13 +21,7 @@ layout(binding = 8, set = 0) uniform constants_t
 
 #include "bindless.glsl.inc"
 
-const float SHALLOW_CUTOFF = 20.f;
 const float G = 9.81f;
-const float H = 500.f;
-const float F = 100000.f;
-const float SCALE = 1.f;
-const float GAMMA = 3.3f;
-const float CASCADE_WN_CUTOFF_SCALE = 6.f;
 
 vec2 get_blue_noise(vec2 uv)
 {
@@ -38,12 +32,12 @@ vec2 get_blue_noise(vec2 uv)
 
 float dispersion(float k, float g, float h)
 {
-  return sqrt(g * k * tanh(min(k * h, SHALLOW_CUTOFF)));
+  return sqrt(g * k * tanh(min(k * h, source.spectrumShallowCutoff)));
 }
 
 float dispersion_ddk(float k, float g, float h)
 {
-  float th = tanh(min(k * h, SHALLOW_CUTOFF));
+  float th = tanh(min(k * h, source.spectrumShallowCutoff));
   float ch = cosh(k * h);
   return g * (h * k / ch / ch + th) / dispersion(k, g, h) / 2.f;
 }
@@ -86,7 +80,7 @@ float jonswap(float omega, float g, float h, float f, float u, float scale)
   return scale * tma(omega, g, h) * alpha * g * g * oneOverOmega *
     oneOverOmega * oneOverOmega * oneOverOmega * oneOverOmega *
     exp(-1.25f * peakOmegaOverOmega * peakOmegaOverOmega * peakOmegaOverOmega * peakOmegaOverOmega) *
-    pow(abs(GAMMA), r);
+    pow(abs(source.spectrumGamma), r);
 }
 
 float donlean_banner_beta_s(float x)
@@ -123,8 +117,8 @@ void main(void)
   float l = 0.f;
   float minWavenumber = 0.0001f;
   float maxWavenumber = 9999.f;
-  const float l1b = CASCADE_WN_CUTOFF_SCALE * SHADER_TWO_PI / source.l1;
-  const float l2b = CASCADE_WN_CUTOFF_SCALE * SHADER_TWO_PI / source.l2;
+  const float l1b = source.spectrumCascadeCutoffScale * SHADER_TWO_PI / source.l1;
+  const float l2b = source.spectrumCascadeCutoffScale * SHADER_TWO_PI / source.l2;
   switch (cascade)
   {
   case 0:
@@ -150,12 +144,12 @@ void main(void)
   float wavenumber = length(k);
   float theta = atan(k.y, k.x);
 
-  float omega = dispersion(wavenumber, G, H);
-  float ddkOmega = dispersion_ddk(wavenumber, G, H);
+  float omega = dispersion(wavenumber, G, source.spectrumDepth);
+  float ddkOmega = dispersion_ddk(wavenumber, G, source.spectrumDepth);
 
   float s =
-    jonswap(omega, G, H, F, constants.windData.strength, SCALE) *
-    donlean_banner(theta, omega, G, F, constants.windData.strength);
+    jonswap(omega, G, source.spectrumDepth, source.spectrumFetch, constants.windData.strength, source.spectrumScale) *
+    donlean_banner(theta, omega, G, source.spectrumFetch, constants.windData.strength);
 
   vec2 initialSpectrum = get_blue_noise(imUv) * sqrt(2.f * s * abs(ddkOmega) / wavenumber * dk * dk);
 

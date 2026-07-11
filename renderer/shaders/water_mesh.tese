@@ -51,11 +51,11 @@ layout(location = 0) out TE_OUT
 
 float shore_foam(float depth, vec3 terrainNormal, float foamWidth, float foamFrequency, float foamSpeed)
 {
-  float shallow = pow(1.f - clamp(depth / foamWidth, 0.f, 1.f), 2.f);
-  float steep = smoothstep(0.f, 0.3f, 1.f - terrainNormal.y);
+  float shallow = pow(1.f - clamp(depth / foamWidth, 0.f, 1.f), source.shoreShallowPow);
+  float steep = smoothstep(0.f, source.shoreSteepMaxCoeff, 1.f - terrainNormal.y);
   float phase = depth * foamFrequency + (constants.time + 1000.f) * foamSpeed;
   float wash  = 0.5f + 0.5f * sin(phase);
-  return shallow * (0.2 + 0.8 * steep) * wash;
+  return shallow * (1.f - source.shoreSteepWeight + source.shoreSteepWeight * steep) * wash;
 }
 
 vec3 sample_cascade(vec2 world_planar_pos, uint cid)
@@ -85,15 +85,22 @@ void main(void)
   for (uint cid = 0; cid < WATER_CASCADE_COUNT; ++cid)
     disp += sample_cascade(pointXZ, cid);
 
-  const float shoreWidth = 4.f;
-  float terrainHeight = sample_geom_clipmap_exact(pointXZ - constants.toroidalUpdatePlayerWorldPos);
-  vec3 terrainNormal = sample_normal_clipmap_exact(pointXZ - constants.toroidalUpdatePlayerWorldPos);
-  float depth = max(source.waterLevel + disp.y - terrainHeight, 0.f);
-  disp *= min(sqrt(depth / shoreWidth), 1.f);
+  float shoreFoam = 0.f;
 
-  float shoreFoam =
-    shore_foam(depth, terrainNormal, 15.f, 3.f, 3.14f) +
-    0.5f * shore_foam(depth, terrainNormal, 2.f, 1.15f, 0.f);
+  if (source.hasShore != 0)
+  {
+    float terrainHeight = sample_geom_clipmap_exact(pointXZ - constants.toroidalUpdatePlayerWorldPos);
+    vec3 terrainNormal = sample_normal_clipmap_exact(pointXZ - constants.toroidalUpdatePlayerWorldPos);
+    float depth = max(source.waterLevel + disp.y - terrainHeight, 0.f);
+    disp *= min(sqrt(depth / source.shoreDepth), 1.f);
+
+    if (source.hasFoam != 0)
+    {
+      shoreFoam =
+        source.shoreCyclicFoamWeight * shore_foam(depth, terrainNormal, source.shoreCyclicFoamDepth, source.shoreCyclicFoamF, source.shoreCyclicFoamSpeed) +
+        source.shorePermanentFoamWeight * shore_foam(depth, terrainNormal, source.shorePermanentFoamDepth, source.shorePermanentFoamF, 0.f);
+    }
+  }
 
   teOut.wPos = vec3(pointXZ.x, source.waterLevel, pointXZ.y) + disp;
   teOut.wInitPlanarPos = pointXZ;
