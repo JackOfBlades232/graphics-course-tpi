@@ -1,0 +1,52 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "fog.h"
+#include "constants.h"
+
+layout(local_size_x = FOG_WORKGROUP_DIM, local_size_y = FOG_WORKGROUP_DIM, local_size_z = 1) in;
+
+layout(binding = 0, set = 0, rgba32f) uniform image2D hdrTarget;
+layout(binding = 1, set = 0) uniform sampler2D fogHalfres;
+
+layout(binding = 6, set = 0) uniform fog_source_t
+{
+  FogSourceData source;
+};
+layout(binding = 8, set = 0) uniform constants_t
+{
+  Constants constants;
+};
+
+struct Fog
+{
+  float transmittance;
+  vec3 color;
+};
+
+Fog upscale_sample_fog(vec2 uv)
+{
+  Fog fog;
+  vec4 pk = textureLod(fogHalfres, uv, 0.f);
+  fog.transmittance = pk.x;
+  fog.color = pk.yzw;
+  return fog;
+}
+
+void main(void)
+{
+  ivec2 imCoord = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 imSize = ivec2(constants.mainTargetResolution);
+
+  if (imCoord.x >= imSize.x || imCoord.y >= imSize.y)
+    return;
+
+  vec3 baseColor = imageLoad(hdrTarget, imCoord).xyz;
+  vec2 uv = vec2(imCoord) * constants.mainTargetInverseResolution;
+  Fog fog = upscale_sample_fog(uv);
+
+  vec3 finalColor = mix(fog.color, baseColor, fog.transmittance);
+  imageStore(hdrTarget, imCoord, vec4(finalColor, 1.f));
+}
+

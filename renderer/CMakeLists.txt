@@ -48,5 +48,7 @@ target_add_shaders(renderer
   shaders/water_generate_caustic_map.comp
   shaders/water_clear_caustic_map.comp
   shaders/water_caustics_convert.frag
+  shaders/fog_generate.comp
+  shaders/fog_apply.comp
   shaders/quad.vert
 )

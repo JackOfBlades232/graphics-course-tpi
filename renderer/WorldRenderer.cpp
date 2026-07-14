@@ -199,7 +199,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .name = "hdr_target",
       .format = vk::Format::eR32G32B32A32Sfloat,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
-        vk::ImageUsageFlagBits::eTransferDst});
+        vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage});
   createManagedImage(
     hdrOpaqueTarget,
     etna::Image::CreateInfo{
@@ -359,6 +359,17 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
   for (auto& component : rcomponents)
     component->allocateResources(resolution);
+
+  if (fog)
+  {
+    createManagedImage(
+      fog->halfresFogBuffer,
+      etna::Image::CreateInfo{
+        .extent = vk::Extent3D{resolution.x / 2, resolution.y / 2, 1},
+        .name = "hr_fog_buffer",
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+  }
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -399,6 +410,25 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       directionalLightCascadeViews.emplace_back(array_make<ViewContext, CSM_CASCADE_COUNT>(
         [this, i] { return viewCtxMgr->alloc(fmt::format("dir{}", i).c_str()); }));
     }
+  }
+
+  // @TODO: into weather
+  {
+    fog.emplace();
+    createManagedImage(
+      fog->halfresFogBuffer,
+      etna::Image::CreateInfo{
+        .extent = vk::Extent3D{resolution.x / 2, resolution.y / 2, 1},
+        .name = "hr_fog_buffer",
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
+    fog->source = create_buffer(etna::Buffer::CreateInfo{
+      .size = sizeof(FogSourceData),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
+      .name = "fog_source"});
+    memcpy(fog->source.data(), &fog->sourceData, sizeof(fog->sourceData));
   }
 
   if (sceneMgr->hasWind())
@@ -814,6 +844,8 @@ void WorldRenderer::loadShaders()
     "water_caustics_convert",
     {RENDERER_SHADERS_ROOT "water_caustics_convert.frag.spv",
      RENDERER_SHADERS_ROOT "quad.vert.spv"});
+  etna::create_program("fog_generate", {RENDERER_SHADERS_ROOT "fog_generate.comp.spv"});
+  etna::create_program("fog_apply", {RENDERER_SHADERS_ROOT "fog_apply.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -1128,6 +1160,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
           .colorAttachmentFormats = {vk::Format::eR8Unorm},
         },
     });
+  fogGenerate = pipelineManager.createComputePipeline("fog_generate", {});
+  fogApply = pipelineManager.createComputePipeline("fog_apply", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -3227,6 +3261,70 @@ void WorldRenderer::renderWorld(
       }
     }
 
+    if (fog && enableFog)
+    {
+      {
+        ETNA_PROFILE_GPU(cmd_buf, fogGenerate);
+        auto programInfo = etna::get_shader_program("fog_generate");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, fog->halfresFogBuffer.genBinding({}, vk::ImageLayout::eGeneral)},
+           etna::Binding{
+             1,
+             mainViewDepth.genBinding(
+               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{6, fog->source.genBinding()},
+           etna::Binding{8, constants->get().genBinding()},
+           etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
+           etna::Binding{10, mainViewContext->viewDataBuf.genBinding()},
+           etna::Binding{11, lights->get().genBinding()},
+           etna::Binding{12, lightMatricesBuf.genBinding()}});
+        etna::flush_barriers(cmd_buf);
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          fogGenerate.getVkPipelineLayout(),
+          0,
+          {set.getVkSet(),
+           materialParamsDsetComp.getVkSet(),
+           bindlessTexturesDsetComp.getVkSet(),
+           bindlessSamplersDsetComp.getVkSet()},
+          {});
+
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, fogGenerate.getVkPipeline());
+
+        cmd_buf.dispatch(
+          get_linear_wg_count(resolution.x / 2, FOG_WORKGROUP_DIM),
+          get_linear_wg_count(resolution.y / 2, FOG_WORKGROUP_DIM),
+          1);
+      }
+
+      {
+        ETNA_PROFILE_GPU(cmd_buf, fogApply);
+        auto programInfo = etna::get_shader_program("fog_apply");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, hdrTarget.genBinding({}, vk::ImageLayout::eGeneral)},
+           etna::Binding{
+             1,
+             fog->halfresFogBuffer.genBinding(
+               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{6, fog->source.genBinding()},
+           etna::Binding{8, constants->get().genBinding()}});
+        etna::flush_barriers(cmd_buf);
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute, fogApply.getVkPipelineLayout(), 0, {set.getVkSet()}, {});
+
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, fogApply.getVkPipeline());
+
+        cmd_buf.dispatch(
+          get_linear_wg_count(resolution.x, FOG_WORKGROUP_DIM),
+          get_linear_wg_count(resolution.y, FOG_WORKGROUP_DIM),
+          1);
+      }
+    }
+
     {
       ETNA_PROFILE_GPU(cmd_buf, tonemapping);
 
@@ -3510,7 +3608,10 @@ void WorldRenderer::drawGui()
         ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
       bool prevEnableWater = false;
       ImGui::Checkbox("Draw water", &enableWater);
+      enableWater &= water.has_value();
       waterSettingsDirty |= prevEnableWater != enableWater;
+      ImGui::Checkbox("Draw fog", &enableFog);
+      enableFog &= fog.has_value();
       ImGui::Checkbox("Use SSAO", &useSsao);
       if (useSsao)
       {
@@ -4114,6 +4215,7 @@ void WorldRenderer::loadDebugConfig()
   showTaaPatternDebug = unwrap(reader.read<bool>());
   taaEmaCoeff = unwrap(reader.read<float>());
   enableWater = unwrap(reader.read<bool>());
+  enableFog = unwrap(reader.read<bool>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -4210,6 +4312,7 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(showTaaPatternDebug));
   ETNA_VERIFY(writer.write(taaEmaCoeff));
   ETNA_VERIFY(writer.write(enableWater));
+  ETNA_VERIFY(writer.write(enableFog));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

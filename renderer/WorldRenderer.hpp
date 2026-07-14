@@ -27,6 +27,7 @@
 #include <terrain.h>
 #include <grass.h>
 #include <skybox.h>
+#include <fog.h>
 #include <dispatch.h>
 #include <ssao.h>
 #include <taa.h>
@@ -199,6 +200,13 @@ private:
     WaterSourceData sourceData{};
   };
 
+  struct FogRenderingData
+  {
+    etna::Image halfresFogBuffer;
+    etna::Buffer source;
+    FogSourceData sourceData{.color = shader_vec3(0.4f, 0.4f, 0.4f), .constantTransmittance = 1.f};
+  };
+
   enum class TonemappingTechnique
   {
     HISTOGRAM_EQ = 0,
@@ -280,6 +288,8 @@ private:
   etna::ComputePipeline waterExtractGeodata{};
   etna::ComputePipeline waterGenerateCausticMap{};
   etna::ComputePipeline waterClearCausticMap{};
+  etna::ComputePipeline fogGenerate{};
+  etna::ComputePipeline fogApply{};
 
   etna::GraphicsPipeline waterCausticMapConvert{};
   etna::GraphicsPipeline waterCausticMapDebug{};
@@ -317,6 +327,7 @@ private:
   std::optional<TerrainRenderingData> terrain{};
   std::optional<VegetationRenderingData> vegetation{};
   std::optional<SkyboxRenderingData> skybox{};
+  std::optional<FogRenderingData> fog{};
 
   etna::Sampler defaultSampler;
   etna::Sampler defaultWrapSampler;
@@ -427,6 +438,7 @@ private:
   bool showTaaPatternDebug = false;
   float taaEmaCoeff = 0.1f;
   bool enableWater = true;
+  bool enableFog = true;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 
