@@ -211,6 +211,28 @@ v Move all appropriate params to settings and scene from shaders (wind as well)
 v Add a dedicated scene with only ocean
 
 Fog
+v Gather task
+v Gather sources
+v Research
+v Plan
+- Bare bones
+  - Set up a separate renderpass fog -- hr target, pipelines, gen shader, apply shader (after water)
+  - Apply in separate pass with bilinear upscale
+  - This version -- add simple constant transmittance raymarch
+  - Add constant sun inscatter with stock pcf sampling
+- Fog shape
+  - Research how height fog is done, add to baseline constant fog
+  - Add noises (shape of height fog and texture to constant)
+  - Pull parameters to scene def (turn JB_wind => JB_weather)
+- Quality
+  - Check for resolution/marching artifacts
+  - Test catmull rom for upscaling
+- Performance
+  - Measure
+  - Test lowering taps for shadows
+  - Refactor tonemapping into single postfx shader. Leave comps for heterogeneous prep, but ->tonemap doesn't work anymore
+
+MieSky
 - Gather task
 - Gather sources
 - Research
@@ -246,12 +268,6 @@ ProjectiveDecals
 - Plan
 
 ClusteredLights
-- Gather task
-- Gather sources
-- Research
-- Plan
-
-MieSky
 - Gather task
 - Gather sources
 - Research
