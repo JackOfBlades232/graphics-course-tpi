@@ -19,19 +19,9 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
-struct Fog
+vec4 upscale_sample_fog(vec2 uv)
 {
-  float transmittance;
-  vec3 color;
-};
-
-Fog upscale_sample_fog(vec2 uv)
-{
-  Fog fog;
-  vec4 pk = textureLod(fogHalfres, uv, 0.f);
-  fog.transmittance = pk.x;
-  fog.color = pk.yzw;
-  return fog;
+  return textureLod(fogHalfres, uv, 0.f);
 }
 
 void main(void)
@@ -44,9 +34,9 @@ void main(void)
 
   vec3 baseColor = imageLoad(hdrTarget, imCoord).xyz;
   vec2 uv = vec2(imCoord) * constants.mainTargetInverseResolution;
-  Fog fog = upscale_sample_fog(uv);
+  vec4 fog = upscale_sample_fog(uv);
 
-  vec3 finalColor = mix(fog.color, baseColor, fog.transmittance);
+  vec3 finalColor = fog.rgb + mix(source.color, baseColor, fog.a);
   imageStore(hdrTarget, imCoord, vec4(finalColor, 1.f));
 }
 

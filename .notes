@@ -216,10 +216,11 @@ v Gather sources
 v Research
 v Plan
 - Bare bones
-  - Set up a separate renderpass fog -- hr target, pipelines, gen shader, apply shader (after water)
-  - Apply in separate pass with bilinear upscale
-  - This version -- add simple constant transmittance raymarch
-  - Add constant sun inscatter with stock pcf sampling
+  v Set up a separate renderpass fog -- hr target, pipelines, gen shader, apply shader (after water)
+  v Apply in separate pass with bilinear upscale
+  v This version -- add simple constant transmittance raymarch
+  v Add constant sun inscatter with stock pcf sampling
+  - Fix artifacts
 - Fog shape
   - Research how height fog is done, add to baseline constant fog
   - Add noises (shape of height fog and texture to constant)

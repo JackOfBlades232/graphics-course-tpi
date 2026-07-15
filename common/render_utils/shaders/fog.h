@@ -6,6 +6,7 @@
 
 #define FOG_WORKGROUP_DIM 16
 
+// @TODO: rework from inshader params
 struct FogSourceData
 {
   shader_vec3 color; 

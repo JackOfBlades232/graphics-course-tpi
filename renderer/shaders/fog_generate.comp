@@ -40,6 +40,11 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 };
 
 #include "bindless.glsl.inc"
+#include "lights.glsl.inc"
+
+const int raymarchSteps = 32;
+const float constantDensity = 0.001f;
+const float constantInscatter = 0.01f;
 
 void main(void)
 {
@@ -49,13 +54,44 @@ void main(void)
   if (imCoord.x >= imSize.x || imCoord.y >= imSize.y)
     return;
 
-  // @TEST
-  vec3 color = source.color;
-  if (lights.directionalLightsCount > 0)
+  const vec2 invaspect = vec2(1.f / viewParams.mProj[0][0], 1.f / viewParams.mProj[1][1]);
+  const vec2 uv = vec2(2 * imCoord + 1) * constants.mainTargetInverseResolution;
+  const vec2 ndcuv = 2.f * uv - 1.f;
+  const vec3 ray = vec3(ndcuv * invaspect, 1.f);
+  const float raylen = length(ray);
+  const vec3 dir = ray / raylen;
+
+  const float clipDepth = textureLod(gbufDepth, uv, 0.f).x;
+  const float linearDepth = linearize_z(clipDepth, viewParams, viewData);
+  const float worldDepth = raylen * linearDepth;
+
+  const vec3 worldDir = mat3(viewParams.mInverseView) * dir;
+
+  vec3 pos = viewParams.viewPos; // @TODO: some other starting pos
+  vec3 vpos = vec3(0.f);
+  float posStepLen = worldDepth / raymarchSteps;
+  vec3 posStep = worldDir * posStepLen;
+  vec3 vposStep = dir * posStepLen;
+  vec4 transmitted = vec4(0.f, 0.f, 0.f, 1.f);
+  for (int s = 0; s < raymarchSteps; ++s)
   {
-    vec3 lightColor = lights.directionalLights[0].intensity * lights.directionalLights[0].color;
-    if (((imCoord / 64).x + (imCoord / 64).y) % 2 == 1)
-      color = lightColor;
+    pos += posStep;
+    vpos += vposStep;
+
+    float d = constantDensity;
+    float i = constantInscatter;
+
+    float stp = exp(-d * posStepLen); 
+    transmitted.a *= stp;
+
+    if (lights.directionalLightsCount > 0)
+    {
+      CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(vpos, viewParams);
+      LightData ld = calculate_directional_light_data(0, pos, csmd);
+      vec3 inscatter = i * ld.intensity * ld.shadow; // * phase
+      transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / d;
+    }
   }
-  imageStore(fogHalfres, imCoord, vec4(0.5f, color));
+
+  imageStore(fogHalfres, imCoord, transmitted);
 }

@@ -1231,8 +1231,6 @@ void WorldRenderer::update(const FramePacket& packet)
           XZ(constantsData.playerWorldPos) - glm::vec2{CLIPMAP_LEVEL_WSIZE(CLIPMAP_LEVEL_COUNT)});
         terrain->invalidateClipmapRequested = false;
       }
-
-      terrain->needToroidalUpdate = true;
     }
 
     const auto toroidalOffsetRaw =
@@ -1246,6 +1244,9 @@ void WorldRenderer::update(const FramePacket& packet)
           constantsData.toroidalUpdatePlayerWorldPos + toroidalOffsetRaw));
       constantsData.toroidalOffset =
         constantsData.toroidalUpdatePlayerWorldPos - oldToroidalUpdatePos;
+
+      if (terrain)
+        terrain->needToroidalUpdate = true;
     }
   }
 
@@ -2392,6 +2393,7 @@ void WorldRenderer::renderWorld(
             .size = WATER_CAUSTIC_MAP_RES * WATER_CAUSTIC_MAP_RES * sizeof(uint32_t)}});
 
         {
+          ETNA_PROFILE_GPU(cmd_buf, waterCausticsCvt);
           auto programInfo = etna::get_shader_program("water_caustics_convert");
           auto set = etna::create_descriptor_set(
             programInfo.getDescriptorLayoutId(0),
