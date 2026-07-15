@@ -8,7 +8,7 @@
 
 layout(local_size_x = FOG_WORKGROUP_DIM, local_size_y = FOG_WORKGROUP_DIM, local_size_z = 1) in;
 
-layout(binding = 0, set = 0, rgba8) uniform writeonly image2D fogHalfres;
+layout(binding = 0, set = 0, rgba16f) uniform writeonly image2D fogHalfres;
 layout(binding = 1, set = 0) uniform sampler2D gbufDepth;
 
 layout(binding = 6, set = 0) uniform fog_source_t

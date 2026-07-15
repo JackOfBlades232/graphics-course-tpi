@@ -215,19 +215,19 @@ v Gather task
 v Gather sources
 v Research
 v Plan
-- Bare bones
+v Bare bones
   v Set up a separate renderpass fog -- hr target, pipelines, gen shader, apply shader (after water)
   v Apply in separate pass with bilinear upscale
   v This version -- add simple constant transmittance raymarch
   v Add constant sun inscatter with stock pcf sampling
-  - Fix artifacts
+  v Fix blatant artifacts -- moving to float16 helped. Still some visible stuff.
+- Quality
+  - Check for resolution/marching artifacts
+  - Test catmull rom for upscaling
 - Fog shape
   - Research how height fog is done, add to baseline constant fog
   - Add noises (shape of height fog and texture to constant)
   - Pull parameters to scene def (turn JB_wind => JB_weather)
-- Quality
-  - Check for resolution/marching artifacts
-  - Test catmull rom for upscaling
 - Performance
   - Measure
   - Test lowering taps for shadows

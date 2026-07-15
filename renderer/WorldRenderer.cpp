@@ -367,7 +367,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       etna::Image::CreateInfo{
         .extent = vk::Extent3D{resolution.x / 2, resolution.y / 2, 1},
         .name = "hr_fog_buffer",
-        .format = vk::Format::eR8G8B8A8Unorm,
+        .format = vk::Format::eR16G16B16A16Sfloat,
         .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
   }
 }
@@ -420,7 +420,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       etna::Image::CreateInfo{
         .extent = vk::Extent3D{resolution.x / 2, resolution.y / 2, 1},
         .name = "hr_fog_buffer",
-        .format = vk::Format::eR8G8B8A8Unorm,
+        .format = vk::Format::eR16G16B16A16Sfloat,
         .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled});
     fog->source = create_buffer(etna::Buffer::CreateInfo{
       .size = sizeof(FogSourceData),
