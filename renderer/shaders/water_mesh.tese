@@ -34,10 +34,10 @@ layout(binding = 10, set = 0) readonly buffer view_data_t
   ViewData viewData;
 };
 
-layout(binding = 16, set = 0) uniform sampler2D geomClipmap[CLIPMAP_LEVEL_COUNT];
-layout(binding = 17, set = 0) uniform sampler2D normalClipmap[CLIPMAP_LEVEL_COUNT];
-layout(binding = 18, set = 0) uniform sampler2D albedoClipmap[CLIPMAP_LEVEL_COUNT];
-layout(binding = 19, set = 0) uniform sampler2D matdataClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 17, set = 0) uniform sampler2D geomClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 18, set = 0) uniform sampler2D normalClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 19, set = 0) uniform sampler2D albedoClipmap[CLIPMAP_LEVEL_COUNT];
+layout(binding = 20, set = 0) uniform sampler2D matdataClipmap[CLIPMAP_LEVEL_COUNT];
 
 #include "terrain_mesh.glsl.inc"
 

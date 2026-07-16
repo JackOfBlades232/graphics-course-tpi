@@ -1555,6 +1555,10 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
           15,
           mainViewOpaqueDepth.genBinding(
             defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
+        waterBinds.emplace_back(
+          16,
+          gbufNormal.genBinding(
+            defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
           waterBinds.emplace_back(
@@ -1578,22 +1582,22 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
           for (const auto& b : terrain->geometryLevelsSamplerBindings)
           {
             waterBinds.push_back(b);
-            waterBinds.back().binding = 16;
+            waterBinds.back().binding = 17;
           }
           for (const auto& b : terrain->normalLevelsSamplerBindings)
           {
             waterBinds.push_back(b);
-            waterBinds.back().binding = 17;
+            waterBinds.back().binding = 18;
           }
           for (const auto& b : terrain->albedoLevelsSamplerBindings)
           {
             waterBinds.push_back(b);
-            waterBinds.back().binding = 18;
+            waterBinds.back().binding = 19;
           }
           for (const auto& b : terrain->matdataLevelsSamplerBindings)
           {
             waterBinds.push_back(b);
-            waterBinds.back().binding = 19;
+            waterBinds.back().binding = 20;
           }
         }
         else
@@ -1601,7 +1605,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
           for (int i = 0; i < CLIPMAP_LEVEL_COUNT * 4; ++i)
           {
             waterBinds.emplace_back(
-              16 + i / CLIPMAP_LEVEL_COUNT,
+              17 + i / CLIPMAP_LEVEL_COUNT,
               sceneMgr->getPlanarTexStub().genBinding(
                 defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal),
               uint32_t(i % CLIPMAP_LEVEL_COUNT));

@@ -42,9 +42,10 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 #include "bindless.glsl.inc"
 #include "lights.glsl.inc"
 
-const int raymarchSteps = 32;
+const int raymarchSteps = 64;
 const float constantDensity = 0.001f;
 const float constantInscatter = 0.01f;
+const float maxStepSize = 0.25f;
 
 void main(void)
 {
@@ -69,9 +70,9 @@ void main(void)
 
   vec3 pos = viewParams.viewPos; // @TODO: some other starting pos
   vec3 vpos = vec3(0.f);
-  float posStepLen = worldDepth / raymarchSteps;
-  vec3 posStep = worldDir * posStepLen;
-  vec3 vposStep = dir * posStepLen;
+  float stepSize = min(worldDepth / raymarchSteps, maxStepSize);
+  vec3 posStep = worldDir * stepSize;
+  vec3 vposStep = dir * stepSize;
   vec4 transmitted = vec4(0.f, 0.f, 0.f, 1.f);
   for (int s = 0; s < raymarchSteps; ++s)
   {
@@ -81,7 +82,7 @@ void main(void)
     float d = constantDensity;
     float i = constantInscatter;
 
-    float stp = exp(-d * posStepLen); 
+    float stp = exp(-d * stepSize); 
     transmitted.a *= stp;
 
     if (lights.directionalLightsCount > 0)

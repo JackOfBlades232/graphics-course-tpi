@@ -50,6 +50,7 @@ layout(binding = 13, set = 0) readonly buffer light_mats_t
 
 layout(binding = 14, set = 0) uniform sampler2D opaqueColor;
 layout(binding = 15, set = 0) uniform sampler2D opaqueDepth;
+layout(binding = 16, set = 0) uniform sampler2D opaqueNormal;
 
 layout(location = 0) in TE_OUT
 {
@@ -172,6 +173,10 @@ void main(void)
             clamp(
               (source.lightingCausticsRenderDistance - dist) / source.lightingCausticsRenderFadeout,
               0.f, 1.f));
+
+        vec3 bgNormal = textureLod(opaqueNormal, refractionTc, 0.f).xyz;
+        float slopeCoeff = bgNormal.y;
+        causticFadeout *= smoothstep(0.f, 1.f, clamp((slopeCoeff - 0.1f) * 2.f, 0.f, 1.f));
 
         if (lights.directionalLightsCount > 0 && causticFadeout > 0.f)
         {
