@@ -19,9 +19,42 @@ layout(binding = 8, set = 0) uniform constants_t
   Constants constants;
 };
 
+// @TODO: pull out & reuse
+vec4 sample_tex_catmull_rom_5tap(in sampler2D texSmp, in vec2 uv, in vec2 texSize, in float c)
+{
+  vec4 rtMetrics = vec4(1.0 / texSize.xy, texSize.xy);
+
+  vec2 position = rtMetrics.zw * uv;
+  vec2 centerPosition = floor(position - 0.5) + 0.5;
+  vec2 f = position - centerPosition;
+  vec2 f2 = f * f;
+  vec2 f3 = f * f2;
+
+
+  vec2 w0 = -c * f3 + 2.0 * c * f2 - c * f;
+  vec2 w1 = (2.0 - c) * f3 - (3.0 - c) * f2 + 1.0;
+  vec2 w2 = -(2.0 - c) * f3 + (3.0 - 2.0 * c) * f2 + c * f;
+  vec2 w3 = c * f3 - c * f2;
+
+  vec2 w12 = w1 + w2;
+  vec2 tc12 = rtMetrics.xy * (centerPosition + w2 / w12);
+  vec3 centerColor = textureLod(texSmp, vec2(tc12.x, tc12.y), 0).rgb;
+
+  vec2 tc0 = rtMetrics.xy * (centerPosition - 1.0);
+  vec2 tc3 = rtMetrics.xy * (centerPosition + 2.0);
+  vec4 color =
+    vec4(textureLod(texSmp, vec2(tc12.x, tc0.y), 0).rgb, 1.0) * (w12.x * w0.y) +
+    vec4(textureLod(texSmp, vec2(tc0.x, tc12.y), 0).rgb, 1.0) * (w0.x * w12.y) +
+    vec4(centerColor, 1.0) * (w12.x * w12.y) +
+    vec4(textureLod(texSmp, vec2(tc3.x, tc12.y), 0).rgb, 1.0) * (w3.x * w12.y) +
+    vec4(textureLod(texSmp, vec2(tc12.x, tc3.y), 0).rgb, 1.0) * (w12.x * w3.y);
+  return vec4(color.rgb / color.a, 1.0);
+}
+
 vec4 upscale_sample_fog(vec2 uv)
 {
-  return textureLod(fogHalfres, uv, 0.f);
+  //return textureLod(fogHalfres, uv, 0.f);
+  return sample_tex_catmull_rom_5tap(fogHalfres, uv, textureSize(fogHalfres, 0), 0.f);
 }
 
 void main(void)

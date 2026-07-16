@@ -45,6 +45,7 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 const int raymarchSteps = 64;
 const float constantDensity = 0.001f;
 const float constantInscatter = 0.01f;
+const float atmosphereZfar = 1000.f;
 const float maxStepSize = 0.25f;
 
 void main(void)
@@ -93,6 +94,11 @@ void main(void)
       transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / d;
     }
   }
+
+  float finalTracedLinearDepth = vpos.z;
+  float finDepth = min(linearDepth, atmosphereZfar);
+  if (finDepth > finalTracedLinearDepth)
+    transmitted.a *= exp(-constantDensity * (finDepth - finalTracedLinearDepth));
 
   imageStore(fogHalfres, imCoord, transmitted);
 }

@@ -83,7 +83,7 @@ vec4 sample_tex_catmull_rom_9tap(in sampler2D texSmp, in vec2 uv, in vec2 texSiz
 
 // from https://advances.realtimerendering.com/s2016/Filmic%20SMAA%20v7.pptx , p 92
 // @TODO same as with 9tap
-vec4 sample_tex_catmull_rom_5tap(in sampler2D texSmp, in vec2 uv, in vec2 texSize)
+vec4 sample_tex_catmull_rom_5tap(in sampler2D texSmp, in vec2 uv, in vec2 texSize, in float c)
 {
   vec4 rtMetrics = vec4(1.0 / texSize.xy, texSize.xy);
 
@@ -94,7 +94,6 @@ vec4 sample_tex_catmull_rom_5tap(in sampler2D texSmp, in vec2 uv, in vec2 texSiz
   vec2 f3 = f * f2;
 
 
-  const float c = 0.4; // note: [0;1] ( SMAA_FILMIC_REPROJECTION_SHARPNESS / 100.0 )
   vec2 w0 = -c * f3 + 2.0 * c * f2 - c * f;
   vec2 w1 = (2.0 - c) * f3 - (3.0 - c) * f2 + 1.0;
   vec2 w2 = -(2.0 - c) * f3 + (3.0 - 2.0 * c) * f2 + c * f;
@@ -222,7 +221,7 @@ void main(void)
     vec2 uv = surf.texCoord - neiData.dilatedMotionVector;
     if (uv.x >= 0.f && uv.x <= 1.f && uv.y >= 0.f && uv.y <= 1.f)
     {
-      vec3 prevCol = sample_tex_catmull_rom_5tap(prevFrame, uv, textureSize(prevFrame, 0)).xyz;
+      vec3 prevCol = sample_tex_catmull_rom_5tap(prevFrame, uv, textureSize(prevFrame, 0), 0.4f).xyz;
 
       prevCol = clamp(prevCol, neiData.clampBoxMin, neiData.clampBoxMax);
       prevCol = clip_to_aabb_center(prevCol, neiData.clipBoxMin, neiData.clipBoxMax);

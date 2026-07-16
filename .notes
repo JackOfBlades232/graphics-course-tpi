@@ -222,8 +222,9 @@ v Bare bones
   v Add constant sun inscatter with stock pcf sampling
   v Fix blatant artifacts -- moving to float16 helped. Still some visible stuff.
 - Quality
-  - Check for resolution/marching artifacts
-  - Test catmull rom for upscaling
+  v Check for resolution/marching artifacts
+  v Test catmull rom for upscaling
+  - Add (optional) other lights with (optional) shadows
 - Fog shape
   - Research how height fog is done, add to baseline constant fog
   - Add noises (shape of height fog and texture to constant)
