@@ -1273,7 +1273,7 @@ void WorldRenderer::update(const FramePacket& packet)
     if (sceneMgr->hasWind())
       constantsData.windData = sceneMgr->getWind();
     else
-      constantsData.windData = {{1.f, 0.f}, 0.f}; // Avoid issues with 0-length dir
+      constantsData.windData = {{1.f, 0.f}, 0.f, 0.f}; // Avoid issues with 0-length dir
   }
 
   {
