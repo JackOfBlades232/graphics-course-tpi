@@ -116,6 +116,8 @@ void main(void)
   for (int i = 0; i < lights.directionalLightsCount; ++i)
   {
     const LightData ld = calculate_directional_light_data(i, pos, csmd);
+    if (length(ld.intensity) < SHADER_EPSILON)
+      continue;
 
     vec3 diff = vec3(0.f);
     vec3 spec = vec3(0.f);
@@ -132,154 +134,38 @@ void main(void)
   // @TODO: refactor to LightData
   for (int i = 0; i < lights.pointLightsCount; ++i)
   {
-    const vec3 lightIntensity = lights.pointLights[i].color * lights.pointLights[i].intensity;
-    const float lightAttenuation =
-      calculate_attenuation(pos, lights.pointLights[i].position, lights.pointLights[i].range);
-    const vec3 lightDir = normalize(lights.pointLights[i].position - pos);
-    const vec3 lightColor = lightIntensity * lightAttenuation;
-    if (length(lightColor) < SHADER_EPSILON)
+    const LightData ld = calculate_point_light_data(i, pos);
+    if (length(ld.intensity) < SHADER_EPSILON)
       continue;
-
-    float shadow = 1.f;
-
-    if (constants.usePointLightShadows != 0)
-    {
-      const vec3 sampleDir = -vec3(lightDir.x, lightDir.y, -lightDir.z);
-
-      // @TODO: pull out?
-      const uint faceIdx =
-        abs(sampleDir.x) > abs(sampleDir.y) && abs(sampleDir.x) > abs(sampleDir.z) ? (sampleDir.x > 0.f ? 0 : 1) :
-        abs(sampleDir.y) > abs(sampleDir.z) ? (sampleDir.y > 0.f ? 2 : 3) :
-        (sampleDir.z > 0.f ? 4 : 5);
-
-      const vec4 posLightClipSpace = mats.pointLightMats[i][faceIdx] * vec4(pos, 1.f);
-      const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
-
-      if (SHADOW_TECHNIQUE_IS_PCF(constants.pointLightShadowsTechnique))
-      {
-        shadow = sample_bindless_tex_cube_shadow_lod(
-          lights.pointLights[i].shadowmap, vec4(sampleDir, posLightSpaceNDC.z), 0.f);
-
-        if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.pointLightShadowsTechnique))
-        {
-          const int gridDim = PCF_KERNEL_SIZES[constants.pointLightShadowsTechnique];
-          const int mid = gridDim / 2 + 1;
-
-          const float faceExt =
-            (faceIdx == 0 || faceIdx == 1) ? abs(sampleDir.x) :
-            (faceIdx == 2 || faceIdx == 3) ? abs(sampleDir.y) :
-            abs(sampleDir.z);
-
-          const vec3 baseDir = sampleDir / faceExt;
-
-          // PCF is symmetrical => dir does not matter
-          const vec3 ud = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 2 || faceIdx == 3) ? vec3(1.f, 0.f, 0.f) : vec3(0.f, 1.f, 0.f));
-          const vec3 vd = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 4 || faceIdx == 5) ? vec3(1.f, 0.f, 0.f) : vec3(0.f, 0.f, 1.f));
-
-          float sampleCount = 1.f;
-
-          for (int y = 0; y < gridDim; ++y)
-            for (int x = 0; x < gridDim; ++x)
-            {
-              if (x == mid && y == mid)
-                continue;
-
-              const vec3 sdir = normalize(baseDir + (float(x) - float(gridDim) * 0.5f) * ud + (float(y) - float(gridDim) * 0.5f) * vd);
-              const float w = pcf_kernel_weight(x, y, constants.pointLightShadowsTechnique);
-
-              shadow += w * sample_bindless_tex_cube_shadow_lod(
-                lights.pointLights[i].shadowmap, vec4(sdir, posLightSpaceNDC.z), 0.f);
-              sampleCount += w;
-            }
-
-          shadow /= sampleCount;
-        }
-      }
-    }
 
     vec3 diff = vec3(0.f);
     vec3 spec = vec3(0.f);
 
     if (mat == MATERIAL_PBR)
-      calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, diff, spec);
+      calculate_pbr(normal, ld.direction, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, diff, spec);
     else if (mat == MATERIAL_DIFFUSE)
-      calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, diff, spec);
+      calculate_pbr_diff_spec_gloss(normal, ld.direction, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, diff, spec);
 
-    totDiff += diff * shadow * lightColor;
-    totSpec += spec * shadow * lightColor;
+    totDiff += diff * ld.shadow * ld.intensity;
+    totSpec += spec * ld.shadow * ld.intensity;
   }
 
   for (int i = 0; i < lights.spotLightsCount; ++i)
   {
-    const vec3 lightIntensity = lights.spotLights[i].color * lights.spotLights[i].intensity;
-    const float lightAttenuation =
-      calculate_attenuation(pos, lights.spotLights[i].position, lights.spotLights[i].range);
-
-    const vec3 lightDir = normalize(lights.spotLights[i].direction);
-    const vec3 fromPosDir = normalize(lights.spotLights[i].position - pos);
-
-    const float lightAngularAttenuation = calculate_angular_attenuation(
-      dot(lightDir, -fromPosDir),
-      cos(lights.spotLights[i].innerConeAngle * 0.5f),
-      cos(lights.spotLights[i].outerConeAngle * 0.5f));
-
-    const vec3 lightColor = lightIntensity * lightAttenuation * lightAngularAttenuation;
-    if (length(lightColor) < SHADER_EPSILON)
+    const LightData ld = calculate_spot_light_data(i, pos);
+    if (length(ld.intensity) < SHADER_EPSILON)
       continue;
-
-    float shadow = 1.f;
-    
-    if (constants.useSpotLightShadows != 0)
-    {
-      const vec4 posLightClipSpace = mats.spotLightMats[i] * vec4(pos, 1.f);
-      const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
-      const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
-
-      if (SHADOW_TECHNIQUE_IS_PCF(constants.spotLightShadowsTechnique))
-      {
-        shadow = sample_bindless_tex_shadow_lod(
-          lights.spotLights[i].shadowmap, vec3(shadowUv, posLightSpaceNDC.z), 0.f);
-
-        // @TODO: pull out
-        if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.spotLightShadowsTechnique))
-        {
-          const int gridDim = PCF_KERNEL_SIZES[constants.spotLightShadowsTechnique];
-          const int mid = gridDim / 2 + 1;
-
-          const vec2 uvStep = vec2(1.f / SPOT_SM_RESOLUTION);
-          const vec2 uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
-
-          float sampleCount = 1.f;
-
-          for (int y = 0; y < gridDim; ++y)
-            for (int x = 0; x < gridDim; ++x)
-            {
-              if (x == mid && y == mid)
-                continue;
-
-              const vec2 uv = uvBase + uvStep * vec2(float(x), float(y));
-              const float w = pcf_kernel_weight(x, y, constants.spotLightShadowsTechnique);
-
-              shadow += w * sample_bindless_tex_shadow_lod(
-                lights.spotLights[i].shadowmap, vec3(uv, posLightSpaceNDC.z), 0.f);
-              sampleCount += w;
-            }
-
-          shadow /= sampleCount;
-        }
-      }
-    }
 
     vec3 diff = vec3(0.f);
     vec3 spec = vec3(0.f);
 
     if (mat == MATERIAL_PBR)
-      calculate_pbr(normal, lightDir, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, diff, spec);
+      calculate_pbr(normal, ld.direction, viewVec, matData.y, matData.z, albedo, transData.w, transData.xyz, diff, spec);
     else if (mat == MATERIAL_DIFFUSE)
-      calculate_pbr_diff_spec_gloss(normal, lightDir, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, diff, spec);
+      calculate_pbr_diff_spec_gloss(normal, ld.direction, viewVec, albedo, dequantize4fcol(floatBitsToUint(matData.y)).xyz, matData.z, transData.w, transData.xyz, diff, spec);
 
-    totDiff += diff * shadow * lightColor;
-    totSpec += spec * shadow * lightColor;
+    totDiff += diff * ld.shadow * ld.intensity;
+    totSpec += spec * ld.shadow * ld.intensity;
   }
 
   vec3 color = ambient + totDiff + totSpec;

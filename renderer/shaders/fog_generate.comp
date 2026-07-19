@@ -47,6 +47,7 @@ const float constantDensity = 0.001f;
 const float constantInscatter = 0.01f;
 const float atmosphereZfar = 1000.f;
 const float maxStepSize = 0.25f;
+const float sceneLightsScatterCoeff = 1.f /* 1.f */;
 
 void main(void)
 {
@@ -55,6 +56,8 @@ void main(void)
 
   if (imCoord.x >= imSize.x || imCoord.y >= imSize.y)
     return;
+
+  const bool scatterAllLights = sceneLightsScatterCoeff >= SHADER_EPSILON;
 
   const vec2 invaspect = vec2(1.f / viewParams.mProj[0][0], 1.f / viewParams.mProj[1][1]);
   const vec2 uv = vec2(2 * imCoord + 1) * constants.mainTargetInverseResolution;
@@ -80,18 +83,31 @@ void main(void)
     pos += posStep;
     vpos += vposStep;
 
-    float d = constantDensity;
-    float i = constantInscatter;
+    float dd = constantDensity;
+    float ii = constantInscatter;
 
-    float stp = exp(-d * stepSize); 
+    float stp = exp(-dd * stepSize); 
     transmitted.a *= stp;
 
-    if (lights.directionalLightsCount > 0)
+    CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(vpos, viewParams);
+    for (int i = 0; i < (scatterAllLights ? lights.directionalLightsCount : min(1, lights.directionalLightsCount)); ++i)
     {
-      CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(vpos, viewParams);
-      LightData ld = calculate_directional_light_data(0, pos, csmd);
-      vec3 inscatter = i * ld.intensity * ld.shadow; // * phase
-      transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / d;
+      LightData ld = calculate_directional_light_data(i, pos, csmd);
+      vec3 inscatter = ii * ld.intensity * ld.shadow; // * phase
+      transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / dd;
+    }
+
+    for (int i = 0; i < (scatterAllLights ? lights.pointLightsCount : 0); ++i)
+    {
+      LightData ld = calculate_point_light_data(i, pos);
+      vec3 inscatter = ii * ld.intensity * ld.shadow * sceneLightsScatterCoeff; // * phase
+      transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / dd;
+    }
+    for (int i = 0; i < (scatterAllLights ? lights.spotLightsCount : 0); ++i)
+    {
+      LightData ld = calculate_spot_light_data(i, pos);
+      vec3 inscatter = ii * ld.intensity * ld.shadow * sceneLightsScatterCoeff; // * phase
+      transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / dd;
     }
   }
 
