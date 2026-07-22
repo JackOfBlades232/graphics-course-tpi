@@ -70,7 +70,7 @@ void main(void)
   vec2 uv = vec2(imCoord) * constants.mainTargetInverseResolution;
   vec4 fog = upscale_sample_fog(uv);
 
-  vec3 finalColor = fog.rgb + mix(source.color, baseColor, fog.a);
+  vec3 finalColor = fog.rgb + mix(source.color, baseColor, clamp(fog.a, 0.f, 1.f));
   imageStore(hdrTarget, imCoord, vec4(finalColor, 1.f));
 }
 
