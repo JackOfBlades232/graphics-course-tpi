@@ -226,8 +226,11 @@ v Quality
   v Test catmull rom for upscaling
   v Add (optional) other lights with (optional) shadows
 - Fog shape
-  - Research how height fog is done, add to baseline constant fog
-  - Add noises (shape of height fog and texture to constant)
+  v Research how height fog is done, add to baseline constant fog
+  v Add noises (shape of height fog and texture to constant)
+  v Tweak around until looks fine
+  - Fix colorized artifacts
+  - Research how to preserve shape at distance -- issue is with current marching scheme
   - Pull parameters to scene def (turn JB_wind => JB_weather)
 - Performance
   - Measure

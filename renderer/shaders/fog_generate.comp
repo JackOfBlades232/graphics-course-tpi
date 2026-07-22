@@ -43,11 +43,137 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 #include "lights.glsl.inc"
 
 const int raymarchSteps = 64;
-const float constantDensity = 0.001f;
+const float constantDensity = 0.0001f;
+const float heightDensityBase = 0.f;
+const float heightDensityFalloff = 0.5f;
+const float shapeDensityScale = 10.f;
+const float shapeDensityWindInfluence = 0.1f;
+const float shapeDensityAmp = 5.f;
+const float detailDensityScale = 1.f;
+const float detailDensityWindInfluence = 0.5f;
+const float detailDensityAmp = 3.f;
 const float constantInscatter = 0.01f;
 const float atmosphereZfar = 1000.f;
 const float maxStepSize = 0.25f;
-const float sceneLightsScatterCoeff = 1.f /* 1.f */;
+const float sceneLightsScatterCoeff = 0.f;
+
+const int perm[512] = int[512](
+  151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,
+  140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,
+  247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,
+  57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,
+  74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,
+  60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,
+  65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,
+  200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,
+  52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,
+  207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,
+  119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,
+  129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,
+  218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,
+  81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,
+  184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,
+  222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180,
+
+  151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,
+  140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,
+  247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,
+  57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,
+  74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,
+  60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,
+  65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,
+  200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,
+  52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,
+  207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,
+  119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,
+  129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,
+  218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,
+  81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,
+  184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,
+  222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180);
+
+float fade(float t)
+{
+  return t * t * t * (t * (t * 6.f - 15.f) + 10.f);
+}
+
+float grad(int hash, vec3 p)
+{
+  int h = hash & 15;
+
+  float u = h < 8 ? p.x : p.y;
+
+  float v;
+  if (h < 4)
+    v = p.y;
+  else if (h == 12 || h == 14)
+    v = p.x;
+  else
+    v = p.z;
+
+  return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
+}
+
+float perlin(vec3 p)
+{
+  ivec3 i = ivec3(floor(p));
+  vec3 f = fract(p);
+
+  vec3 u = vec3(fade(f.x), fade(f.y), fade(f.z));
+
+  int X = i.x & 255;
+  int Y = i.y & 255;
+  int Z = i.z & 255;
+
+  int A  = perm[X] + Y;
+  int AA = perm[A] + Z;
+  int AB = perm[A + 1] + Z;
+
+  int B  = perm[X + 1] + Y;
+  int BA = perm[B] + Z;
+  int BB = perm[B + 1] + Z;
+
+  float x1 = mix(grad(perm[AA], f), grad(perm[BA], f - vec3(1.f, 0.f, 0.f)), u.x);
+  float x2 = mix(grad(perm[AB], f - vec3(0.f, 1.f, 0.f)), grad(perm[BB], f - vec3(1.f, 1.f, 0.f)), u.x);
+  float y1 = mix(x1, x2, u.y);
+  float x3 = mix(grad(perm[AA + 1], f - vec3(0.f, 0.f, 1.f)), grad(perm[BA + 1], f - vec3(1.f, 0.f, 1.f)), u.x);
+  float x4 = mix(grad(perm[AB + 1], f - vec3(0.f, 1.f, 1.f)), grad(perm[BB + 1], f - vec3(1.f, 1.f, 1.f)), u.x);
+
+  float y2 = mix(x3, x4, u.y);
+
+  return mix(y1, y2, u.z);
+}
+
+float fbm(vec3 p, int octaves)
+{
+  float value = 0.f;
+  float amplitude = 0.5f;
+
+  for (int i = 0; i < octaves; i++)
+  {
+    value += amplitude * perlin(p);
+
+    p *= 2.f;
+    amplitude *= 0.5f;
+  }
+
+  return value;
+}
+
+float density_base(vec3 p)
+{
+  float height = exp(-(p.y - heightDensityBase) * heightDensityFalloff);
+  return height + constantDensity;
+}
+
+float density(vec3 p)
+{
+  const vec2 wind2d = -constants.windData.direction * constants.windData.strength;
+  const vec3 wind = vec3(wind2d.x, 0.f, wind2d.y) * constants.time;
+  float shape = 1.f + shapeDensityAmp * fbm((p + wind * shapeDensityWindInfluence) / shapeDensityScale, 5);
+  float detail = 1.f + detailDensityAmp * fbm((p + wind * detailDensityWindInfluence) / detailDensityScale, 8);
+  return density_base(p) * shape * detail;
+}
 
 void main(void)
 {
@@ -83,7 +209,7 @@ void main(void)
     pos += posStep;
     vpos += vposStep;
 
-    float dd = constantDensity;
+    float dd = density(pos);
     float ii = constantInscatter;
 
     float stp = exp(-dd * stepSize); 
