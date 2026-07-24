@@ -225,15 +225,17 @@ v Quality
   v Check for resolution/marching artifacts
   v Test catmull rom for upscaling
   v Add (optional) other lights with (optional) shadows
+  v Perturb ray base
 - Fog shape
   v Research how height fog is done, add to baseline constant fog
   v Add noises (shape of height fog and texture to constant)
   v Tweak around until looks fine
-  - Fix colorized artifacts
+  v Fix colorized artifacts
   - Research how to preserve shape at distance -- issue is with current marching scheme
   - Pull parameters to scene def (turn JB_wind => JB_weather)
 - Performance
   - Measure
+  - Bake density noise into textures and sample
   - Test lowering taps for shadows
   - Refactor tonemapping into single postfx shader. Leave comps for heterogeneous prep, but ->tonemap doesn't work anymore
 

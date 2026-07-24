@@ -45,14 +45,12 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 const int raymarchSteps = 64;
 const float constantDensity = 0.f;
 const float heightDensityBase = -1.f;
-const float heightDensityFalloff = 0.5f;
-const float shapeDensityScale = 10.f;
+const float heightDensityFalloff = 1.f;
+const float shapeDensityScale = 3.f;
 const float shapeDensityWindInfluence = 0.1f;
-const float shapeDensityAmp = 1.f;
-const float detailDensityScale = 1.f;
-const float detailDensityWindInfluence = 0.5f;
-const float detailDensityAmp = 0.25f;
-const float constantInscatter = 0.01f;
+const float detailDensityScale = 0.7f;
+const float detailDensityWindInfluence = 0.4f;
+const float constantInscatter = 0.02f;
 const float atmosphereZfar = 1000.f;
 const float maxStepSize = 0.25f;
 const float sceneLightsScatterCoeff = 0.f;
@@ -157,12 +155,20 @@ float fbm(vec3 p, int octaves)
     amplitude *= 0.5f;
   }
 
-  return value;
+  return 0.5f * value + 0.5f;
+}
+
+float density_noise(vec3 p, float rng_min, float rng_max, int n, float scale, float wind_inf)
+{
+  const vec2 wind2d = -constants.windData.direction * constants.windData.strength;
+  const vec3 wind = vec3(wind2d.x, 0.f, wind2d.y) * constants.time;
+  float base = fbm((p + wind * wind_inf) / scale, n);
+  return smoothstep(rng_min, rng_max, base);
 }
 
 float density_base(vec3 p)
 {
-  float height = exp(-(p.y - heightDensityBase) * heightDensityFalloff);
+  float height = exp(-max(p.y - heightDensityBase, 0.f) * heightDensityFalloff);
   return height + constantDensity;
 }
 
@@ -170,9 +176,14 @@ float density(vec3 p)
 {
   const vec2 wind2d = -constants.windData.direction * constants.windData.strength;
   const vec3 wind = vec3(wind2d.x, 0.f, wind2d.y) * constants.time;
-  float shape = 1.f + shapeDensityAmp * fbm((p + wind * shapeDensityWindInfluence) / shapeDensityScale, 5);
-  float detail = 1.f + detailDensityAmp * fbm((p + wind * detailDensityWindInfluence) / detailDensityScale, 8);
+  float shape = density_noise(p, 0.4f, 0.7f, 3, shapeDensityScale, shapeDensityWindInfluence);
+  float detail = density_noise(p, 0.2f, 0.5f, 5, detailDensityScale, detailDensityWindInfluence);
   return density_base(p) * shape * detail;
+}
+
+float random (vec2 st)
+{
+  return fract(sin(dot(st.xy, vec2(145.f, 7.233f))) * 4274.8420509421345434f);
 }
 
 void main(void)
@@ -203,6 +214,9 @@ void main(void)
   float stepSize = min(worldDepth / raymarchSteps, maxStepSize);
   vec3 posStep = worldDir * stepSize;
   vec3 vposStep = dir * stepSize;
+  float r = random(pos.xy + pos.z);
+  pos += posStep * r;
+  vpos += vposStep * r;
   vec4 transmitted = vec4(0.f, 0.f, 0.f, 1.f);
   for (int s = 0; s < raymarchSteps; ++s)
   {
@@ -210,6 +224,9 @@ void main(void)
     vpos += vposStep;
 
     float dd = density(pos);
+    if (dd < SHADER_EPSILON)
+      continue;
+
     float ii = constantInscatter;
 
     float stp = exp(-dd * stepSize); 
