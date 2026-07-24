@@ -43,15 +43,15 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 #include "lights.glsl.inc"
 
 const int raymarchSteps = 64;
-const float constantDensity = 0.0001f;
-const float heightDensityBase = 0.f;
+const float constantDensity = 0.f;
+const float heightDensityBase = -1.f;
 const float heightDensityFalloff = 0.5f;
 const float shapeDensityScale = 10.f;
 const float shapeDensityWindInfluence = 0.1f;
-const float shapeDensityAmp = 5.f;
+const float shapeDensityAmp = 1.f;
 const float detailDensityScale = 1.f;
 const float detailDensityWindInfluence = 0.5f;
-const float detailDensityAmp = 3.f;
+const float detailDensityAmp = 0.25f;
 const float constantInscatter = 0.01f;
 const float atmosphereZfar = 1000.f;
 const float maxStepSize = 0.25f;
