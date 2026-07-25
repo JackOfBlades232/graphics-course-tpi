@@ -15,8 +15,10 @@ struct WeatherSourceData
   float fogShapeRngMax;
   float fogShapeScale;
   float fogShapeWindInfluence;
+  float fogShapeFadeoutStart;
+  float fogShapeFadeoutSize;
   float fogInscatterC;
-  float pad_;
+  float pad1_, pad2_, pad3_;
 };
 
 #endif // WIND_H_INCLUDED

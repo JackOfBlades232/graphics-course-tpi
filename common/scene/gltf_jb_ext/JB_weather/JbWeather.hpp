@@ -22,8 +22,10 @@ struct JbWeatherExtData
     {
       float rngMin = 0.f;
       float rngMax = 1.f;
-      float scale = 1.f;
+      float scale = 0.f;
       float windInfluence = 0.f;
+      float fadeoutStart = 0.f;
+      float fadeoutSize = 1.f;
     } shape;
     struct Inscatter
     {

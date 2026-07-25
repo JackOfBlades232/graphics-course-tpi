@@ -129,16 +129,24 @@ std::optional<JbWeatherExtData> jb_weather_parse_desc(const tinygltf::Model& mod
         FETCHM(*s, rngMax, get_float);
         FETCHM(*s, scale, get_float);
         FETCHM(*s, windInfluence, get_float);
+        FETCHM(*s, fadeoutStart, get_float);
+        FETCHM(*s, fadeoutSize, get_float);
         if (rngMin < 0.f || rngMin > 1.f || rngMax < 0.f || rngMax > 1.f || rngMin >= rngMax)
           FAIL("fog/shape/rngMin and rngMax must be in [0, 1] and min must be less than max");
         if (scale < FLT_EPSILON)
           FAIL("fog/shape/scale must be positive");
         if (windInfluence < 0.f)
           FAIL("fog/shape/windInfluence must not be negative");
+        if (fadeoutStart < 0.f)
+          FAIL("fog/shape/fadeoutStart must not be negative");
+        if (fadeoutSize < FLT_EPSILON)
+          FAIL("fog/shape/fadeoutSize must be positive");
         data.fog.shape.rngMin = rngMin;
         data.fog.shape.rngMax = rngMax;
         data.fog.shape.scale = scale;
         data.fog.shape.windInfluence = windInfluence;
+        data.fog.shape.fadeoutStart = fadeoutStart;
+        data.fog.shape.fadeoutSize = fadeoutSize;
       }
       auto iattr = get_subobject(*f, "inscatter");
       if (const auto* i = iattr.value)

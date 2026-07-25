@@ -44,12 +44,6 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 
 const int raymarchSteps = 64;
 const int distantSteps = 8;
-const float densityO = 0.1f;
-const float heightDensityBase = -1.f;
-const float heightDensityFalloff = 0.1f;
-const float shapeDensityScale = 10.f;
-const float shapeDensityWindInfluence = 0.5f;
-const float constantInscatter = 0.001f;
 const float maxStepSize = 20.f;
 const float sceneLightsScatterCoeff = 0.f;
 
@@ -166,23 +160,34 @@ float density_noise(vec3 p, float rng_min, float rng_max, int n, float scale, fl
 
 float density_base(vec3 p)
 {
-  float height = exp(-max(p.y - heightDensityBase, 0.f) * heightDensityFalloff);
-  return height * densityO;
+  float height = exp(-max(p.y - constants.weatherData.fogHBase, 0.f) * constants.weatherData.fogHC);
+  return height * constants.weatherData.fogRho0;
 }
 
 float density(vec3 p, float dist)
 {
   const vec2 wind2d = -constants.weatherData.windDirection * constants.weatherData.windStrength;
   const vec3 wind = vec3(wind2d.x, 0.f, wind2d.y) * constants.time;
-  float shape = 1.f;
-  float detail = 1.f;
-  float shapeFadeout = smoothstep(0.f, 1.f, (dist - 280.f) / 1000.f);
-  float detailFadeout = smoothstep(0.f, 1.f, (dist - 50.f) / 50.f);
-  if (shapeFadeout < 0.9999f)
-    shape = density_noise(p, 0.4f, 0.7f, 3, shapeDensityScale, shapeDensityWindInfluence);
-  float shapeFaded = mix(shape, 1.f, shapeFadeout);
-  float detailFaded = mix(detail, 1.f, detailFadeout);
-  return density_base(p) * shapeFaded * detailFaded;
+  float shapeFaded = 1.f;
+  if (constants.weatherData.fogShapeScale > SHADER_EPSILON)
+  {
+    float shapeFadeout = smoothstep(
+      0.f, 1.f,
+      (dist - constants.weatherData.fogShapeFadeoutStart) / constants.weatherData.fogShapeFadeoutSize);
+    float shape = 1.f;
+    if (shapeFadeout < 0.9999f)
+    {
+      shape = density_noise(
+        p,
+        constants.weatherData.fogShapeRngMin,
+        constants.weatherData.fogShapeRngMax,
+        3,
+        constants.weatherData.fogShapeScale,
+        constants.weatherData.fogShapeWindInfluence);
+    }
+    shapeFaded = mix(shape, 1.f, shapeFadeout);
+  }
+  return density_base(p) * shapeFaded;
 }
 
 float random(vec3 st)
@@ -234,30 +239,33 @@ void main(void)
       continue;
     }
 
-    float ii = constantInscatter;
+    float ii = constants.weatherData.fogInscatterC;
 
     float stp = exp(-dd * stepSize); 
     transmitted.a *= stp;
 
-    CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(vpos, viewParams);
-    for (int i = 0; i < (scatterAllLights ? lights.directionalLightsCount : min(1, lights.directionalLightsCount)); ++i)
+    if (ii > 0.f)
     {
-      LightData ld = calculate_directional_light_data(i, pos, csmd);
-      vec3 inscatter = ii * ld.intensity * ld.shadow; // * phase
-      transmitted.rgb += transmitted.a * inscatter * stp;
-    }
+      CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(vpos, viewParams);
+      for (int i = 0; i < (scatterAllLights ? lights.directionalLightsCount : min(1, lights.directionalLightsCount)); ++i)
+      {
+        LightData ld = calculate_directional_light_data(i, pos, csmd);
+        vec3 inscatter = ii * ld.intensity * ld.shadow; // * phase
+        transmitted.rgb += transmitted.a * inscatter * stp;
+      }
 
-    for (int i = 0; i < (scatterAllLights ? lights.pointLightsCount : 0); ++i)
-    {
-      LightData ld = calculate_point_light_data(i, pos);
-      vec3 inscatter = ii * ld.intensity * ld.shadow * sceneLightsScatterCoeff; // * phase
-      transmitted.rgb += transmitted.a * inscatter * stp * dd;
-    }
-    for (int i = 0; i < (scatterAllLights ? lights.spotLightsCount : 0); ++i)
-    {
-      LightData ld = calculate_spot_light_data(i, pos);
-      vec3 inscatter = ii * ld.intensity * ld.shadow * sceneLightsScatterCoeff; // * phase
-      transmitted.rgb += transmitted.a * inscatter * stp * dd;
+      for (int i = 0; i < (scatterAllLights ? lights.pointLightsCount : 0); ++i)
+      {
+        LightData ld = calculate_point_light_data(i, pos);
+        vec3 inscatter = ii * ld.intensity * ld.shadow * sceneLightsScatterCoeff; // * phase
+        transmitted.rgb += transmitted.a * inscatter * stp;
+      }
+      for (int i = 0; i < (scatterAllLights ? lights.spotLightsCount : 0); ++i)
+      {
+        LightData ld = calculate_spot_light_data(i, pos);
+        vec3 inscatter = ii * ld.intensity * ld.shadow * sceneLightsScatterCoeff; // * phase
+        transmitted.rgb += transmitted.a * inscatter * stp;
+      }
     }
 
     pos += posStep;

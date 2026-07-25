@@ -4059,6 +4059,22 @@
       "wind": {
         "direction": [1.0, 1.0],
         "strength": 2.0
+      },
+      "fog": {
+        "rho0": 0.1,
+        "hBase": -1.0,
+        "hC": 0.1,
+        "shape": {
+          "rngMin": 0.4,
+          "rngMax": 0.7,
+          "scale": 10.0,
+          "windInfluence": 0.5,
+          "fadeoutStart": 280.0,
+          "fadeoutSize": 1000.0
+        },
+        "inscatter": {
+          "c": 0.001
+        }
       }
     },
     "JB_water": {

@@ -1247,6 +1247,8 @@ void SceneManager::selectScene(
     data.fogShapeRngMax = weatherExt->fog.shape.rngMax;
     data.fogShapeScale = weatherExt->fog.shape.scale;
     data.fogShapeWindInfluence = weatherExt->fog.shape.windInfluence;
+    data.fogShapeFadeoutStart = weatherExt->fog.shape.fadeoutStart;
+    data.fogShapeFadeoutSize = weatherExt->fog.shape.fadeoutSize;
     data.fogInscatterC = weatherExt->fog.inscatter.c;
   }
 
