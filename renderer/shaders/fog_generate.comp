@@ -43,16 +43,16 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 #include "lights.glsl.inc"
 
 const int raymarchSteps = 64;
-const float constantDensity = 0.f;
+const float densityO = 2.f;
 const float heightDensityBase = -1.f;
 const float heightDensityFalloff = 1.f;
 const float shapeDensityScale = 3.f;
 const float shapeDensityWindInfluence = 0.1f;
 const float detailDensityScale = 0.7f;
 const float detailDensityWindInfluence = 0.4f;
-const float constantInscatter = 0.02f;
+const float constantInscatter = 0.0f;
 const float atmosphereZfar = 1000.f;
-const float maxStepSize = 0.25f;
+const float maxStepSize = 2.f;
 const float sceneLightsScatterCoeff = 0.f;
 
 const int perm[512] = int[512](
@@ -169,7 +169,7 @@ float density_noise(vec3 p, float rng_min, float rng_max, int n, float scale, fl
 float density_base(vec3 p)
 {
   float height = exp(-max(p.y - heightDensityBase, 0.f) * heightDensityFalloff);
-  return height + constantDensity;
+  return height * densityO;
 }
 
 float density(vec3 p)
@@ -218,12 +218,15 @@ void main(void)
   pos += posStep * r;
   vpos += vposStep * r;
   vec4 transmitted = vec4(0.f, 0.f, 0.f, 1.f);
+  float pdd = density(pos);
   for (int s = 0; s < raymarchSteps; ++s)
   {
     pos += posStep;
     vpos += vposStep;
 
-    float dd = density(pos);
+    float ndd = density(pos);
+    float dd = (ndd + pdd) * 0.5f;
+    pdd = ndd;
     if (dd < SHADER_EPSILON)
       continue;
 
@@ -257,7 +260,22 @@ void main(void)
   float finalTracedLinearDepth = vpos.z;
   float finDepth = min(linearDepth, atmosphereZfar);
   if (finDepth > finalTracedLinearDepth)
-    transmitted.a *= exp(-density_base(pos) * (finDepth - finalTracedLinearDepth));
+  {
+    vec3 initPos = viewParams.viewPos + posStep * r;
+    vec3 startPoint = pos;
+    vec3 endPoint = initPos + (pos - initPos) * (finDepth / finalTracedLinearDepth);
+    if (abs(endPoint.y - startPoint.y) < SHADER_EPSILON)
+    {
+      transmitted.a *= exp(-density_base(pos) * (finDepth - finalTracedLinearDepth));
+    }
+    else
+    {
+      transmitted.a *= exp(
+        -(density_base(endPoint) - density_base(startPoint)) *
+        (finDepth - finalTracedLinearDepth) /
+        (heightDensityFalloff * (endPoint.y - startPoint.y)));
+    }
+  }
 
   imageStore(fogHalfres, imCoord, transmitted);
 }
