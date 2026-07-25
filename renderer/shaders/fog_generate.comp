@@ -43,16 +43,14 @@ layout(binding = 12, set = 0) readonly buffer light_mats_t
 #include "lights.glsl.inc"
 
 const int raymarchSteps = 64;
-const float densityO = 2.f;
+const int distantSteps = 8;
+const float densityO = 0.1f;
 const float heightDensityBase = -1.f;
-const float heightDensityFalloff = 1.f;
-const float shapeDensityScale = 3.f;
-const float shapeDensityWindInfluence = 0.1f;
-const float detailDensityScale = 0.7f;
-const float detailDensityWindInfluence = 0.4f;
-const float constantInscatter = 0.0f;
-const float atmosphereZfar = 1000.f;
-const float maxStepSize = 2.f;
+const float heightDensityFalloff = 0.1f;
+const float shapeDensityScale = 10.f;
+const float shapeDensityWindInfluence = 0.5f;
+const float constantInscatter = 0.001f;
+const float maxStepSize = 20.f;
 const float sceneLightsScatterCoeff = 0.f;
 
 const int perm[512] = int[512](
@@ -172,18 +170,24 @@ float density_base(vec3 p)
   return height * densityO;
 }
 
-float density(vec3 p)
+float density(vec3 p, float dist)
 {
   const vec2 wind2d = -constants.windData.direction * constants.windData.strength;
   const vec3 wind = vec3(wind2d.x, 0.f, wind2d.y) * constants.time;
-  float shape = density_noise(p, 0.4f, 0.7f, 3, shapeDensityScale, shapeDensityWindInfluence);
-  float detail = density_noise(p, 0.2f, 0.5f, 5, detailDensityScale, detailDensityWindInfluence);
-  return density_base(p) * shape * detail;
+  float shape = 1.f;
+  float detail = 1.f;
+  float shapeFadeout = smoothstep(0.f, 1.f, (dist - 280.f) / 1000.f);
+  float detailFadeout = smoothstep(0.f, 1.f, (dist - 50.f) / 50.f);
+  if (shapeFadeout < 0.9999f)
+    shape = density_noise(p, 0.4f, 0.7f, 3, shapeDensityScale, shapeDensityWindInfluence);
+  float shapeFaded = mix(shape, 1.f, shapeFadeout);
+  float detailFaded = mix(detail, 1.f, detailFadeout);
+  return density_base(p) * shapeFaded * detailFaded;
 }
 
-float random (vec2 st)
+float random(vec3 st)
 {
-  return fract(sin(dot(st.xy, vec2(145.f, 7.233f))) * 4274.8420509421345434f);
+  return fract(sin(dot(st.xy * st.z, vec2(145.f, 7.233f))) * 4274.8420509421345434f);
 }
 
 void main(void)
@@ -209,26 +213,26 @@ void main(void)
 
   const vec3 worldDir = mat3(viewParams.mInverseView) * dir;
 
-  vec3 pos = viewParams.viewPos; // @TODO: some other starting pos
+  vec3 pos = viewParams.viewPos;
   vec3 vpos = vec3(0.f);
   float stepSize = min(worldDepth / raymarchSteps, maxStepSize);
   vec3 posStep = worldDir * stepSize;
   vec3 vposStep = dir * stepSize;
-  float r = random(pos.xy + pos.z);
-  pos += posStep * r;
-  vpos += vposStep * r;
   vec4 transmitted = vec4(0.f, 0.f, 0.f, 1.f);
-  float pdd = density(pos);
+  float dist = 0.f;
+  float pdd = density(pos, dist);
   for (int s = 0; s < raymarchSteps; ++s)
   {
-    pos += posStep;
-    vpos += vposStep;
-
-    float ndd = density(pos);
+    float ndd = density(pos, dist);
     float dd = (ndd + pdd) * 0.5f;
     pdd = ndd;
-    if (dd < SHADER_EPSILON)
+    if (dd < 0.000001f)
+    {
+      pos += posStep;
+      vpos += vposStep;
+      dist += stepSize;
       continue;
+    }
 
     float ii = constantInscatter;
 
@@ -240,40 +244,39 @@ void main(void)
     {
       LightData ld = calculate_directional_light_data(i, pos, csmd);
       vec3 inscatter = ii * ld.intensity * ld.shadow; // * phase
-      transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / dd;
+      transmitted.rgb += transmitted.a * inscatter * stp;
     }
 
     for (int i = 0; i < (scatterAllLights ? lights.pointLightsCount : 0); ++i)
     {
       LightData ld = calculate_point_light_data(i, pos);
       vec3 inscatter = ii * ld.intensity * ld.shadow * sceneLightsScatterCoeff; // * phase
-      transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / dd;
+      transmitted.rgb += transmitted.a * inscatter * stp * dd;
     }
     for (int i = 0; i < (scatterAllLights ? lights.spotLightsCount : 0); ++i)
     {
       LightData ld = calculate_spot_light_data(i, pos);
       vec3 inscatter = ii * ld.intensity * ld.shadow * sceneLightsScatterCoeff; // * phase
-      transmitted.rgb += transmitted.a * inscatter * (1.f - stp) / dd;
+      transmitted.rgb += transmitted.a * inscatter * stp * dd;
     }
+
+    pos += posStep;
+    vpos += vposStep;
+    dist += stepSize;
   }
 
   float finalTracedLinearDepth = vpos.z;
-  float finDepth = min(linearDepth, atmosphereZfar);
+  float finDepth = min(linearDepth, viewParams.viewFrustum.farZ);
   if (finDepth > finalTracedLinearDepth)
   {
-    vec3 initPos = viewParams.viewPos + posStep * r;
     vec3 startPoint = pos;
-    vec3 endPoint = initPos + (pos - initPos) * (finDepth / finalTracedLinearDepth);
-    if (abs(endPoint.y - startPoint.y) < SHADER_EPSILON)
+    vec3 endPoint = viewParams.viewPos + (pos - viewParams.viewPos) * (finDepth / finalTracedLinearDepth);
+    float distantStepSize = raylen * (finDepth - finalTracedLinearDepth) / distantSteps;
+    vec3 distantStep = worldDir * distantStepSize;
+    for (int s = 0; s < distantSteps; ++s)
     {
-      transmitted.a *= exp(-density_base(pos) * (finDepth - finalTracedLinearDepth));
-    }
-    else
-    {
-      transmitted.a *= exp(
-        -(density_base(endPoint) - density_base(startPoint)) *
-        (finDepth - finalTracedLinearDepth) /
-        (heightDensityFalloff * (endPoint.y - startPoint.y)));
+      transmitted.a *= exp(-density_base(pos) * distantStepSize);
+      pos += distantStep;
     }
   }
 
