@@ -158,7 +158,7 @@ float fbm(vec3 p, int octaves)
 
 float density_noise(vec3 p, float rng_min, float rng_max, int n, float scale, float wind_inf)
 {
-  const vec2 wind2d = -constants.windData.direction * constants.windData.strength;
+  const vec2 wind2d = -constants.weatherData.windDirection * constants.weatherData.windStrength;
   const vec3 wind = vec3(wind2d.x, 0.f, wind2d.y) * constants.time;
   float base = fbm((p + wind * wind_inf) / scale, n);
   return smoothstep(rng_min, rng_max, base);
@@ -172,7 +172,7 @@ float density_base(vec3 p)
 
 float density(vec3 p, float dist)
 {
-  const vec2 wind2d = -constants.windData.direction * constants.windData.strength;
+  const vec2 wind2d = -constants.weatherData.windDirection * constants.weatherData.windStrength;
   const vec3 wind = vec3(wind2d.x, 0.f, wind2d.y) * constants.time;
   float shape = 1.f;
   float detail = 1.f;

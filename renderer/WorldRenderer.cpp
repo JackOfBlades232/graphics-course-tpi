@@ -431,10 +431,10 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     memcpy(fog->source.data(), &fog->sourceData, sizeof(fog->sourceData));
   }
 
-  if (sceneMgr->hasWind())
-    spdlog::info("JB_wind: wind loaded!");
+  if (sceneMgr->hasWeather())
+    spdlog::info("JB_weather: weather loaded!");
   else
-    spdlog::info("JB_wind: wind not present");
+    spdlog::info("JB_weather: weather not present");
 
   if (sceneMgr->hasTerrain())
   {
@@ -1270,10 +1270,15 @@ void WorldRenderer::update(const FramePacket& packet)
     directionalLightShadowsSettings.enable = false;
 
   {
-    if (sceneMgr->hasWind())
-      constantsData.windData = sceneMgr->getWind();
+    if (sceneMgr->hasWeather())
+    {
+      constantsData.weatherData = sceneMgr->getWeather();
+    }
     else
-      constantsData.windData = {{1.f, 0.f}, 0.f, 0.f}; // Avoid issues with 0-length dir
+    {
+      constantsData.weatherData = {};
+      constantsData.weatherData.windDirection = {1.f, 0.f}; // Avoid issues with 0-length dir
+    }
   }
 
   {
@@ -1556,9 +1561,7 @@ void WorldRenderer::renderScene(vk::CommandBuffer cmd_buf, SceneRenderPassInfo&&
           mainViewOpaqueDepth.genBinding(
             defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
         waterBinds.emplace_back(
-          16,
-          gbufNormal.genBinding(
-            defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
+          16, gbufNormal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal));
         for (int c = 0; c < WATER_CASCADE_COUNT; ++c)
         {
           waterBinds.emplace_back(
@@ -3618,6 +3621,7 @@ void WorldRenderer::drawGui()
       waterSettingsDirty |= prevEnableWater != enableWater;
       ImGui::Checkbox("Draw fog", &enableFog);
       enableFog &= fog.has_value();
+      enableFog &= sceneMgr->getWeather().fogRho0 >= FLT_EPSILON;
       ImGui::Checkbox("Use SSAO", &useSsao);
       if (useSsao)
       {
@@ -3910,15 +3914,15 @@ void WorldRenderer::drawGui()
     {
       ImGui::Begin("Scene");
 
-      if (sceneMgr->hasWind())
+      if (sceneMgr->hasWeather())
       {
-        auto& wind = sceneMgr->getWindRW();
-        auto prevWindDir = wind.direction;
-        auto prevWindStr = wind.strength;
-        ImGui::SliderFloat2("Wind direction", (float*)&wind.direction, -1.f, 1.f);
-        wind.direction = glm::normalize(wind.direction);
-        ImGui::SliderFloat("Wind strengh", &wind.strength, 0.f, 150.f);
-        waterSettingsDirty |= prevWindDir != wind.direction || prevWindStr != wind.strength;
+        auto& weather = sceneMgr->getWeatherRW();
+        auto prevWindDir = weather.windDirection;
+        auto prevWindStr = weather.windStrength;
+        ImGui::SliderFloat2("Wind direction", (float*)&weather.windDirection, -1.f, 1.f);
+        weather.windDirection = glm::normalize(weather.windDirection);
+        ImGui::SliderFloat("Wind strengh", &weather.windStrength, 0.f, 150.f);
+        waterSettingsDirty |= prevWindDir != weather.windDirection || prevWindStr != weather.windStrength;
       }
 
       ImGui::End();

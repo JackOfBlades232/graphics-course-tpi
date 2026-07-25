@@ -26,7 +26,7 @@
 #include <terrain.h>
 #include <skybox.h>
 #include <water.h>
-#include <wind.h>
+#include <weather.h>
 
 struct RenderElement
 {
@@ -186,16 +186,16 @@ public:
 
   const UniformLights& getLights() const { return *lightsData; }
 
-  bool hasWind() const { return windData.has_value(); }
-  const WindSourceData& getWind() const
+  bool hasWeather() const { return weatherData.has_value(); }
+  const WeatherSourceData& getWeather() const
   {
-    ETNA_ASSERT(hasWind());
-    return *windData;
+    ETNA_ASSERT(hasWeather());
+    return *weatherData;
   }
-  WindSourceData& getWindRW()
+  WeatherSourceData& getWeatherRW()
   {
-    ETNA_ASSERT(hasWind());
-    return *windData;
+    ETNA_ASSERT(hasWeather());
+    return *weatherData;
   }
 
   std::span<const glm::vec2> getVegetationTemplateData() const
@@ -335,7 +335,7 @@ public:
     "JB_skybox",
     "JB_water",
     "JB_noise",
-    "JB_wind"};
+    "JB_weather"};
 
   std::vector<TexId> tickTransfer(vk::CommandBuffer cmd_buf);
 
@@ -435,7 +435,7 @@ private:
   std::optional<TerrainSourceData> terrainData{};
   std::optional<SkyboxSourceData> skyboxData{};
   std::optional<WaterSourceData> waterData{};
-  std::optional<WindSourceData> windData{};
+  std::optional<WeatherSourceData> weatherData{};
 
   // @TODO: do we support reentrability in selectScene?
   std::vector<etna::Image> textures{};

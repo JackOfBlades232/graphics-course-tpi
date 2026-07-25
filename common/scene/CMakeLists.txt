@@ -6,7 +6,7 @@ add_library(scene
   gltf_jb_ext/JB_skybox/JbSkybox.cpp
   gltf_jb_ext/JB_water/JbWater.cpp
   gltf_jb_ext/JB_noise/JbNoise.cpp
-  gltf_jb_ext/JB_wind/JbWind.cpp)
+  gltf_jb_ext/JB_weather/JbWeather.cpp)
 
 target_compile_definitions(tinygltf PUBLIC TINYGLTF_NO_EXTERNAL_IMAGE)
 

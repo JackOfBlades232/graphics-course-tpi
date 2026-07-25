@@ -13,14 +13,14 @@
     "JB_water",
     "JB_skybox",
     "JB_noise",
-    "JB_wind"
+    "JB_weather"
   ],
   "extensionsUsed": [
     "KHR_lights_punctual",
     "JB_water",
     "JB_skybox",
     "JB_noise",
-    "JB_wind"
+    "JB_weather"
   ],
   "images": [
     {
@@ -51,9 +51,11 @@
         }
       }
     },
-    "JB_wind": {
-      "direction": [1.0, 0.0],
-      "strength": 25.0
+    "JB_weather": {
+      "wind": {
+        "direction": [1.0, 0.0],
+        "strength": 25.0
+      }
     },
     "JB_water": {
       "level": 0.0,

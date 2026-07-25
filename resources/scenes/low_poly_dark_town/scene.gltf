@@ -3386,7 +3386,7 @@
     "JB_water",
     "JB_skybox",
     "JB_noise",
-    "JB_wind"
+    "JB_weather"
   ],
   "images": [
     {
@@ -4055,9 +4055,11 @@
         }
       }
     },
-    "JB_wind": {
-      "direction": [1.0, 1.0],
-      "strength": 2.0
+    "JB_weather": {
+      "wind": {
+        "direction": [1.0, 1.0],
+        "strength": 2.0
+      }
     },
     "JB_water": {
       "level": -0.5,

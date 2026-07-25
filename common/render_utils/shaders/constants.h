@@ -6,7 +6,7 @@
 #include "lights.h"
 #include "materials.h"
 #include "ssao.h"
-#include "wind.h"
+#include "weather.h"
 
 #define BIG_EPSILON 0.001f
 
@@ -100,7 +100,7 @@ struct Constants
 
   float pad0_, pad1_, pad2_;
 
-  WindSourceData windData;
+  WeatherSourceData weatherData;
 
   SsaoConstData ssaoData;
 };

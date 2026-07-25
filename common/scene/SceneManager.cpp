@@ -7,7 +7,7 @@
 #include <JB_skybox/JbSkybox.hpp>
 #include <JB_water/JbWater.hpp>
 #include <JB_noise/JbNoise.hpp>
-#include <JB_wind/JbWind.hpp>
+#include <JB_weather/JbWeather.hpp>
 
 #include <render_utils/Common.hpp>
 #include <render_utils/GrassUtils.hpp>
@@ -1235,11 +1235,19 @@ void SceneManager::selectScene(
     }
   }
 
-  if (auto windExt = jb_wind_parse_desc(model))
+  if (auto weatherExt = jb_weather_parse_desc(model))
   {
-    auto& data = windData.emplace();
-    data.direction = windExt->direction;
-    data.strength = windExt->strength;
+    auto& data = weatherData.emplace();
+    data.windDirection = weatherExt->wind.direction;
+    data.windStrength = weatherExt->wind.strength;
+    data.fogRho0 = weatherExt->fog.rho0;
+    data.fogHBase = weatherExt->fog.hBase;
+    data.fogHC = weatherExt->fog.hC;
+    data.fogShapeRngMin = weatherExt->fog.shape.rngMin;
+    data.fogShapeRngMax = weatherExt->fog.shape.rngMax;
+    data.fogShapeScale = weatherExt->fog.shape.scale;
+    data.fogShapeWindInfluence = weatherExt->fog.shape.windInfluence;
+    data.fogInscatterC = weatherExt->fog.inscatter.c;
   }
 
   // @TODO: make terrain also use a material?
