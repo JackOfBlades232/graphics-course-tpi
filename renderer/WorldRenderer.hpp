@@ -439,6 +439,10 @@ private:
   float taaEmaCoeff = 0.1f;
   bool enableWater = true;
   bool enableFog = true;
+  int fogRaymarchSteps = 64;
+  int fogDistantSteps = 8;
+  float fogMaxStepSize = 20.f;
+  float fogSceneLightsScatterCoeff = 0.f;
 
   MovingAverageAccumulator<float, 64> smoothedDt{};
 

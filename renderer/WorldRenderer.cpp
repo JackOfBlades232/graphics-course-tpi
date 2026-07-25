@@ -1345,6 +1345,11 @@ void WorldRenderer::update(const FramePacket& packet)
     constantsData.taaEmaCoeff = taaEmaCoeff;
 
     constantsData.waterEnabled = enableWater;
+
+    constantsData.fogRaymarchSteps = fogRaymarchSteps;
+    constantsData.fogDistantSteps = fogDistantSteps;
+    constantsData.fogMaxStepSize = fogMaxStepSize;
+    constantsData.fogSceneLightsScatterCoeff = fogSceneLightsScatterCoeff;
   }
 
   {
@@ -3622,6 +3627,55 @@ void WorldRenderer::drawGui()
       ImGui::Checkbox("Draw fog", &enableFog);
       enableFog &= fog.has_value();
       enableFog &= sceneMgr->getWeather().fogRho0 >= FLT_EPSILON;
+      if (enableFog)
+      {
+        constexpr const char* SC_NAMES[] = {"8", "16", "32", "64", "128", "256"};
+        constexpr int SC_VALUES[] = {8, 16, 32, 64, 128, 256};
+        size_t curScId = size_t(
+          std::find(std::begin(SC_VALUES), std::end(SC_VALUES), fogRaymarchSteps) -
+          std::begin(SC_VALUES));
+        if (ImGui::BeginCombo("Fog raymarch steps", SC_NAMES[curScId]))
+        {
+          for (size_t i = 0; i < ARRCNT(SC_NAMES); i++)
+          {
+            bool selected = curScId == i;
+            if (ImGui::Selectable(SC_NAMES[i], selected))
+            {
+              curScId = i;
+              fogRaymarchSteps = SC_VALUES[i];
+            }
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::EndCombo();
+        }
+        constexpr const char* DSC_NAMES[] = {"0", "8", "16", "32"};
+        constexpr int DSC_VALUES[] = {0, 8, 16, 32};
+        size_t curDscId = size_t(
+          std::find(std::begin(DSC_VALUES), std::end(DSC_VALUES), fogDistantSteps) -
+          std::begin(DSC_VALUES));
+        if (ImGui::BeginCombo("Fog distant raymarch steps", DSC_NAMES[curDscId]))
+        {
+          for (size_t i = 0; i < ARRCNT(DSC_NAMES); i++)
+          {
+            bool selected = curDscId == i;
+            if (ImGui::Selectable(DSC_NAMES[i], selected))
+            {
+              curDscId = i;
+              fogDistantSteps = DSC_VALUES[i];
+            }
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::EndCombo();
+        }
+        ImGui::SliderFloat("Fog max step size", &fogMaxStepSize, 0.01f, 100.f);
+        bool addSceneLights = fogSceneLightsScatterCoeff > SHADER_EPSILON;
+        ImGui::Checkbox("Fog scene lights", &addSceneLights);
+        fogSceneLightsScatterCoeff = addSceneLights ? 1.f : 0.f;
+      }
       ImGui::Checkbox("Use SSAO", &useSsao);
       if (useSsao)
       {
@@ -3922,7 +3976,8 @@ void WorldRenderer::drawGui()
         ImGui::SliderFloat2("Wind direction", (float*)&weather.windDirection, -1.f, 1.f);
         weather.windDirection = glm::normalize(weather.windDirection);
         ImGui::SliderFloat("Wind strengh", &weather.windStrength, 0.f, 150.f);
-        waterSettingsDirty |= prevWindDir != weather.windDirection || prevWindStr != weather.windStrength;
+        waterSettingsDirty |=
+          prevWindDir != weather.windDirection || prevWindStr != weather.windStrength;
       }
 
       ImGui::End();
@@ -4226,6 +4281,10 @@ void WorldRenderer::loadDebugConfig()
   taaEmaCoeff = unwrap(reader.read<float>());
   enableWater = unwrap(reader.read<bool>());
   enableFog = unwrap(reader.read<bool>());
+  fogRaymarchSteps = unwrap(reader.read<int>());
+  fogDistantSteps = unwrap(reader.read<int>());
+  fogMaxStepSize = unwrap(reader.read<float>());
+  fogSceneLightsScatterCoeff = unwrap(reader.read<float>());
 
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
@@ -4323,6 +4382,10 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(taaEmaCoeff));
   ETNA_VERIFY(writer.write(enableWater));
   ETNA_VERIFY(writer.write(enableFog));
+  ETNA_VERIFY(writer.write(fogRaymarchSteps));
+  ETNA_VERIFY(writer.write(fogDistantSteps));
+  ETNA_VERIFY(writer.write(fogMaxStepSize));
+  ETNA_VERIFY(writer.write(fogSceneLightsScatterCoeff));
 
   spdlog::info("Saved debug config to {}", cfg.debugConfigFile.c_str());
 }

@@ -98,6 +98,11 @@ struct Constants
 
   TexSmpIdPair blueNoiseTexSmp;
 
+  int fogRaymarchSteps;
+  int fogDistantSteps;
+  float fogMaxStepSize;
+  float fogSceneLightsScatterCoeff;
+
   float pad0_, pad1_, pad2_;
 
   WeatherSourceData weatherData;
