@@ -16,7 +16,7 @@ float calculate_angular_attenuation(float cosine, float inner_cos, float outer_c
   return 1.f - angularAttenuation;
 }
 
-float calculate_csm_shadow_pcf_no_blend(int lid, int cid, vec3 pos)
+float calculate_csm_shadow_pcf_no_blend(int lid, int cid, vec3 pos, ShadowTechnique tech)
 {
   const vec4 posLightClipSpace = mats.directionalLightMats[lid][cid] * vec4(pos, 1.f);
   const vec3 posLightSpaceNDC = posLightClipSpace.xyz; // No perspective divide cuz ortho
@@ -25,9 +25,9 @@ float calculate_csm_shadow_pcf_no_blend(int lid, int cid, vec3 pos)
   float shadow = sample_bindless_tex_shadow_lod(
     lights.directionalLights[lid].shadowmapCascades[cid].map, vec3(shadowUv, posLightSpaceNDC.z), 0.f);
 
-  if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.directionalLightShadowsTechnique))
+  if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(tech))
   {
-    const int gridDim = PCF_KERNEL_SIZES[constants.directionalLightShadowsTechnique];
+    const int gridDim = PCF_KERNEL_SIZES[tech];
     const int mid = gridDim / 2 + 1;
 
     const vec2 uvStep = vec2(1.f / CSM_CASCADE_RESOLUTION);
@@ -42,7 +42,7 @@ float calculate_csm_shadow_pcf_no_blend(int lid, int cid, vec3 pos)
           continue;
 
         const vec2 uv = uvBase + uvStep * vec2(float(x), float(y));
-        const float w = pcf_kernel_weight(x, y, constants.directionalLightShadowsTechnique);
+        const float w = pcf_kernel_weight(x, y, tech);
 
         shadow += w * sample_bindless_tex_shadow_lod(
           lights.directionalLights[lid].shadowmapCascades[cid].map, vec3(uv, posLightSpaceNDC.z), 0.f);
@@ -55,9 +55,9 @@ float calculate_csm_shadow_pcf_no_blend(int lid, int cid, vec3 pos)
   return shadow;
 }
 
-float calculate_csm_shadow_pcf(int lid, int cid, vec3 pos, float z_from_start, float z_from_end)
+float calculate_csm_shadow_pcf(int lid, int cid, vec3 pos, float z_from_start, float z_from_end, ShadowTechnique tech)
 {
-  float base = calculate_csm_shadow_pcf_no_blend(lid, cid, pos);
+  float base = calculate_csm_shadow_pcf_no_blend(lid, cid, pos, tech);
   float prev = 0.f;
   float next = 0.f;
 
@@ -69,7 +69,7 @@ float calculate_csm_shadow_pcf(int lid, int cid, vec3 pos, float z_from_start, f
   if (cid > 0 && z_from_start <= constants.csmBlendingBeltSize)
   {
     prevw = 0.5f * (constants.csmBlendingBeltSize - z_from_start) / constants.csmBlendingBeltSize;
-    prev = calculate_csm_shadow_pcf_no_blend(lid, cid - 1, pos);
+    prev = calculate_csm_shadow_pcf_no_blend(lid, cid - 1, pos, tech);
   }
 
   if (z_from_end <= constants.csmBlendingBeltSize)
@@ -77,7 +77,7 @@ float calculate_csm_shadow_pcf(int lid, int cid, vec3 pos, float z_from_start, f
     nextw = (constants.csmBlendingBeltSize - z_from_end) / constants.csmBlendingBeltSize;
     if (cid < CSM_CASCADE_COUNT - 1)
     {
-      next = calculate_csm_shadow_pcf_no_blend(lid, cid + 1, pos);
+      next = calculate_csm_shadow_pcf_no_blend(lid, cid + 1, pos, tech);
       nextw *= 0.5f;
     }
     else
@@ -163,7 +163,7 @@ struct LightData
   float shadow;
 };
 
-LightData calculate_directional_light_data(int lid, vec3 pos, in CsmCascadeLightingData data)
+LightData calculate_directional_light_data(int lid, vec3 pos, in CsmCascadeLightingData data, ShadowTechnique tech)
 {
   LightData ld;
   ld.intensity = lights.directionalLights[lid].color * lights.directionalLights[lid].intensity;
@@ -173,17 +173,17 @@ LightData calculate_directional_light_data(int lid, vec3 pos, in CsmCascadeLight
 
   if (constants.useDirectionalLightShadows != 0 && data.cascade < CSM_CASCADE_COUNT)
   {
-    if (SHADOW_TECHNIQUE_IS_PCF(constants.directionalLightShadowsTechnique))
+    if (SHADOW_TECHNIQUE_IS_PCF(tech))
     {
       ld.shadow = calculate_csm_shadow_pcf(
-        lid, data.cascade, pos, data.zIntoCascadeStart / data.zCascadeSize, data.zIntoCascadeEnd / data.zNextCascadeSize);
+        lid, data.cascade, pos, data.zIntoCascadeStart / data.zCascadeSize, data.zIntoCascadeEnd / data.zNextCascadeSize, tech);
     }
   }
 
   return ld;
 }
 
-LightData calculate_point_light_data(int lid, vec3 pos)
+LightData calculate_point_light_data(int lid, vec3 pos, ShadowTechnique tech)
 {
     LightData ld;
     ld.direction = normalize(lights.pointLights[lid].position - pos);
@@ -207,14 +207,14 @@ LightData calculate_point_light_data(int lid, vec3 pos)
       const vec4 posLightClipSpace = mats.pointLightMats[lid][faceIdx] * vec4(pos, 1.f);
       const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
 
-      if (SHADOW_TECHNIQUE_IS_PCF(constants.pointLightShadowsTechnique))
+      if (SHADOW_TECHNIQUE_IS_PCF(tech))
       {
         ld.shadow = sample_bindless_tex_cube_shadow_lod(
           lights.pointLights[lid].shadowmap, vec4(sampleDir, posLightSpaceNDC.z), 0.f);
 
-        if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.pointLightShadowsTechnique))
+        if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(tech))
         {
-          const int gridDim = PCF_KERNEL_SIZES[constants.pointLightShadowsTechnique];
+          const int gridDim = PCF_KERNEL_SIZES[tech];
           const int mid = gridDim / 2 + 1;
 
           const float faceExt =
@@ -237,7 +237,7 @@ LightData calculate_point_light_data(int lid, vec3 pos)
                 continue;
 
               const vec3 sdir = normalize(baseDir + (float(x) - float(gridDim) * 0.5f) * ud + (float(y) - float(gridDim) * 0.5f) * vd);
-              const float w = pcf_kernel_weight(x, y, constants.pointLightShadowsTechnique);
+              const float w = pcf_kernel_weight(x, y, tech);
 
               ld.shadow += w * sample_bindless_tex_cube_shadow_lod(
                 lights.pointLights[lid].shadowmap, vec4(sdir, posLightSpaceNDC.z), 0.f);
@@ -252,7 +252,7 @@ LightData calculate_point_light_data(int lid, vec3 pos)
     return ld;
 }
 
-LightData calculate_spot_light_data(int lid, vec3 pos)
+LightData calculate_spot_light_data(int lid, vec3 pos, ShadowTechnique tech)
 {
   LightData ld;
   ld.shadow = 1.f;
@@ -278,14 +278,14 @@ LightData calculate_spot_light_data(int lid, vec3 pos)
     const vec3 posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
     const vec2 shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
 
-    if (SHADOW_TECHNIQUE_IS_PCF(constants.spotLightShadowsTechnique))
+    if (SHADOW_TECHNIQUE_IS_PCF(tech))
     {
       ld.shadow = sample_bindless_tex_shadow_lod(
         lights.spotLights[lid].shadowmap, vec3(shadowUv, posLightSpaceNDC.z), 0.f);
 
-      if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(constants.spotLightShadowsTechnique))
+      if (SHADOW_TECHNIQUE_IS_PCF_KERNEL(tech))
       {
-        const int gridDim = PCF_KERNEL_SIZES[constants.spotLightShadowsTechnique];
+        const int gridDim = PCF_KERNEL_SIZES[tech];
         const int mid = gridDim / 2 + 1;
 
         const vec2 uvStep = vec2(1.f / SPOT_SM_RESOLUTION);
@@ -300,7 +300,7 @@ LightData calculate_spot_light_data(int lid, vec3 pos)
               continue;
 
             const vec2 uv = uvBase + uvStep * vec2(float(x), float(y));
-            const float w = pcf_kernel_weight(x, y, constants.spotLightShadowsTechnique);
+            const float w = pcf_kernel_weight(x, y, tech);
 
             ld.shadow += w * sample_bindless_tex_shadow_lod(
               lights.spotLights[lid].shadowmap, vec3(uv, posLightSpaceNDC.z), 0.f);

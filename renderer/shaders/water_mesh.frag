@@ -260,7 +260,7 @@ void main(void)
   // @TODO: pull out
   for (int i = 0; i < lights.directionalLightsCount; ++i)
   {
-    const LightData ld = calculate_directional_light_data(i, surf.wPos, csmd);
+    const LightData ld = calculate_directional_light_data(i, surf.wPos, csmd, constants.directionalLightShadowsTechnique);
     vec3 spec = vec3(0.f);
 
     // @TODO: pull out

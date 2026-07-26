@@ -133,7 +133,7 @@ void main(void)
 
   for (int i = 0; i < lights.directionalLightsCount; ++i)
   {
-    LightData ld = calculate_directional_light_data(i, pos, csmd);
+    LightData ld = calculate_directional_light_data(i, pos, csmd, SHADOW_TECHNIQUE_SIMPLE);
     // if (ld.shadow <= 0.01f)
     //   continue;
     if (dot(ld.direction, normal) <= 0.f)

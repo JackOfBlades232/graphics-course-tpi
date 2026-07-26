@@ -115,7 +115,7 @@ void main(void)
 
   for (int i = 0; i < lights.directionalLightsCount; ++i)
   {
-    const LightData ld = calculate_directional_light_data(i, pos, csmd);
+    const LightData ld = calculate_directional_light_data(i, pos, csmd, constants.directionalLightShadowsTechnique);
     if (length(ld.intensity) < SHADER_EPSILON)
       continue;
 
@@ -134,7 +134,7 @@ void main(void)
   // @TODO: refactor to LightData
   for (int i = 0; i < lights.pointLightsCount; ++i)
   {
-    const LightData ld = calculate_point_light_data(i, pos);
+    const LightData ld = calculate_point_light_data(i, pos, constants.pointLightShadowsTechnique);
     if (length(ld.intensity) < SHADER_EPSILON)
       continue;
 
@@ -152,7 +152,7 @@ void main(void)
 
   for (int i = 0; i < lights.spotLightsCount; ++i)
   {
-    const LightData ld = calculate_spot_light_data(i, pos);
+    const LightData ld = calculate_spot_light_data(i, pos, constants.spotLightShadowsTechnique);
     if (length(ld.intensity) < SHADER_EPSILON)
       continue;
 

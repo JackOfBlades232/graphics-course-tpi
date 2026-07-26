@@ -236,7 +236,7 @@ v Fog shape
 - Performance
   v Pull fog quality knobs to imgui
   v Measure -- baseline ~10-11ms for gen, need to do muuch better
-  - Test lowering taps for shadows
+  v Test lowering taps for shadows -- around 2ms save
   - Bake density noise into textures and sample
   - Refactor tonemapping into single postfx shader. Leave comps for heterogeneous prep, but ->tonemap doesn't work anymore
 
