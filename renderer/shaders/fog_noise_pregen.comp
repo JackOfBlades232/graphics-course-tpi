@@ -1,0 +1,88 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "fog.h"
+#include "constants.h"
+
+layout(
+  local_size_x = FOG_PREGEN_WORKGROUP_DIM,
+  local_size_y = FOG_PREGEN_WORKGROUP_DIM,
+  local_size_z = FOG_PREGEN_WORKGROUP_DIM) in;
+
+layout(binding = 0, set = 0, r8) uniform writeonly image3D perlinNoise;
+
+const int perm[64] = int[64](
+  17, 5, 29, 12, 8, 23, 1, 30,
+  15, 26, 10, 19, 3, 21, 14, 28,
+  7, 31, 11, 24, 2, 18, 27, 6,
+  13, 0, 25, 20, 9, 22, 4, 16,
+
+  17, 5, 29, 12, 8, 23, 1, 30,
+  15, 26, 10, 19, 3, 21, 14, 28,
+  7, 31, 11, 24, 2, 18, 27, 6,
+  13, 0, 25, 20, 9, 22, 4, 16);
+
+float fade(float t)
+{
+  return t * t * t * (t * (t * 6.f - 15.f) + 10.f);
+}
+
+float grad(int hash, vec3 p)
+{
+  int h = hash & 15;
+
+  float u = h < 8 ? p.x : p.y;
+
+  float v;
+  if (h < 4)
+    v = p.y;
+  else if (h == 12 || h == 14)
+    v = p.x;
+  else
+    v = p.z;
+
+  return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
+}
+
+float perlin(vec3 p)
+{
+  ivec3 i = ivec3(floor(p));
+  vec3 f = fract(p);
+
+  vec3 u = vec3(fade(f.x), fade(f.y), fade(f.z));
+
+  int X = i.x & 31;
+  int Y = i.y & 31;
+  int Z = i.z & 31;
+
+  int A  = perm[X] + Y;
+  int AA = perm[A] + Z;
+  int AB = perm[A + 1] + Z;
+
+  int B  = perm[X + 1] + Y;
+  int BA = perm[B] + Z;
+  int BB = perm[B + 1] + Z;
+
+  float x1 = mix(grad(perm[AA], f), grad(perm[BA], f - vec3(1.f, 0.f, 0.f)), u.x);
+  float x2 = mix(grad(perm[AB], f - vec3(0.f, 1.f, 0.f)), grad(perm[BB], f - vec3(1.f, 1.f, 0.f)), u.x);
+  float y1 = mix(x1, x2, u.y);
+  float x3 = mix(grad(perm[AA + 1], f - vec3(0.f, 0.f, 1.f)), grad(perm[BA + 1], f - vec3(1.f, 0.f, 1.f)), u.x);
+  float x4 = mix(grad(perm[AB + 1], f - vec3(0.f, 1.f, 1.f)), grad(perm[BB + 1], f - vec3(1.f, 1.f, 1.f)), u.x);
+
+  float y2 = mix(x3, x4, u.y);
+
+  return mix(y1, y2, u.z);
+}
+
+void main(void)
+{
+  ivec3 imCoord = ivec3(gl_GlobalInvocationID.xyz);
+  ivec3 imSize = ivec3(imageSize(perlinNoise));
+
+  if (imCoord.x >= imSize.x || imCoord.y >= imSize.y || imCoord.z >= imSize.z)
+    return;
+
+  vec3 noiseCoord = vec3(imCoord) * 32.f / vec3(imSize);
+  imageStore(perlinNoise, imCoord, vec4(perlin(noiseCoord) * 0.5f + 0.5f, 0.f, 0.f, 0.f));
+}

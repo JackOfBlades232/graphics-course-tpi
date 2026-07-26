@@ -412,7 +412,7 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     }
   }
 
-  // @TODO: into weather
+  if (sceneMgr->hasWeather())
   {
     fog.emplace();
     createManagedImage(
@@ -429,12 +429,20 @@ void WorldRenderer::loadScene(std::filesystem::path path)
       .allocationCreate = VMA_ALLOCATION_CREATE_MAPPED_BIT,
       .name = "fog_source"});
     memcpy(fog->source.data(), &fog->sourceData, sizeof(fog->sourceData));
-  }
-
-  if (sceneMgr->hasWeather())
+    createManagedImage(
+      fog->perlinNoise,
+      etna::Image::CreateInfo{
+        .extent = vk::Extent3D{256, 256, 256},
+        .name = "fog_perlin_noise",
+        .format = vk::Format::eR8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+        .type = vk::ImageType::e3D});
     spdlog::info("JB_weather: weather loaded!");
+  }
   else
+  {
     spdlog::info("JB_weather: weather not present");
+  }
 
   if (sceneMgr->hasTerrain())
   {
@@ -846,6 +854,7 @@ void WorldRenderer::loadShaders()
      RENDERER_SHADERS_ROOT "quad.vert.spv"});
   etna::create_program("fog_generate", {RENDERER_SHADERS_ROOT "fog_generate.comp.spv"});
   etna::create_program("fog_apply", {RENDERER_SHADERS_ROOT "fog_apply.comp.spv"});
+  etna::create_program("fog_noise_pregen", {RENDERER_SHADERS_ROOT "fog_noise_pregen.comp.spv"});
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -1162,6 +1171,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     });
   fogGenerate = pipelineManager.createComputePipeline("fog_generate", {});
   fogApply = pipelineManager.createComputePipeline("fog_apply", {});
+  fogPerlinNoisePregen = pipelineManager.createComputePipeline("fog_noise_pregen", {});
 
   gbufferResolver = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "gbuffer_resolve",
@@ -1195,6 +1205,8 @@ void WorldRenderer::onShadersReloaded()
   spotLightsSettingsDirty = true;
   directionalLightsSettingsDirty = true;
   waterSettingsDirty = true;
+  if (fog)
+    fog->needPerlinGen = true;
 }
 
 void WorldRenderer::debugInput(const Keyboard&, const Mouse&, bool mouse_captured)
@@ -3277,6 +3289,29 @@ void WorldRenderer::renderWorld(
 
     if (fog && enableFog)
     {
+      if (fog->needPerlinGen)
+      {
+        ETNA_PROFILE_GPU(cmd_buf, fogPerlinNoisePregen);
+        auto programInfo = etna::get_shader_program("fog_noise_pregen");
+        auto set = etna::create_descriptor_set(
+          programInfo.getDescriptorLayoutId(0),
+          cmd_buf,
+          {etna::Binding{0, fog->perlinNoise.genBinding({}, vk::ImageLayout::eGeneral)}});
+        etna::flush_barriers(cmd_buf);
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          fogPerlinNoisePregen.getVkPipelineLayout(),
+          0,
+          {set.getVkSet()},
+          {});
+        cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, fogPerlinNoisePregen.getVkPipeline());
+        cmd_buf.dispatch(
+          get_linear_wg_count(fog->perlinNoise.getExtent().width, FOG_PREGEN_WORKGROUP_DIM),
+          get_linear_wg_count(fog->perlinNoise.getExtent().height, FOG_PREGEN_WORKGROUP_DIM),
+          get_linear_wg_count(fog->perlinNoise.getExtent().depth, FOG_PREGEN_WORKGROUP_DIM));
+        fog->needPerlinGen = false;
+      }
+
       {
         ETNA_PROFILE_GPU(cmd_buf, fogGenerate);
         auto programInfo = etna::get_shader_program("fog_generate");
@@ -3288,6 +3323,10 @@ void WorldRenderer::renderWorld(
              1,
              mainViewDepth.genBinding(
                defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+           etna::Binding{
+             2,
+             fog->perlinNoise.genBinding(
+               defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
            etna::Binding{6, fog->source.genBinding()},
            etna::Binding{8, constants->get().genBinding()},
            etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},

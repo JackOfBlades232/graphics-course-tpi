@@ -233,12 +233,11 @@ v Fog shape
   v Fix colorized artifacts
   v Research how to preserve shape at distance -- issue is with current marching scheme
   v Pull parameters to scene def (turn JB_wind => JB_weather)
-- Performance
+v Performance
   v Pull fog quality knobs to imgui
   v Measure -- baseline ~10-11ms for gen, need to do muuch better
-  v Test lowering taps for shadows -- around 2ms save
-  - Bake density noise into textures and sample
-  - Refactor tonemapping into single postfx shader. Leave comps for heterogeneous prep, but ->tonemap doesn't work anymore
+  v Test lowering taps for shadows -- around 4ms save (9.5 -> 5)
+  v Bake density noise into textures and sample -- down to 2.3ms, leaving as is for now
 
 MieSky
 - Gather task

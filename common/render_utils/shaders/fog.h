@@ -5,6 +5,7 @@
 #include "defs.h"
 
 #define FOG_WORKGROUP_DIM 16
+#define FOG_PREGEN_WORKGROUP_DIM 8
 
 // @TODO: rework from inshader params
 struct FogSourceData

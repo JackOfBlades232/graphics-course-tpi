@@ -50,5 +50,6 @@ target_add_shaders(renderer
   shaders/water_caustics_convert.frag
   shaders/fog_generate.comp
   shaders/fog_apply.comp
+  shaders/fog_noise_pregen.comp
   shaders/quad.vert
 )

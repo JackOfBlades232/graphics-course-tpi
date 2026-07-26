@@ -203,8 +203,10 @@ private:
   struct FogRenderingData
   {
     etna::Image halfresFogBuffer;
+    etna::Image perlinNoise;
     etna::Buffer source;
     FogSourceData sourceData{.color = shader_vec3(0.4f, 0.4f, 0.4f), .constantTransmittance = 1.f};
+    bool needPerlinGen = true;
   };
 
   enum class TonemappingTechnique
@@ -290,6 +292,7 @@ private:
   etna::ComputePipeline waterClearCausticMap{};
   etna::ComputePipeline fogGenerate{};
   etna::ComputePipeline fogApply{};
+  etna::ComputePipeline fogPerlinNoisePregen{};
 
   etna::GraphicsPipeline waterCausticMapConvert{};
   etna::GraphicsPipeline waterCausticMapDebug{};
