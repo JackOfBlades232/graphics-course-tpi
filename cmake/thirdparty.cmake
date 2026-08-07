@@ -13,7 +13,7 @@ CPMAddPackage(
 )
 
 # Cross-platform 3D graphics
-find_package(Vulkan 1.4.328 REQUIRED)
+find_package(Vulkan 1.4.357 REQUIRED)
 
 # Dear ImGui -- easiest way to do GUI
 CPMAddPackage(
