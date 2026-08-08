@@ -19,7 +19,6 @@ App::App(const char* scene_name, std::span<const char* const> argv)
     OsWindow::CreateInfo{
       .resolution = initialRes,
       .resizeable = true,
-      // @TODO: provide some refresh capability while resizing, and check if we need spec on-resize
       .name = std::string{NAME}});
 
   render.reset(new Renderer{initialRes, cfg});
