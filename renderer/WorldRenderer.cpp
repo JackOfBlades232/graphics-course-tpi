@@ -3665,7 +3665,7 @@ void WorldRenderer::drawGui()
       waterSettingsDirty |= prevEnableWater != enableWater;
       ImGui::Checkbox("Draw fog", &enableFog);
       enableFog &= fog.has_value();
-      enableFog &= sceneMgr->getWeather().fogRho0 >= FLT_EPSILON;
+      enableFog &= sceneMgr->hasWeather() && sceneMgr->getWeather().fogRho0 >= FLT_EPSILON;
       if (enableFog)
       {
         constexpr const char* SC_NAMES[] = {"8", "16", "32", "64", "128", "256"};

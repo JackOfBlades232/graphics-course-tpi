@@ -1,0 +1,19 @@
+Slang
+  - Set up for etna and my renderer
+    v Bump vk in course & etna
+    v Implement package find inside the VK sdk
+    - Figure out where to put the dynamic libraries
+      - Study how Vulkan does it
+    - Write a proof of concept inclusion context in etna that inits the slang runtime
+  - Hello world + basic etna support
+    - Expand
+  - Migrate a feature + proper etna support
+    - Choose
+  - Plan further
+
+Issues
+  Water
+    - Remove 2nd derivative from foam subtask. Jacobian is correct for that and is cheaper.
+      Report to Alexandr
+
+
