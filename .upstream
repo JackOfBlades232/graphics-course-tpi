@@ -5,12 +5,17 @@ Slang
     v Figure out where to put the dynamic libraries
       v Study how Vulkan does it
     v Write a proof of concept inclusion context in etna that inits the slang runtime
-  - Decide the design direction, for shader cursor + reflection based layouts and filling
-    o Build slang-modules offline (via slangc), at runtime load in, link, generate, get reflection and create cursors/layouts
-    o Build spv blobs AND slang-modules offline (exe using api), load both, use the module just for reflection
-    o Build spv blobs and custom-format layout reflection (exe using api), no api at runtime -- use custom format for cursors
+  v Decide the design direction, for shader cursor + reflection based layouts and filling
+    x Build slang-modules offline (via slangc), at runtime load in, link, generate, get reflection and create cursors/layouts
+    x Build spv blobs AND slang-modules offline (exe using api), load both, use the module just for reflection
+    v Build spv blobs and custom-format layout reflection (exe using api), no api at runtime -- use custom format for cursors
   - Hello world + basic etna support
-    - Expand
+    v Init-helloworld etna-slangc target inside of etna
+    v Move Slang.hpp/cpp to etna-slangc
+    - Write a hello.slang
+    - Hook up compiler invocation to generate raw spirv
+    - Make a stub implementation of reflection walker for generating reflection data to the same file
+    - Make a sample inside graphics-course master which uses slang shader + legacy binding path
   - Migrate a feature + proper etna support
     - Choose
   - Plan further
