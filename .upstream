@@ -12,10 +12,11 @@ Slang
   - Hello world + basic etna support
     v Init-helloworld etna-slangc target inside of etna
     v Move Slang.hpp/cpp to etna-slangc
-    - Write a hello.slang
-    - Hook up compiler invocation to generate raw spirv
+    v Write a hello.slang
+    - Hook up compiler invocation to generate raw spirv in etna-slangc
+    - Add a cmake target for it
     - Make a stub implementation of reflection walker for generating reflection data to the same file
-    - Make a sample inside graphics-course master which uses slang shader + legacy binding path
+    - Make a sample which uses slang shader + legacy binding path inside dev copied from graphics course
   - Migrate a feature + proper etna support
     - Choose
   - Plan further
