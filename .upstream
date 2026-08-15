@@ -13,10 +13,10 @@ Slang
     v Init-helloworld etna-slangc target inside of etna
     v Move Slang.hpp/cpp to etna-slangc
     v Write a hello.slang
-    - Hook up compiler invocation to generate raw spirv in etna-slangc
-    - Add a cmake target for it
-    - Make a stub implementation of reflection walker for generating reflection data to the same file
-    - Make a sample which uses slang shader + legacy binding path inside dev copied from graphics course
+    v Hook up compiler invocation to generate raw spirv in etna-slangc
+    v Add a cmake target for it
+    v Make a sample which uses slang shader + legacy binding path inside dev copied from graphics course
+    - Implement .d file generation from enumerating modules loaded in the session
   - Migrate a feature + proper etna support
     - Choose
   - Plan further

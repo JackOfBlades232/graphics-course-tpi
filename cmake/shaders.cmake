@@ -94,3 +94,59 @@ function(target_add_shaders tgt)
       PRIVATE $<UPPER_CASE:${tgt}>_SHADERS_ROOT="${shader_binaries_dir}")
   endif()
 endfunction()
+
+function(target_add_shaders_slang tgt)
+  list(LENGTH ARGN len)
+  math(EXPR remainder "${len} % 2")
+  math(EXPR last "${len} - 1")
+  if(NOT remainder EQUAL 0)
+    message(FATAL_ERROR "Expected an even number of args (path-target pairs), got ${len}")
+  endif()
+
+  set(shader_binaries_dir "${CMAKE_CURRENT_BINARY_DIR}/shaders/")
+
+  set(incl_dirs "$<TARGET_GENEX_EVAL:${tgt},$<TARGET_PROPERTY:${tgt},SHADER_INCLUDE_DIRECTORIES>>")
+
+  foreach(i RANGE 0 ${last} 2)
+    math(EXPR j "${i} + 1")
+
+    list(GET ARGN ${i} path)
+    list(GET ARGN ${j} target)
+
+    set(input_path "${CMAKE_CURRENT_LIST_DIR}/${path}")
+    set(output_path "${shader_binaries_dir}/$<PATH:GET_FILENAME,${path}>-${target}.spv")
+    add_custom_command(
+      OUTPUT ${output_path}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_binaries_dir}
+      COMMAND $<TARGET_FILE:etna-slangc>
+        "$<$<BOOL:${incl_dirs}>:-I$<JOIN:${incl_dirs},;-I>>"
+        "$<$<CONFIG:Debug>:-g>"
+        ${input_path}
+        -o ${output_path}
+        -target ${target}
+        --depfile "${output_path}.d"
+      VERBATIM
+      COMMAND_EXPAND_LISTS
+      DEPENDS ${input_path}
+      DEPENDS etna-slangc
+      DEPFILE "${output_path}.d"
+    )
+
+    list(APPEND SHADER_BINARY_FILES ${output_path})
+  endforeach()
+
+  set(custom_target_name "${tgt}_slang_shaders")
+
+  if(TARGET ${custom_target_name})
+    message(FATAL_ERROR "Sorry, you can't call target_add_shaders_slang multiple times cuz it's unimplemented. Fell free to create a PR.")
+  else()
+    set_target_properties(${tgt} PROPERTIES
+      TRANSITIVE_COMPILE_PROPERTIES "SHADER_INCLUDE_DIRECTORIES"
+    )
+
+    add_custom_target(${custom_target_name} DEPENDS ${SHADER_BINARY_FILES})
+    add_dependencies(${tgt} ${custom_target_name})
+    add_compile_definitions(${tgt}
+      PRIVATE $<UPPER_CASE:${tgt}>_SLANG_SHADERS_ROOT="${shader_binaries_dir}")
+  endif()
+endfunction()

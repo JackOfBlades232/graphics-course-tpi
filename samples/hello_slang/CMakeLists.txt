@@ -5,4 +5,6 @@ add_executable(hello_slang
 
 target_link_libraries(hello_slang PRIVATE glm::glm etna)
 
-target_add_shaders_slang(hello_slang shaders/hello.slang)
+target_add_shaders_slang(hello_slang
+  shaders/hello.slang computeMain
+)
