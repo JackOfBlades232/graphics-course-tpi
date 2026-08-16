@@ -52,8 +52,7 @@ void Renderer::initVulkan(const char* app_name, std::span<const char*> instance_
              .fillModeNonSolid = true}},
       .physicalDeviceIndexOverride = {},
       .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),
-      .generateBarriersAutomatically = true,
-      .loadSlangRuntime = true});
+      .generateBarriersAutomatically = true});
 }
 
 void Renderer::initFrameDelivery(vk::UniqueSurfaceKHR a_surface, ResolutionProvider res_provider)
