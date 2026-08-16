@@ -9,15 +9,22 @@ Slang
     x Build slang-modules offline (via slangc), at runtime load in, link, generate, get reflection and create cursors/layouts
     x Build spv blobs AND slang-modules offline (exe using api), load both, use the module just for reflection
     v Build spv blobs and custom-format layout reflection (exe using api), no api at runtime -- use custom format for cursors
-  - Hello world + basic etna support
+  v Hello world + basic etna support
     v Init-helloworld etna-slangc target inside of etna
     v Move Slang.hpp/cpp to etna-slangc
     v Write a hello.slang
     v Hook up compiler invocation to generate raw spirv in etna-slangc
     v Add a cmake target for it
     v Make a sample which uses slang shader + legacy binding path inside dev copied from graphics course
-    - Implement .d file generation from enumerating modules loaded in the session
-  - Migrate a feature + proper etna support
+    v Implement .d file generation from enumerating modules loaded in the session
+  - Implement proper etna support
+    - Read code around program creation/info/pipelines
+    - Add a sibling codepath for _reflected_ shaders (same API, will be extended)
+    - Determine reflection format and build layouts from it
+    - Write reflection in etna-slangc into the combined blob and mark with magic number
+    - Work out a descriptor set creation/updating API that allows us to use automatic bindings
+    - Port hello.slang to use automatic bindings
+  - Migrate a feature
     - Choose
   - Plan further
 
