@@ -123,8 +123,8 @@ function(target_add_shaders_slang tgt)
         "$<$<CONFIG:Debug>:-g>"
         ${input_path}
         -o ${output_path}
-        -target ${target}
-        --depfile "${output_path}.d"
+        -e ${target}
+        -df "${output_path}.d"
       VERBATIM
       COMMAND_EXPAND_LISTS
       DEPENDS ${input_path}
