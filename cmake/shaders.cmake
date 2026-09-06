@@ -114,7 +114,7 @@ function(target_add_shaders_slang tgt)
     list(GET ARGN ${j} target)
 
     set(input_path "${CMAKE_CURRENT_LIST_DIR}/${path}")
-    set(output_path "${shader_binaries_dir}/$<PATH:GET_FILENAME,${path}>-${target}.spv")
+    set(output_path "${shader_binaries_dir}/$<PATH:GET_FILENAME,${path}>-${target}.escb")
     add_custom_command(
       OUTPUT ${output_path}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_binaries_dir}

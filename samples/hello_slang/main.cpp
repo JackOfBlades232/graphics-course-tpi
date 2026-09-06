@@ -77,7 +77,7 @@ void HelloSlang::execute()
 void HelloSlang::setup()
 {
   etna::create_program(
-    "hello_slang", {HELLO_SLANG_SLANG_SHADERS_ROOT "hello.slang-computeMain.spv"});
+    "hello_slang", {HELLO_SLANG_SLANG_SHADERS_ROOT "hello.slang-computeMain.escb"});
 
   bufA = context->createBuffer(
     etna::Buffer::CreateInfo{
