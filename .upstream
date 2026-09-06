@@ -17,16 +17,24 @@ Slang
     v Add a cmake target for it
     v Make a sample which uses slang shader + legacy binding path inside dev copied from graphics course
     v Implement .d file generation from enumerating modules loaded in the session
-  - Implement proper etna support
-    - Read code around program creation/info/pipelines
-    - Add a sibling codepath for _reflected_ shaders (same API, will be extended)
-    - Determine reflection format and build layouts from it
-    - Write reflection in etna-slangc into the combined blob and mark with magic number
-    - Work out a descriptor set creation/updating API that allows us to use automatic bindings
-    - Port hello.slang to use automatic bindings
+  - Proper slang support
+    v Read code around program creation/info/pipelines
+    v Implement skeleton of the shader format
+    v Implement compilation of the shader format
+    - Implement parse codepath in etna
+    - Make compute sample work again
+    - Add shadowmap sample
+    - Add multi-entrypoint build to CMake
+    - Make sample work
+    - Add multi-source build to compiler
+    - Add multi-source build to CMake
+  - By-name parameter build for new dset API
+    - Reflection compilation
+    - Reflection build at runtime
+    - Builder API
   - Migrate a feature
     - Choose
-  - Plan further
+  - Analyze for improvements
 
 Issues
   Water
