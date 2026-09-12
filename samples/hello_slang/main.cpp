@@ -45,11 +45,10 @@ HelloSlang::HelloSlang()
 
 void HelloSlang::init()
 {
-  etna::initialize(
-    etna::InitParams{
-      .applicationName = "HelloSlang",
-      .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
-    });
+  etna::initialize(etna::InitParams{
+    .applicationName = "HelloSlang",
+    .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
+  });
 
   context = &etna::get_context();
 
@@ -77,31 +76,25 @@ void HelloSlang::execute()
 void HelloSlang::setup()
 {
   etna::create_program(
-    "hello_slang", {HELLO_SLANG_SLANG_SHADERS_ROOT "hello.slang-computeMain.escb"});
+    "hello_slang", HELLO_SLANG_SLANG_SHADERS_ROOT "hello.slang-computeMain.escb");
 
-  bufA = context->createBuffer(
-    etna::Buffer::CreateInfo{
-      .size = sizeof(float) * length,
-      .bufferUsage =
-        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-      .name = "buffer0",
-    });
+  bufA = context->createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(float) * length,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+    .name = "buffer0",
+  });
 
-  bufB = context->createBuffer(
-    etna::Buffer::CreateInfo{
-      .size = sizeof(float) * length,
-      .bufferUsage =
-        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-      .name = "buffer1",
-    });
+  bufB = context->createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(float) * length,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+    .name = "buffer1",
+  });
 
-  bufResult = context->createBuffer(
-    etna::Buffer::CreateInfo{
-      .size = sizeof(float) * length,
-      .bufferUsage =
-        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc,
-      .name = "result",
-    });
+  bufResult = context->createBuffer(etna::Buffer::CreateInfo{
+    .size = sizeof(float) * length,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc,
+    .name = "result",
+  });
 
   {
     std::vector<float> values(length);
