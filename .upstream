@@ -21,10 +21,10 @@ Slang
     v Read code around program creation/info/pipelines
     v Implement skeleton of the shader format
     v Implement compilation of the shader format
-    - Implement parse codepath in etna
-    - Make compute sample work again
-    - Add shadowmap sample
-    - Add multi-entrypoint build to CMake
+    v Implement parse codepath in etna
+    v Make compute sample work again
+    v Add shadowmap sample
+    v Add multi-entrypoint build to CMake
     - Make sample work
     - Add multi-source build to compiler
     - Add multi-source build to CMake

@@ -97,33 +97,61 @@ endfunction()
 
 function(target_add_shaders_slang tgt)
   list(LENGTH ARGN len)
-  math(EXPR remainder "${len} % 2")
-  math(EXPR last "${len} - 1")
-  if(NOT remainder EQUAL 0)
-    message(FATAL_ERROR "Expected an even number of args (path-target pairs), got ${len}")
-  endif()
 
   set(shader_binaries_dir "${CMAKE_CURRENT_BINARY_DIR}/shaders/")
 
   set(incl_dirs "$<TARGET_GENEX_EVAL:${tgt},$<TARGET_PROPERTY:${tgt},SHADER_INCLUDE_DIRECTORIES>>")
 
-  foreach(i RANGE 0 ${last} 2)
-    math(EXPR j "${i} + 1")
+  set(i 0)
+  while(i LESS len)
+    list(GET ARGN ${i} directive)
+    if(NOT directive STREQUAL "SHADER")
+      message(FATAL_ERROR "Expected SHADER directive, got ${directive}")
+    endif()
+
+    math(EXPR i "${i} + 1")
+    if(NOT i LESS len)
+      message(FATAL_ERROR "Expected shader file path")
+    endif()
 
     list(GET ARGN ${i} path)
-    list(GET ARGN ${j} target)
+    if(path STREQUAL "SHADER")
+      message(FATAL_ERROR "Expected shader file path")
+    endif()
+
+    math(EXPR i "${i} + 1")
+    if(NOT i LESS len)
+      message(FATAL_ERROR "Expected shader entry point")
+    endif()
+
+    set(entry_args "")
+    set(entry_suffix "")
+    list(GET ARGN ${i} entry)
+    while(i LESS len AND NOT entry STREQUAL "SHADER")
+      list(APPEND entry_args "-e" ${entry})
+      string(APPEND entry_suffix "-${entry}")
+      math(EXPR i "${i} + 1")
+      if(i LESS len)
+        list(GET ARGN ${i} entry)
+      endif()
+    endwhile()
+
+    if(entry_suffix STREQUAL "")
+      list(APPEND entry_args "-e" "main")
+      string(APPEND entry_suffix "-main")
+    endif()
 
     set(input_path "${CMAKE_CURRENT_LIST_DIR}/${path}")
-    set(output_path "${shader_binaries_dir}/$<PATH:GET_FILENAME,${path}>-${target}.escb")
+    set(output_path "${shader_binaries_dir}/$<PATH:GET_FILENAME,${path}>${entry_suffix}.escb")
     add_custom_command(
       OUTPUT ${output_path}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_binaries_dir}
       COMMAND $<TARGET_FILE:etna-slangc>
-        "$<$<BOOL:${incl_dirs}>:-I$<JOIN:${incl_dirs},;-I>>"
+        "$<$<BOOL:${incl_dirs}>:-I;$<LIST:JOIN,${incl_dirs},;-I;>>"
         "$<$<CONFIG:Debug>:-g>"
         ${input_path}
         -o ${output_path}
-        -e ${target}
+        ${entry_args}
         -df "${output_path}.d"
       VERBATIM
       COMMAND_EXPAND_LISTS
@@ -133,7 +161,7 @@ function(target_add_shaders_slang tgt)
     )
 
     list(APPEND SHADER_BINARY_FILES ${output_path})
-  endforeach()
+  endwhile()
 
   set(custom_target_name "${tgt}_slang_shaders")
 
