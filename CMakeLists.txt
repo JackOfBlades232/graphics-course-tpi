@@ -41,5 +41,3 @@ add_subdirectory(renderer)
 add_subdirectory(baker)
 
 include("cmake/scenes.cmake")
-
-add_subdirectory(samples)
