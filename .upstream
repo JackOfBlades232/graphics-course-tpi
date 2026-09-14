@@ -25,7 +25,7 @@ Slang
     v Make compute sample work again
     v Add shadowmap sample
     v Add multi-entrypoint build to CMake
-    - Make sample work
+    v Make sample work
     - Add multi-source build to compiler
     - Add multi-source build to CMake
   - By-name parameter build for new dset API
@@ -35,6 +35,9 @@ Slang
   - Migrate a feature
     - Choose
   - Analyze for improvements
+  - Clean up implementation
+  - Migrate my whole renderer
+  - Prepare 
 
 Issues
   Water
