@@ -7,16 +7,17 @@
 #include <etna/DescriptorSet.hpp>
 
 
-const std::string_view QuadRenderer::VERTEX_SHADER_PATH = RENDER_UTILS_SHADERS_ROOT "quad.vert.spv";
-const std::string_view QuadRenderer::FRAGMENT_SHADER_PATH =
-  RENDER_UTILS_SHADERS_ROOT "quad.frag.spv";
+const std::string_view QuadRenderer::SHADER_PATH =
+  RENDER_UTILS_SHADERS_ROOT "debug_quad.slang-postfxVertexMain-debugQuadFragmentMain.escb";
+const std::string_view QuadRenderer::LEGACY_VERTEX_SHADER_PATH =
+  RENDER_UTILS_SHADERS_ROOT "quad.vert.spv";
 
 QuadRenderer::QuadRenderer(CreateInfo info)
 {
   programId = etna::get_program_id("quad_renderer");
 
   if (programId == etna::ShaderProgramId::Invalid)
-    programId = etna::create_program("quad_renderer", {VERTEX_SHADER_PATH, FRAGMENT_SHADER_PATH});
+    programId = etna::create_program("quad_renderer", SHADER_PATH);
 
   auto& pipelineManager = etna::get_context().getPipelineManager();
   pipeline = pipelineManager.createGraphicsPipeline(

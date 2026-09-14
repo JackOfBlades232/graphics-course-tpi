@@ -18,8 +18,11 @@ target_link_libraries(render_utils PUBLIC etna glm::glm utils)
 
 target_add_shaders(render_utils
   shaders/quad.vert
-  shaders/quad.frag
   shaders/bbox.vert
   shaders/bbox.frag
   shaders/bitonic_sort_float.comp
+)
+
+target_add_shaders_slang(render_utils
+  SHADER shaders/debug_quad.slang postfxVertexMain debugQuadFragmentMain
 )

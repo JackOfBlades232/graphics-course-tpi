@@ -39,8 +39,8 @@ public:
     bool showB = true,
     bool showA = true);
 
-  static const std::string_view VERTEX_SHADER_PATH;
-  static const std::string_view FRAGMENT_SHADER_PATH;
+  static const std::string_view SHADER_PATH;
+  static const std::string_view LEGACY_VERTEX_SHADER_PATH;
 
 private:
   etna::GraphicsPipeline pipeline;
