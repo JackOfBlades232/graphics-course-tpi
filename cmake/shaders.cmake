@@ -149,6 +149,7 @@ function(target_add_shaders_slang tgt)
       COMMAND $<TARGET_FILE:etna-slangc>
         "$<$<BOOL:${incl_dirs}>:-I;$<LIST:JOIN,${incl_dirs},;-I;>>"
         "$<$<CONFIG:Debug>:-g>"
+        "-werror"
         ${input_path}
         -o ${output_path}
         ${entry_args}
