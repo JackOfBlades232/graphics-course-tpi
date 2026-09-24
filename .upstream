@@ -31,8 +31,14 @@ Slang
     v Simple -- quad renderer
   - By-name parameter build for new dset API
     - Reflection compilation
+      v Basic reflection demo in compiler
+      v Figure out how arrays are supposed to work
+      - Finish basic reflection generator
+      - Serialize it
+      - Build dset layouts from it to verify
     - Reflection build at runtime
     - Builder API
+    - Cleanup
   - Migrate a serious feature
     - Medium -- postfx chain (tonemap & taa)
   - Analyze for improvements
