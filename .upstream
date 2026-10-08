@@ -32,12 +32,12 @@ Slang
   - By-name parameter build for new dset API
     - Reflection compilation
       v Basic reflection demo in compiler
-      - Figure out how arrays are supposed to work
+      v Figure out how arrays are supposed to work
         v Treat 0 as unsized -- bug
         v Ban unsized arrays of cbuf values in structs -- undersupported
         v Test slang flags to enable spirv validation as part of the pipeline
-        - File a bug report for 0 array size reporting
-        - File a bug report for unsized arrays in different places & spv val
+        v File a bug report for 0 array size reporting
+        v File a bug report for unsized arrays in different places & spv val
       - Finish basic reflection generator
       - Serialize it
       - Build dset layouts from it to verify
