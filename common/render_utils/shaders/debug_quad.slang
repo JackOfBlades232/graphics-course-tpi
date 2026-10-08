@@ -18,7 +18,6 @@ uniform var as: A[3];
 // uniform var asua: A[];
 
 uniform var texarr: Texture2D[2];
-uniform var texarrua: Texture2D[];
 uniform var texarrz: Texture2D[0];
 
 uniform var foo: float2;
@@ -39,7 +38,8 @@ struct Tipi
   var baz: ConstantBuffer<float4>;
   var bara: Texture2D<float4>[5];
   var barz: Texture2D<float4>[0];
-  var barua: Texture2D<float4>[];
+  //var barua: Texture2D<float4>[];
+  Texture2D[] barua;
 };
 
 struct MixedResources
@@ -57,7 +57,6 @@ uniform var mixeda: MixedResources[5];
 // and numeric data behaves like we expect. So, builder API should give us the hierarchy view, but fill at correct strides
 
 var tipi: ConstantBuffer<TipiData>;
-//var ptipi: ParameterBlock<Tipi>;
 
 // uniform var asua: A[]; <== @NOTE and this (as last member) is a bug in spirv codegen. All in all, have to ZAPRETIT!
 
@@ -78,7 +77,11 @@ var tipi: ConstantBuffer<TipiData>;
 
 // @NOTE: so, verdicts about unsized arrays of numerics -- BAN. They do not work (unless I go into deep compat syntax, idk)
 
+var tipis: ConstantBuffer<TipiData>[5];
 
+var ptipi: ParameterBlock<Tipi>;
+
+var texarrua: Texture2D[];
 
 [shader("fragment")]
 func debugQuadFragmentMain(
@@ -113,9 +116,10 @@ func debugQuadFragmentMain(
   // color += bar.Load(0, 0);
   // color += baz;
   // color *= tipi.foo.x;
-  // color *= ptipi.data.foo.x;
-  // color += ptipi.bar.Load(0, 0);
-  // color += ptipi.baz;
+  color *= ptipi.data.foo.x;
+  color += ptipi.bar.Load(0, 0);
+  color += ptipi.baz;
+  color += ptipi.barua[2244].Load(0, 0);
 
   // if (matrixPool.head >= 0)
   // {
@@ -126,6 +130,11 @@ func debugQuadFragmentMain(
   color += mixeda[3].bar[0];
   color += mixeda[3].baz.Load(0, 0);
   color += mixeda[3].tipi.fooa[3].x;
+
+  color *= tipis[4].foo.x;
+  color *= tipis[4].fooa[2].x;
+
+  color += texarrua[2].Load(0, 0);
 
   return FsOutput(color);
 }
