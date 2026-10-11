@@ -30,7 +30,7 @@ Slang
     v Choose
     v Simple -- quad renderer
   - By-name parameter build for new dset API
-    - Reflection compilation
+    v Reflection compilation
       v Basic reflection demo in compiler
       v Figure out how arrays are supposed to work
         v Treat 0 as unsized -- bug
@@ -38,10 +38,13 @@ Slang
         v Test slang flags to enable spirv validation as part of the pipeline
         v File a bug report for 0 array size reporting
         v File a bug report for unsized arrays in different places & spv val
-      - Finish basic reflection generator
-      - Serialize it
-      - Build dset layouts from it to verify
+      v Finish basic reflection generator
+      v Serialize it
+      v Build dset layouts from it to verify
     - Reflection build at runtime
+      - Parse resource names into hash maps per dset
+      - Store dset binding schemes in a database (layout or new?)
+      - Give program info a hash map to dset schemes + pushconst scheme
     - Builder API
     - Cleanup
   - Migrate a serious feature
