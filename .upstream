@@ -42,11 +42,14 @@ Slang
       v Serialize it
       v Build dset layouts from it to verify
     - Reflection build at runtime
+      v Store dset binding schemes in a database
+      v Give program info a hash map to dset schemes + pushconst scheme
       - Parse resource names into hash maps per dset
-      - Store dset binding schemes in a database (layout or new?)
-      - Give program info a hash map to dset schemes + pushconst scheme
     - Builder API
-    - Cleanup
+      - Give program info an API to spawn a builder
+      - Create the builder API that uses parameter sets to build a binding list
+      - Add APIs to dset pools to create from builder outputs
+      - Rewrite debug quad bindings with the new API
   - Migrate a serious feature
     - Medium -- postfx chain (tonemap & taa)
   - Analyze for improvements
