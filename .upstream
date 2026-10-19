@@ -45,13 +45,13 @@ Slang
       v Store dset binding schemes in a database
       v Give program info a hash map to dset schemes + pushconst scheme
       - Parse resource names into hash maps per dset
-        - Remake the reflection data in compiler to a TypeDb
+        v Remake the reflection data in compiler to a TypeDb
           v Build a basic type DB for structs with offsets into dset arrays
           v Figure out constbuffers & parblocks -- they may come outside of their own structs (parblocks & implicit)
           v Verify correct typedb build
-          - Separate it out to avoid merging (just append to program-global typedb)
-          - Serialize it (also store hashes for speed -- but they have to be reproducible!)
-        - Build a typedb at runtime, implement addTypes on shader load
+          v Separate it out to avoid merging (just append to program-global typedb)
+          v Serialize it (also store hashes for speed -- but they have to be reproducible!)
+        v Build a typedb at runtime, implement addTypes on shader load
         - Build a parsetDb, where a parameter set is a type + flat bindmap
     - Builder API
       - Give program info an API to spawn a builder
@@ -70,6 +70,4 @@ Slang
 Issues
   Water
     - Remove 2nd derivative from foam subtask. Jacobian is correct for that and is cheaper.
-      Report to Alexandr
-
 
