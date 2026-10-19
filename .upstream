@@ -47,8 +47,8 @@ Slang
       - Parse resource names into hash maps per dset
         - Remake the reflection data in compiler to a TypeDb
           v Build a basic type DB for structs with offsets into dset arrays
-          - Figure out constbuffers & parblocks -- they may come outside of their own structs (parblocks & implicit)
-          - Verify correct typedb build
+          v Figure out constbuffers & parblocks -- they may come outside of their own structs (parblocks & implicit)
+          v Verify correct typedb build
           - Separate it out to avoid merging (just append to program-global typedb)
           - Serialize it (also store hashes for speed -- but they have to be reproducible!)
         - Build a typedb at runtime, implement addTypes on shader load
