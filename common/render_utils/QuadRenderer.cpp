@@ -61,19 +61,19 @@ void QuadRenderer::render(
   bool showB,
   bool showA)
 {
-  auto programInfo = etna::get_shader_program(programId);
-  auto set = etna::create_descriptor_set(
-    programInfo.getDescriptorLayoutId(0),
-    cmd_buf,
-    {etna::Binding{
-      0,
-      tex_to_draw.genBinding(
-        sampler.get(),
-        vk::ImageLayout::eShaderReadOnlyOptimal,
-        {.baseMip = mip_level ? *mip_level : 0,
-         .levelCount = mip_level ? 1 : vk::RemainingMipLevels,
-         .baseLayer = layer ? *layer : 0,
-         .layerCount = layer ? 1 : vk::RemainingArrayLayers})}});
+  auto desc = etna::get_shader_program(programId)
+                .dsetBuilder()
+                .setTex(
+                  "colorTex",
+                  tex_to_draw.genBinding(
+                    sampler.get(),
+                    vk::ImageLayout::eShaderReadOnlyOptimal,
+                    {.baseMip = mip_level ? *mip_level : 0,
+                     .levelCount = mip_level ? 1 : vk::RemainingMipLevels,
+                     .baseLayer = layer ? *layer : 0,
+                     .layerCount = layer ? 1 : vk::RemainingArrayLayers}))
+                .build();
+  auto set = etna::create_descriptor_set(cmd_buf, std::move(desc));
 
   etna::RenderTargetState renderTargets(
     cmd_buf,
