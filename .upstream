@@ -41,10 +41,10 @@ Slang
       v Finish basic reflection generator
       v Serialize it
       v Build dset layouts from it to verify
-    - Reflection build at runtime
+    v Reflection build at runtime
       v Store dset binding schemes in a database
       v Give program info a hash map to dset schemes + pushconst scheme
-      - Parse resource names into hash maps per dset
+      v Parse resource names into hash maps per dset
         v Remake the reflection data in compiler to a TypeDb
           v Build a basic type DB for structs with offsets into dset arrays
           v Figure out constbuffers & parblocks -- they may come outside of their own structs (parblocks & implicit)
@@ -52,7 +52,7 @@ Slang
           v Separate it out to avoid merging (just append to program-global typedb)
           v Serialize it (also store hashes for speed -- but they have to be reproducible!)
         v Build a typedb at runtime, implement addTypes on shader load
-        - Build a parsetDb, where a parameter set is a type + flat bindmap
+        v Build a parsetDb, where a parameter set is a type + flat bindmap
     - Builder API
       - Give program info an API to spawn a builder
       - Create the builder API that uses parameter sets to build a binding list
