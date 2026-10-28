@@ -6,6 +6,7 @@
 #include <etna/GraphicsPipeline.hpp>
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
+#include <etna/SlangShaderParameters.hpp>
 
 #include <string>
 

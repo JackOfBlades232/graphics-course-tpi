@@ -29,7 +29,7 @@ Slang
   v Migrate a feature
     v Choose
     v Simple -- quad renderer
-  - By-name parameter build for new dset API
+  v By-name parameter build for new dset API
     v Reflection compilation
       v Basic reflection demo in compiler
       v Figure out how arrays are supposed to work
@@ -53,15 +53,18 @@ Slang
           v Serialize it (also store hashes for speed -- but they have to be reproducible!)
         v Build a typedb at runtime, implement addTypes on shader load
         v Build a parsetDb, where a parameter set is a type + flat bindmap
-    - Builder API
-      - Give program info an API to spawn a builder
-      - Create the builder API that uses parameter sets to build a binding list
-      - Add APIs to dset pools to create from builder outputs
-      - Rewrite debug quad bindings with the new API
+    v Builder API
+      v Give program info an API to spawn a builder
+      v Create the builder API that uses parameter sets to build a binding list
+      v Add APIs to dset pools to create from builder outputs
+      v Rewrite debug quad bindings with the new API
+      v Fixup type compilation for entry point and global merging
+      v Rework the type system to allow array offsets in subtypes
   - Migrate a serious feature
     - Medium -- postfx chain (tonemap & taa)
-  - Analyze for improvements
-  - Clean up implementation
+    - Finish the API with validation (all types, arrays, etc)
+  - Shipping-qual implementation
+    - Reimplement everything with better architecture
     - Error handling
     - Use spirv tools from sdk to not build too much
   - Migrate my whole renderer
