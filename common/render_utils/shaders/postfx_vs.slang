@@ -5,7 +5,7 @@ struct VsOutput
 };
 
 [shader("vertex")]
-func postfxVertexMain(uint vid : SV_VertexID) -> VsOutput
+func postfx_vertex_main(uint vid : SV_VertexID) -> VsOutput
 {
   var vOut: VsOutput = {};
   let xy = vid == 0.f ? float2(-1.f, -1.f) : (vid == 1.f ? float2(3.f, -1.f) : float2(-1.f, 3.f));

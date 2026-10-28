@@ -6,14 +6,14 @@ struct FsOutput
 };
 
 [shader("fragment")]
-func debugQuadFragmentMain(
+func debug_quad_fragment_main(
   texCoord: float2 : TEXCOORD,
   colorTex: Sampler2D<float4>,
   uniform colorRange: float2,
   uniform mask: uint) -> FsOutput
 {
   let base =
-    (colorTex.SampleLevel(texCoord, 0.f) - colorRange.x) /
+    (colorTex.SampleLevel(texCoord, 0) - colorRange.x) /
     (colorRange.y - colorRange.x);
   let color = float4(
     (mask & 1) == 1 ? base.x : 0.f,

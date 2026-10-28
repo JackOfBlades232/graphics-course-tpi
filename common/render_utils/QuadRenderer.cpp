@@ -8,7 +8,7 @@
 
 
 const std::string_view QuadRenderer::SHADER_PATH =
-  RENDER_UTILS_SHADERS_ROOT "debug_quad.slang-postfxVertexMain-debugQuadFragmentMain.escb";
+  RENDER_UTILS_SHADERS_ROOT "debug_quad.slang-postfx_vertex_main-debug_quad_fragment_main.escb";
 const std::string_view QuadRenderer::LEGACY_VERTEX_SHADER_PATH =
   RENDER_UTILS_SHADERS_ROOT "quad.vert.spv";
 

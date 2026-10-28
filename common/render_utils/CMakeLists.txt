@@ -24,5 +24,5 @@ target_add_shaders(render_utils
 )
 
 target_add_shaders_slang(render_utils
-  SHADER shaders/debug_quad.slang postfxVertexMain debugQuadFragmentMain
+  SHADER shaders/debug_quad.slang postfx_vertex_main debug_quad_fragment_main
 )

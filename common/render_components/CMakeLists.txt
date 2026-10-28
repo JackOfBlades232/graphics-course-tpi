@@ -34,3 +34,7 @@ target_add_shaders(render_components
   shaders/srgb_encode.frag
 )
 
+target_add_shaders_slang(render_components
+  SHADER shaders/fxaa.slang postfx_vertex_main fxaa_fragment_main
+  SHADER shaders/fxaa.slang postfx_vertex_main fxaa311_fragment_main
+)
