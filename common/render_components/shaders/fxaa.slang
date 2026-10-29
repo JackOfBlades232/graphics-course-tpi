@@ -5,6 +5,7 @@
 
 import postfx_vs;
 import tonemapping;
+import constants;
 
 struct FsOutput
 {
@@ -20,7 +21,7 @@ static const bool DEBUG_SUBPIXEL_W = false;
 
 func fxaa_luma(rgb: float3) -> float
 {
-  if (constants.fxaaAntialiasInSrgb != 0)
+  if (constants.fxaaAntialiasInSrgb)
     return rgb.y * (0.587f / 0.299f) + rgb.x;
   else
     return sqrt(dot(rgb, float3(0.299f, 0.587f, 0.114f)));
@@ -127,8 +128,8 @@ func fxaa_fragment_main(
   var doneP: bool = false;
   var doneN: bool = false;
 
-  var lumaEndP: float;
-  var lumaEndN: float;
+  var lumaEndP: float = 0.f;
+  var lumaEndN: float = 0.f;
 
   var offP: float2 = off - stp;
   var offN: float2 = off + stp;
@@ -294,8 +295,8 @@ func fxaa311_fragment_main(
   var doneP: bool = false;
   var doneN: bool = false;
 
-  var lumaEndP: float;
-  var lumaEndN: float;
+  var lumaEndP: float = 0.f;
+  var lumaEndN: float = 0.f;
 
   var offP: float2 = off - stp;
   var offN: float2 = off + stp;

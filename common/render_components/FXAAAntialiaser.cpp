@@ -14,7 +14,7 @@ void FXAAAntialiaser::setupPipelines(vk::Format swapchain_format, DebugDrawersRe
 {
   aa = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "fxaa",
-    RENDER_COMPONENTS_SHADERS_ROOT "fxaa.frag.spv",
+    RENDER_COMPONENTS_SHADERS_ROOT "fxaa.slang-fxaa_fragment_main-postfx_vertex_main.escb",
     swapchain_format,
     {targetResolution.x, targetResolution.y}});
 }
@@ -30,11 +30,14 @@ void FXAAAntialiaser::antialias(
   ETNA_PROFILE_GPU(cmd_buf, fxaa);
 
   auto set = etna::create_descriptor_set(
-    aa->shaderProgramInfo().getDescriptorLayoutId(0),
     cmd_buf,
-    {etna::Binding{
-       0, aliased_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-     etna::Binding{8, constants.genBinding()}});
+    aa->shaderProgramInfo()
+      .dsetBuilder()
+      .setTex(
+        "ldrImage",
+        aliased_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal))
+      .setCbuf("constants", constants.genBinding())
+      .build());
 
   cmd_buf.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics, aa->pipelineLayout(), 0, {set.getVkSet()}, {});

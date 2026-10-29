@@ -15,9 +15,17 @@ PostfxRenderer::PostfxRenderer(CreateInfo info)
 
   if (programId == etna::ShaderProgramId::Invalid)
   {
-    programId = etna::create_program(
-      info.shaderProgramName.c_str(),
-      {RENDER_UTILS_SHADERS_ROOT "quad.vert.spv", info.fragShaderPath.c_str()});
+    // @TODO: fix this hack after migration
+    if (info.fragShaderPath.ends_with(".escb"))
+    {
+      programId = etna::create_program(info.shaderProgramName.c_str(), info.fragShaderPath.c_str());
+    }
+    else
+    {
+      programId = etna::create_program(
+        info.shaderProgramName.c_str(),
+        {RENDER_UTILS_SHADERS_ROOT "quad.vert.spv", info.fragShaderPath.c_str()});
+    }
   }
 
   std::vector<vk::Format> attachmentFormats{};

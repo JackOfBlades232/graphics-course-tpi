@@ -62,6 +62,13 @@ Slang
       v Rework the type system to allow array offsets in subtypes
   - Migrate a serious feature
     - Medium -- postfx chain (tonemap & taa)
+      v Port FXAA
+      - Implement typeset merge & prune -- currently I had to order the compilation of entry points, and restore the order
+      - Port Srgb encoder
+      - Port Reinhard and Aces
+      - Kill histogram tonemapper, it must be rewritten (along with glsl code)
+      - Port TAA with all utils
+      - Remove glsl versions from compilation (full purge only at the end)
     - Finish the API with validation (all types, arrays, etc)
   - Shipping-qual implementation
     - Reimplement everything with better architecture

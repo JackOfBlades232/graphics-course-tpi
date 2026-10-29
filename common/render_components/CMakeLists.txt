@@ -35,6 +35,6 @@ target_add_shaders(render_components
 )
 
 target_add_shaders_slang(render_components
-  SHADER shaders/fxaa.slang postfx_vertex_main fxaa_fragment_main
-  SHADER shaders/fxaa.slang postfx_vertex_main fxaa311_fragment_main
+  SHADER shaders/fxaa.slang fxaa_fragment_main postfx_vertex_main
+  SHADER shaders/fxaa.slang fxaa311_fragment_main postfx_vertex_main 
 )
