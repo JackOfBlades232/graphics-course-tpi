@@ -5,7 +5,7 @@ import constants;
 struct FsOutput
 {
   var color: float4 : SV_Target;
-};
+}
 
 uniform let constants: ConstantBuffer<Constants>;
 

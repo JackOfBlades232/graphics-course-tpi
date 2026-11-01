@@ -14,7 +14,7 @@ void SrgbEncoder::setupPipelines(vk::Format swapchain_format, DebugDrawersRegist
 {
   encoder = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "srgb_encode",
-    RENDER_COMPONENTS_SHADERS_ROOT
+    RENDER_COMPONENTS_SLANG_SHADERS_ROOT
     "srgb_encode.slang-postfx_vertex_main-srgb_encode_fragment_main.escb",
     swapchain_format,
     {targetResolution.x, targetResolution.y}});

@@ -4,7 +4,7 @@ import tonemapping;
 struct FsOutput
 {
   var color: float4 : SV_Target;
-};
+}
 
 [shader("fragment")]
 func srgb_encode_fragment_main(

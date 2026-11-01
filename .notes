@@ -281,7 +281,8 @@ ClusteredLights
 - Plan
 
 Tonemapping
-- Try to put histogram tonemapping to use
+- Remake histogram tonemapping
+  - Recollect theory from the task
   - Use it to calculate exposure to seed into the main tonemapping algo
   - Fix all existing instabilities and issues
 

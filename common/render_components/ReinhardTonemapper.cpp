@@ -14,7 +14,7 @@ void ReinhardTonemapper::setupPipelines(vk::Format swapchain_format, DebugDrawer
 {
   tonemapper = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "reinhard_tonemap",
-    RENDER_COMPONENTS_SHADERS_ROOT
+    RENDER_COMPONENTS_SLANG_SHADERS_ROOT
     "reinhard_tonemap.slang-postfx_vertex_main-reinhard_tonemap_fragment_main.escb",
     swapchain_format,
     {targetResolution.x, targetResolution.y}});

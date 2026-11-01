@@ -1,83 +1,78 @@
 Slang
-  v Set up for etna and my renderer
-    v Bump vk in course & etna
-    v Implement package find inside the VK sdk
-    v Figure out where to put the dynamic libraries
-      v Study how Vulkan does it
-    v Write a proof of concept inclusion context in etna that inits the slang runtime
-  v Decide the design direction, for shader cursor + reflection based layouts and filling
-    x Build slang-modules offline (via slangc), at runtime load in, link, generate, get reflection and create cursors/layouts
-    x Build spv blobs AND slang-modules offline (exe using api), load both, use the module just for reflection
-    v Build spv blobs and custom-format layout reflection (exe using api), no api at runtime -- use custom format for cursors
-  v Hello world + basic etna support
-    v Init-helloworld etna-slangc target inside of etna
-    v Move Slang.hpp/cpp to etna-slangc
-    v Write a hello.slang
-    v Hook up compiler invocation to generate raw spirv in etna-slangc
-    v Add a cmake target for it
-    v Make a sample which uses slang shader + legacy binding path inside dev copied from graphics course
-    v Implement .d file generation from enumerating modules loaded in the session
-  v Proper slang support
-    v Read code around program creation/info/pipelines
-    v Implement skeleton of the shader format
-    v Implement compilation of the shader format
-    v Implement parse codepath in etna
-    v Make compute sample work again
-    v Add shadowmap sample
-    v Add multi-entrypoint build to CMake
-    v Make sample work
-  v Migrate a feature
-    v Choose
-    v Simple -- quad renderer
-  v By-name parameter build for new dset API
-    v Reflection compilation
-      v Basic reflection demo in compiler
-      v Figure out how arrays are supposed to work
-        v Treat 0 as unsized -- bug
-        v Ban unsized arrays of cbuf values in structs -- undersupported
-        v Test slang flags to enable spirv validation as part of the pipeline
-        v File a bug report for 0 array size reporting
-        v File a bug report for unsized arrays in different places & spv val
-      v Finish basic reflection generator
-      v Serialize it
-      v Build dset layouts from it to verify
-    v Reflection build at runtime
-      v Store dset binding schemes in a database
-      v Give program info a hash map to dset schemes + pushconst scheme
-      v Parse resource names into hash maps per dset
-        v Remake the reflection data in compiler to a TypeDb
-          v Build a basic type DB for structs with offsets into dset arrays
-          v Figure out constbuffers & parblocks -- they may come outside of their own structs (parblocks & implicit)
-          v Verify correct typedb build
-          v Separate it out to avoid merging (just append to program-global typedb)
-          v Serialize it (also store hashes for speed -- but they have to be reproducible!)
-        v Build a typedb at runtime, implement addTypes on shader load
-        v Build a parsetDb, where a parameter set is a type + flat bindmap
-    v Builder API
-      v Give program info an API to spawn a builder
-      v Create the builder API that uses parameter sets to build a binding list
-      v Add APIs to dset pools to create from builder outputs
-      v Rewrite debug quad bindings with the new API
-      v Fixup type compilation for entry point and global merging
-      v Rework the type system to allow array offsets in subtypes
-  - Migrate a serious feature
-    - Medium -- postfx chain (tonemap & taa)
-      v Port FXAA
-      v Implement typeset merge & prune -- currently I had to order the compilation of entry points, and restore the order
-      v Port Srgb encoder
-      v Port Reinhard and Aces
-      - Kill histogram tonemapper, it must be rewritten (along with glsl code)
-      - Port TAA with all utils
-      - Remove glsl versions from compilation (full purge only at the end)
-    - Finish the API with validation (all types, arrays, etc)
-  - Shipping-qual implementation
-    - Reimplement everything with better architecture
-    - Error handling
-    - Use spirv tools from sdk to not build too much
-  - Migrate my whole renderer
-  - Prepare 
-
-Issues
-  Water
-    - Remove 2nd derivative from foam subtask. Jacobian is correct for that and is cheaper.
-
+v Set up for etna and my renderer
+  v Bump vk in course & etna
+  v Implement package find inside the VK sdk
+  v Figure out where to put the dynamic libraries
+    v Study how Vulkan does it
+  v Write a proof of concept inclusion context in etna that inits the slang runtime
+v Decide the design direction, for shader cursor + reflection based layouts and filling
+  x Build slang-modules offline (via slangc), at runtime load in, link, generate, get reflection and create cursors/layouts
+  x Build spv blobs AND slang-modules offline (exe using api), load both, use the module just for reflection
+  v Build spv blobs and custom-format layout reflection (exe using api), no api at runtime -- use custom format for cursors
+v Hello world + basic etna support
+  v Init-helloworld etna-slangc target inside of etna
+  v Move Slang.hpp/cpp to etna-slangc
+  v Write a hello.slang
+  v Hook up compiler invocation to generate raw spirv in etna-slangc
+  v Add a cmake target for it
+  v Make a sample which uses slang shader + legacy binding path inside dev copied from graphics course
+  v Implement .d file generation from enumerating modules loaded in the session
+v Proper slang support
+  v Read code around program creation/info/pipelines
+  v Implement skeleton of the shader format
+  v Implement compilation of the shader format
+  v Implement parse codepath in etna
+  v Make compute sample work again
+  v Add shadowmap sample
+  v Add multi-entrypoint build to CMake
+  v Make sample work
+v Migrate a feature
+  v Choose
+  v Simple -- quad renderer
+v By-name parameter build for new dset API
+  v Reflection compilation
+    v Basic reflection demo in compiler
+    v Figure out how arrays are supposed to work
+      v Treat 0 as unsized -- bug
+      v Ban unsized arrays of cbuf values in structs -- undersupported
+      v Test slang flags to enable spirv validation as part of the pipeline
+      v File a bug report for 0 array size reporting
+      v File a bug report for unsized arrays in different places & spv val
+    v Finish basic reflection generator
+    v Serialize it
+    v Build dset layouts from it to verify
+  v Reflection build at runtime
+    v Store dset binding schemes in a database
+    v Give program info a hash map to dset schemes + pushconst scheme
+    v Parse resource names into hash maps per dset
+      v Remake the reflection data in compiler to a TypeDb
+        v Build a basic type DB for structs with offsets into dset arrays
+        v Figure out constbuffers & parblocks -- they may come outside of their own structs (parblocks & implicit)
+        v Verify correct typedb build
+        v Separate it out to avoid merging (just append to program-global typedb)
+        v Serialize it (also store hashes for speed -- but they have to be reproducible!)
+      v Build a typedb at runtime, implement addTypes on shader load
+      v Build a parsetDb, where a parameter set is a type + flat bindmap
+  v Builder API
+    v Give program info an API to spawn a builder
+    v Create the builder API that uses parameter sets to build a binding list
+    v Add APIs to dset pools to create from builder outputs
+    v Rewrite debug quad bindings with the new API
+    v Fixup type compilation for entry point and global merging
+    v Rework the type system to allow array offsets in subtypes
+- Migrate a serious feature
+  v Medium -- postfx chain (tonemap & taa)
+    v Port FXAA
+    v Implement typeset merge & prune -- currently I had to order the compilation of entry points, and restore the order
+    v Port Srgb encoder
+    v Port Reinhard and Aces
+    v Kill histogram tonemapper, it must be rewritten (along with glsl code)
+    v Port TAA with all utils
+    v Compare last time and remove glsl
+  - Finish the API with validation (all types, arrays, etc)
+- Shipping-qual implementation
+  - Reimplement everything with better architecture
+  - Error handling
+  - Use spirv tools from sdk to not build too much
+- Migrate my whole renderer
+- Prepare 

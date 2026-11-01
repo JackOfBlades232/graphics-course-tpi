@@ -211,8 +211,7 @@ private:
 
   enum class TonemappingTechnique
   {
-    HISTOGRAM_EQ = 0,
-    REINHARD,
+    REINHARD = 0,
     ACES,
 
     COUNT
@@ -220,7 +219,7 @@ private:
   static constexpr size_t TONEMAPPING_TECHNIQUE_COUNT = size_t(TonemappingTechnique::COUNT);
 
   static constexpr std::array<std::string_view, TONEMAPPING_TECHNIQUE_COUNT>
-    TONEMAPPING_TECHNIQUE_NAMES = {"Histogram equalization", "Reinhard", "ACES"};
+    TONEMAPPING_TECHNIQUE_NAMES = {"Reinhard", "ACES"};
 
   enum class AATechnique
   {
@@ -230,7 +229,7 @@ private:
 
     COUNT
   };
-  static constexpr size_t AA_TECHNIQUE_COUNT = size_t(TonemappingTechnique::COUNT);
+  static constexpr size_t AA_TECHNIQUE_COUNT = size_t(AATechnique::COUNT);
 
   static constexpr std::array<std::string_view, AA_TECHNIQUE_COUNT> AA_TECHNIQUE_NAMES = {
     "FXAA 1.0", "FXAA 3.11", "TAA"};
@@ -409,9 +408,6 @@ private:
   float terrainNoisePeriod = 0.25f;
   float vegetationRenderingDistance = 100.f;
   float vegetationRenderingDropoffDistance = 80.f;
-  float histEqTonemappingRegW = 0.5f, histEqTonemappingRefinedW = 0.5f;
-  // @TODO: find a way to deal with jittering from lum outliers?
-  float histEqTonemappingMinAdmissibleLum = 0.0f, histEqTonemappingMaxAdmissibleLum = 10.f;
   float acesExposure = 2.f;
   float csmSplitLambda = 0.9f;
   float csmShadowDist = 400.f;

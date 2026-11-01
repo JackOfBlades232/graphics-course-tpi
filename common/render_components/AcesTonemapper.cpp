@@ -15,7 +15,7 @@ void AcesTonemapper::setupPipelines(vk::Format swapchain_format, DebugDrawersReg
 {
   tonemapper = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "aces_tonemap",
-    RENDER_COMPONENTS_SHADERS_ROOT
+    RENDER_COMPONENTS_SLANG_SHADERS_ROOT
     "aces_tonemap.slang-postfx_vertex_main-aces_tonemap_fragment_main.escb",
     swapchain_format,
     {targetResolution.x, targetResolution.y}});

@@ -1,6 +1,5 @@
 
 add_library(render_components
-  HistogramEqTonemapper.cpp
   ReinhardTonemapper.cpp
   AcesTonemapper.cpp
   FXAAAntialiaser.cpp
@@ -18,25 +17,10 @@ target_shader_include_directories(render_components INTERFACE shaders)
 
 target_link_libraries(render_components PUBLIC etna glm::glm function2::function2 utils render_utils)
 
-target_add_shaders(render_components
-  shaders/histogram_minmax.comp
-  shaders/histogram_pre_refine.comp
-  shaders/histogram_binning.comp
-  shaders/histogram_distribution.comp
-  shaders/histogram_clear.comp
-  shaders/histogram_debug.frag
-  shaders/histogram_tonemap.frag
-  shaders/reinhard_tonemap.frag
-  shaders/aces_tonemap.frag
-  shaders/fxaa.frag
-  shaders/fxaa311.frag
-  shaders/taa.frag
-  shaders/srgb_encode.frag
-)
-
 target_add_shaders_slang(render_components
   SHADER shaders/fxaa.slang postfx_vertex_main fxaa_fragment_main
   SHADER shaders/fxaa.slang postfx_vertex_main fxaa311_fragment_main
+  SHADER shaders/taa.slang postfx_vertex_main taa_fragment_main
   SHADER shaders/aces_tonemap.slang postfx_vertex_main aces_tonemap_fragment_main
   SHADER shaders/reinhard_tonemap.slang postfx_vertex_main reinhard_tonemap_fragment_main
   SHADER shaders/srgb_encode.slang postfx_vertex_main srgb_encode_fragment_main

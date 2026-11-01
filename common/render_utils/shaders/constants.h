@@ -43,11 +43,6 @@ struct Constants
 
   shader_uint drawCascadesInSolidColor;
 
-  float histEqTonemappingRegW;
-  float histEqTonemappingRefinedW;
-  float histEqTonemappingMinAdmissibleLum;
-  float histEqTonemappingMaxAdmissibleLum;
-
   // @TODO: try getting exposure from histogram instead
   float acesExposure;
 

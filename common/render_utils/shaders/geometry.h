@@ -74,8 +74,7 @@ struct ViewParams
   float subpixelUvJitterX;
   shader_vec3 prevViewPos;
   float subpixelUvJitterY;
-  // Workaround for a bug where [1] array is probably flattened
-  shader_vec4 csmFrustumSplits[SHADER_MAX((CSM_CASCADE_COUNT - 1) / 4 + 1, 2)];
+  shader_vec4 csmFrustumSplits[2];
   ViewType type;
   shader_uint needDepthBounds;
   shader_uint needReverseZ;

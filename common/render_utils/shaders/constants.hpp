@@ -14,18 +14,10 @@
 #define float4x3 glm::mat4x3
 #define float4x4 glm::mat4x4
 #define bool glm::uint
+#define 
 #endif
 
 // @TODO: reuse, reorg fields, drop everything here, optional namespaces
-
-// Scene
-//
-
-enum class CullingMode : uint
-{
-  PER_VERTEX = 0,
-  SAT = 1
-};
 
 // Materials
 //
@@ -65,6 +57,76 @@ enum class MaterialId : uint
 // Lights
 //
 
+static const uint POINT_LIGHT_BUF_SIZE = 256;
+static const uint SPOT_LIGHT_BUF_SIZE = 64;
+static const uint DIRECTIONAL_LIGHT_BUF_SIZE = 1;
+
+static const uint CSM_CASCADE_COUNT = 4;
+static const uint CSM_CASCADE_RESOLUTION = 2048;
+static const uint POINT_SM_RESOLUTION = 1024;
+static const uint SPOT_SM_RESOLUTION = 1024;
+
+static const float CSM_CORRIDOR_SIZE = 100.f;
+
+// @TODO: make static_assert(CSM_CASCADE_COUNT <= 8); work
+
+struct CascadeData
+{
+  TexSmpIdPair map;
+  float minX, maxX, minY, maxY, minZ, maxZ; // View plane space
+  uint pad1_;
+};
+
+struct PointLight
+{
+  float3 position;
+  float range;
+  float3 color;
+  float intensity;
+  TexSmpIdPair shadowmap;
+  float pad0_, pad1_, pad2_;
+};
+
+struct SpotLight
+{
+  float3 position;
+  TexSmpIdPair shadowmap;
+  float3 direction;
+  float range;
+  float3 color;
+  float intensity;
+  float innerConeAngle;
+  float outerConeAngle;
+  float2 pad1;
+};
+
+struct DirectionalLight
+{
+  float3 direction;
+  float pad0;
+  float3 color;
+  float intensity;
+  CascadeData shadowmapCascades[CSM_CASCADE_COUNT];
+};
+
+struct UniformLights
+{
+  PointLight pointLights[POINT_LIGHT_BUF_SIZE];
+  SpotLight spotLights[SPOT_LIGHT_BUF_SIZE];
+  DirectionalLight directionalLights[DIRECTIONAL_LIGHT_BUF_SIZE];
+  uint pointLightsCount;
+  uint spotLightsCount;
+  uint directionalLightsCount;
+  uint pad_;
+};
+
+struct LightMatrices
+{
+  float4x4 pointLightMats[POINT_LIGHT_BUF_SIZE][6];
+  float4x4 spotLightMats[SPOT_LIGHT_BUF_SIZE];
+  float4x4 directionalLightMats[DIRECTIONAL_LIGHT_BUF_SIZE][CSM_CASCADE_COUNT];
+};
+
 enum class ShadowTechnique : uint
 {
   SIMPLE = 0,
@@ -76,6 +138,79 @@ enum class ShadowTechnique : uint
   // @TODO: VSM
 
   COUNT
+};
+
+// Scene
+//
+
+enum class ViewType : uint
+{
+  PERSPECTIVE = 0,
+  ORTHO = 1
+};
+
+enum class CullingMode : uint
+{
+  PER_VERTEX = 0,
+  SAT = 1
+};
+
+struct BBox
+{
+  float4 min;
+  float4 max;
+};
+
+struct OBBox
+{
+  float3 center;
+  float3 extents;
+  float3 xAxis;
+  float3 yAxis;
+  float3 zAxis;
+};
+
+struct ViewFrustum
+{
+  float nearX;
+  float nearY;
+  float nearZ;
+  float farZ;
+};
+
+struct ViewParams
+{
+  float4x4 mProjView;
+  float4x4 mView;
+  float4x4 mInverseView;
+  float4x4 mProj;
+  float4x4 mPrevProjView;
+  float4x4 mPrevView;
+  float4x4 mPrevProj;
+  ViewFrustum viewFrustum;
+  ViewFrustum prevViewFrustum;
+  float3 viewPos;
+  float subpixelUvJitterX;
+  float3 prevViewPos;
+  float subpixelUvJitterY;
+  float4 csmFrustumSplits[2];
+  ViewType type;
+  bool needDepthBounds;
+  bool needReverseZ;
+  uint pad2_;
+  float2 prevSubpixelUvJitter;
+  float2 pad3_;
+  float3 viewDir;
+  uint pad4_;
+};
+
+// Calculated on the GPU
+struct ViewData
+{
+  uint minViewZOrderedUint;
+  uint maxViewZOrderedUint;
+  uint prevMinViewZOrderedUint;
+  uint prevMaxViewZOrderedUint;
 };
 
 // SSAO
@@ -183,17 +318,17 @@ struct WaterSourceData
 
   float3 lightingSurfaceColor;
 
-  uint hasShore;
+  bool hasShore;
 
   float3 lightingRefractionColor;
 
-  uint hasRefraction;
+  bool hasRefraction;
 
   float3 lightingFoamColor;
 
-  uint hasFoam;
+  bool hasFoam;
 
-  uint hasCaustics;
+  bool hasCaustics;
 
   uint pad0_, pad1_, pad2_;
 };
@@ -217,7 +352,7 @@ struct Constants
 
   uint terrainFirstInstance;
 
-  uint drawTerrainSplattedDetail;
+  bool drawTerrainSplattedDetail;
 
   bool useSkybox;
 
@@ -233,11 +368,6 @@ struct Constants
   ShadowTechnique directionalLightShadowsTechnique;
 
   bool drawCascadesInSolidColor;
-
-  float histEqTonemappingRegW;
-  float histEqTonemappingRefinedW;
-  float histEqTonemappingMinAdmissibleLum;
-  float histEqTonemappingMaxAdmissibleLum;
 
   // @TODO: try getting exposure from histogram instead
   float acesExposure;

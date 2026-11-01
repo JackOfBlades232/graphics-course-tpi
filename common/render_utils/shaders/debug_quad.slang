@@ -3,7 +3,7 @@ import postfx_vs;
 struct FsOutput
 {
   var color: float4 : SV_Target;
-};
+}
 
 [shader("fragment")]
 func debug_quad_fragment_main(

@@ -2,7 +2,6 @@
 
 #include "WorldRenderer.hpp"
 
-#include <render_components/HistogramEqTonemapper.hpp>
 #include <render_components/ReinhardTonemapper.hpp>
 #include <render_components/AcesTonemapper.hpp>
 #include <render_components/FXAAAntialiaser.hpp>
@@ -146,7 +145,6 @@ WorldRenderer::WorldRenderer(const etna::GpuWorkCount& wc, const Config& config)
   registerViewContextManager();
   registerSrgbEncoder();
 
-  registerTonemapper<HistogramEqTonemapper>(TonemappingTechnique::HISTOGRAM_EQ);
   registerTonemapper<ReinhardTonemapper>(TonemappingTechnique::REINHARD);
   registerTonemapper<AcesTonemapper>(TonemappingTechnique::ACES);
 
@@ -1316,10 +1314,6 @@ void WorldRenderer::update(const FramePacket& packet)
 
     constantsData.useTonemapping = doTonemapping;
     constantsData.useSharedMemForTonemapping = useSharedMemForTonemapping;
-    constantsData.histEqTonemappingRegW = histEqTonemappingRegW;
-    constantsData.histEqTonemappingRefinedW = histEqTonemappingRefinedW;
-    constantsData.histEqTonemappingMinAdmissibleLum = histEqTonemappingMinAdmissibleLum;
-    constantsData.histEqTonemappingMaxAdmissibleLum = histEqTonemappingMaxAdmissibleLum;
     constantsData.acesExposure = acesExposure;
 
     constantsData.csmSplitLambda = csmSplitLambda;
@@ -3806,33 +3800,7 @@ void WorldRenderer::drawGui()
           ImGui::EndCombo();
         }
 
-        if (currentTonemappingTechnique == TonemappingTechnique::HISTOGRAM_EQ)
-        {
-          ImGui::Checkbox("Use shared memory for tonemapping", &useSharedMemForTonemapping);
-
-          float constW = 1.f - histEqTonemappingRegW - histEqTonemappingRefinedW;
-          ImGui::SliderFloat("Regular bin W", &histEqTonemappingRegW, 0.f, 1.f);
-          ImGui::SliderFloat("Refined bin W", &histEqTonemappingRefinedW, 0.f, 1.f);
-          ImGui::SliderFloat("Constant W", &constW, 0.f, 1.f);
-
-          histEqTonemappingRegW = glm::clamp(histEqTonemappingRegW, 0.f, 1.f);
-          histEqTonemappingRefinedW =
-            glm::clamp(histEqTonemappingRefinedW, 0.f, 1.f - histEqTonemappingRegW);
-
-          float minAdmissibleLogLum =
-            glm::log(histEqTonemappingMinAdmissibleLum + 1.f) / glm::log(10.f);
-          float maxAdmissibleLogLum =
-            glm::log(histEqTonemappingMaxAdmissibleLum + 1.f) / glm::log(10.f);
-          ImGui::SliderFloat(
-            "Min admissible lum (log10(+1))", &minAdmissibleLogLum, 0.f, 4.f - SHADER_EPSILON);
-          ImGui::SliderFloat("Max admissible lum (log10(+1))", &maxAdmissibleLogLum, 0.f, 4.f);
-          maxAdmissibleLogLum =
-            glm::clamp(maxAdmissibleLogLum, minAdmissibleLogLum + SHADER_EPSILON, 4.f);
-
-          histEqTonemappingMinAdmissibleLum = glm::exp(minAdmissibleLogLum * glm::log(10.f)) - 1.f;
-          histEqTonemappingMaxAdmissibleLum = glm::exp(maxAdmissibleLogLum * glm::log(10.f)) - 1.f;
-        }
-        else if (currentTonemappingTechnique == TonemappingTechnique::ACES)
+        if (currentTonemappingTechnique == TonemappingTechnique::ACES)
         {
           ImGui::SliderFloat("Hardcoded exposure", &acesExposure, 0.f, 64.f);
         }
@@ -4204,20 +4172,6 @@ void WorldRenderer::registerManagedImage(
     }};
 }
 
-static void validate_hist_tonemapping_coeffs(
-  [[maybe_unused]] float reg,
-  [[maybe_unused]] float refined,
-  [[maybe_unused]] float min_lum,
-  [[maybe_unused]] float max_lum)
-{
-  ETNA_ASSERT(reg >= 0.f && reg <= 1.f);
-  ETNA_ASSERT(refined >= 0.f && refined <= 1.f);
-  ETNA_ASSERT(reg + refined <= 1.f);
-  ETNA_ASSERT(min_lum >= 0.f);
-  ETNA_ASSERT(max_lum >= min_lum);
-  ETNA_ASSERT(max_lum < 100.f);
-}
-
 void WorldRenderer::loadDebugConfig()
 {
   auto readerMaybe = make_binfile_reader(cfg.debugConfigFile.c_str());
@@ -4288,10 +4242,6 @@ void WorldRenderer::loadDebugConfig()
   terrainNoisePeriod = unwrap(reader.read<float>());
   vegetationRenderingDistance = unwrap(reader.read<float>());
   vegetationRenderingDropoffDistance = unwrap(reader.read<float>());
-  histEqTonemappingRegW = unwrap(reader.read<float>());
-  histEqTonemappingRefinedW = unwrap(reader.read<float>());
-  histEqTonemappingMinAdmissibleLum = unwrap(reader.read<float>());
-  histEqTonemappingMaxAdmissibleLum = unwrap(reader.read<float>());
   acesExposure = unwrap(reader.read<float>());
   csmSplitLambda = unwrap(reader.read<float>());
   csmBlendingBeltSize = unwrap(reader.read<float>());
@@ -4328,12 +4278,6 @@ void WorldRenderer::loadDebugConfig()
   ETNA_ASSERT(
     ssaoTotalLimitSamples == 4 || ssaoTotalLimitSamples == 8 || ssaoTotalLimitSamples == 16 ||
     ssaoTotalLimitSamples == 32 || ssaoTotalLimitSamples == 64 || ssaoTotalLimitSamples == 128);
-
-  validate_hist_tonemapping_coeffs(
-    histEqTonemappingRegW,
-    histEqTonemappingRefinedW,
-    histEqTonemappingMinAdmissibleLum,
-    histEqTonemappingMaxAdmissibleLum);
 
   pointLightsSettingsDirty = true;
   spotLightsSettingsDirty = true;
@@ -4389,10 +4333,6 @@ void WorldRenderer::saveDebugConfig()
   ETNA_VERIFY(writer.write(terrainNoisePeriod));
   ETNA_VERIFY(writer.write(vegetationRenderingDistance));
   ETNA_VERIFY(writer.write(vegetationRenderingDropoffDistance));
-  ETNA_VERIFY(writer.write(histEqTonemappingRegW));
-  ETNA_VERIFY(writer.write(histEqTonemappingRefinedW));
-  ETNA_VERIFY(writer.write(histEqTonemappingMinAdmissibleLum));
-  ETNA_VERIFY(writer.write(histEqTonemappingMaxAdmissibleLum));
   ETNA_VERIFY(writer.write(acesExposure));
   ETNA_VERIFY(writer.write(csmSplitLambda));
   ETNA_VERIFY(writer.write(csmBlendingBeltSize));
