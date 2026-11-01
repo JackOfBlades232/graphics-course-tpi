@@ -64,8 +64,8 @@ Slang
     - Medium -- postfx chain (tonemap & taa)
       v Port FXAA
       v Implement typeset merge & prune -- currently I had to order the compilation of entry points, and restore the order
-      - Port Srgb encoder
-      - Port Reinhard and Aces
+      v Port Srgb encoder
+      v Port Reinhard and Aces
       - Kill histogram tonemapper, it must be rewritten (along with glsl code)
       - Port TAA with all utils
       - Remove glsl versions from compilation (full purge only at the end)

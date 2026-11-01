@@ -37,4 +37,7 @@ target_add_shaders(render_components
 target_add_shaders_slang(render_components
   SHADER shaders/fxaa.slang postfx_vertex_main fxaa_fragment_main
   SHADER shaders/fxaa.slang postfx_vertex_main fxaa311_fragment_main
+  SHADER shaders/aces_tonemap.slang postfx_vertex_main aces_tonemap_fragment_main
+  SHADER shaders/reinhard_tonemap.slang postfx_vertex_main reinhard_tonemap_fragment_main
+  SHADER shaders/srgb_encode.slang postfx_vertex_main srgb_encode_fragment_main
 )

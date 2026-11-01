@@ -14,7 +14,8 @@ void SrgbEncoder::setupPipelines(vk::Format swapchain_format, DebugDrawersRegist
 {
   encoder = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "srgb_encode",
-    RENDER_COMPONENTS_SHADERS_ROOT "srgb_encode.frag.spv",
+    RENDER_COMPONENTS_SHADERS_ROOT
+    "srgb_encode.slang-postfx_vertex_main-srgb_encode_fragment_main.escb",
     swapchain_format,
     {targetResolution.x, targetResolution.y}});
 }
@@ -29,10 +30,12 @@ void SrgbEncoder::encode(
   ETNA_PROFILE_GPU(cmd_buf, srgb_encode);
 
   auto set = etna::create_descriptor_set(
-    encoder->shaderProgramInfo().getDescriptorLayoutId(0),
     cmd_buf,
-    {etna::Binding{
-      0, ldr_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}});
+    encoder->shaderProgramInfo()
+      .dsetBuilder()
+      .setTex(
+        "ldrImage", ldr_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal))
+      .build());
 
   cmd_buf.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics, encoder->pipelineLayout(), 0, {set.getVkSet()}, {});

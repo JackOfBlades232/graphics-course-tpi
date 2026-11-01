@@ -15,7 +15,8 @@ void AcesTonemapper::setupPipelines(vk::Format swapchain_format, DebugDrawersReg
 {
   tonemapper = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "aces_tonemap",
-    RENDER_COMPONENTS_SHADERS_ROOT "aces_tonemap.frag.spv",
+    RENDER_COMPONENTS_SHADERS_ROOT
+    "aces_tonemap.slang-postfx_vertex_main-aces_tonemap_fragment_main.escb",
     swapchain_format,
     {targetResolution.x, targetResolution.y}});
 }
@@ -31,10 +32,13 @@ void AcesTonemapper::tonemap(
   ETNA_PROFILE_GPU(cmd_buf, aces_tonemapping_apply);
 
   auto set = etna::create_descriptor_set(
-    tonemapper->shaderProgramInfo().getDescriptorLayoutId(0),
     cmd_buf,
-    {etna::Binding{0, hdr_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-     etna::Binding{8, constants.genBinding()}});
+    tonemapper->shaderProgramInfo()
+      .dsetBuilder()
+      .setTex(
+        "hdrImage", hdr_image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal))
+      .setCbuf("constants", constants.genBinding())
+      .build());
 
   cmd_buf.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics, tonemapper->pipelineLayout(), 0, {set.getVkSet()}, {});
