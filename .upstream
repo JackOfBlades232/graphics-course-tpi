@@ -63,7 +63,7 @@ Slang
   - Migrate a serious feature
     - Medium -- postfx chain (tonemap & taa)
       v Port FXAA
-      - Implement typeset merge & prune -- currently I had to order the compilation of entry points, and restore the order
+      v Implement typeset merge & prune -- currently I had to order the compilation of entry points, and restore the order
       - Port Srgb encoder
       - Port Reinhard and Aces
       - Kill histogram tonemapper, it must be rewritten (along with glsl code)

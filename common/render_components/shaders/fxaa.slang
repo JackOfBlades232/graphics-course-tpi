@@ -1,6 +1,4 @@
 // @TODO:
-// Constants & type headers for slang (minimal tree, need refactoring)
-//  Research slang's capability of emitting c++ instead
 // Factor out common code
 
 import postfx_vs;

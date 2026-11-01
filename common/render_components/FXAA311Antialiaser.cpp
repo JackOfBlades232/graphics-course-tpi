@@ -14,7 +14,7 @@ void FXAA311Antialiaser::setupPipelines(vk::Format swapchain_format, DebugDrawer
 {
   aa = std::make_unique<PostfxRenderer>(PostfxRenderer::CreateInfo{
     "fxaa311",
-    RENDER_COMPONENTS_SHADERS_ROOT "fxaa.slang-fxaa311_fragment_main-postfx_vertex_main.escb",
+    RENDER_COMPONENTS_SHADERS_ROOT "fxaa.slang-postfx_vertex_main-fxaa311_fragment_main.escb",
     swapchain_format,
     {targetResolution.x, targetResolution.y}});
 }
