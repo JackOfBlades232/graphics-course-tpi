@@ -14,7 +14,7 @@
 #define float4x3 glm::mat4x3
 #define float4x4 glm::mat4x4
 #define bool glm::uint
-#define 
+#define
 #endif
 
 // @TODO: reuse, reorg fields, drop everything here, optional namespaces
@@ -213,14 +213,55 @@ struct ViewData
   uint prevMaxViewZOrderedUint;
 };
 
+static const uint CALC_DEPTH_BOUNDS_ELEMS_PER_THREAD = 32;
+
+// Draw
+//
+
+enum class InstanceFlags : uint
+{
+  TERRAIN_CHUNK = 0x1,
+  VEGETATION = 0x2,
+  WATER_CHUNK = 0x4
+};
+
+struct IndirectCommand
+{
+  uint indexCount;
+  uint instanceCount;
+  uint firstIndex;
+  int vertexOffset;
+  uint firstInstance;
+};
+
+struct CullableInstance
+{
+  uint instId;
+  uint materialId;
+  uint commandId;
+  uint flags;
+};
+
+struct DrawableInstance
+{
+  uint instId;
+  uint materialId;
+  uint commandId;
+  uint flags;
+  float minViewZ;
+  float maxViewZ;
+  uint pad1_, pad2_;
+};
+
 // SSAO
 //
 
 static const int SSAO_KERNEL_MAX_SIZE = 128;
-static const int SSAO_BLUR_KERNEL_SIZE =  5;
+static const int SSAO_BLUR_KERNEL_SIZE = 5;
 static const int SSAO_BLUR_KERNEL_HS = (SSAO_BLUR_KERNEL_SIZE / 2);
 static const int SSAO_BLUR_KERNEL_TSIZE = (SSAO_BLUR_KERNEL_SIZE * SSAO_BLUR_KERNEL_SIZE);
-static const int SSAO_BLUR_KERNEL_TSIZE_V4 = ((SSAO_BLUR_KERNEL_TSIZE + (SSAO_BLUR_KERNEL_TSIZE & 1)) / 2);
+static const int SSAO_BLUR_KERNEL_TSIZE_V4 =
+  ((SSAO_BLUR_KERNEL_TSIZE + (SSAO_BLUR_KERNEL_TSIZE & 1)) / 2);
 
 struct SsaoConstData
 {

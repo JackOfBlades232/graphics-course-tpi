@@ -8,11 +8,15 @@
 
 void ViewContextManager::loadShaders()
 {
-  etna::create_program("culling", {SCENE_SHADERS_ROOT "culling.comp.spv"});
-  etna::create_program("reset_view_context", {SCENE_SHADERS_ROOT "reset_view_context.comp.spv"});
-  etna::create_program("reset_indirect_buf", {SCENE_SHADERS_ROOT "reset_indirect_buf.comp.spv"});
   etna::create_program(
-    "calculate_depth_bounds", {SCENE_SHADERS_ROOT "calculate_depth_bounds.comp.spv"});
+    "culling", SCENE_SLANG_SHADERS_ROOT "culling_shaders.slang-perform_culling.escb");
+  etna::create_program(
+    "reset_view_context", SCENE_SLANG_SHADERS_ROOT "culling_shaders.slang-reset_view_context.escb");
+  etna::create_program(
+    "reset_indirect_buf", SCENE_SLANG_SHADERS_ROOT "culling_shaders.slang-reset_indirect_buf.escb");
+  etna::create_program(
+    "calculate_depth_bounds",
+    SCENE_SLANG_SHADERS_ROOT "culling_shaders.slang-calculate_depth_bounds.escb");
 }
 
 void ViewContextManager::setupPipelines(vk::Format, DebugDrawersRegistry&)
@@ -126,10 +130,11 @@ void ViewContextManager::cullForView(
   {
     auto programInfo = etna::get_shader_program("reset_view_context");
     auto set = etna::create_descriptor_set(
-      programInfo.getDescriptorLayoutId(0),
       cmd_buf,
-      {etna::Binding{0, ctx.indirectDrawBuf.genBinding()},
-       etna::Binding{1, ctx.viewDataBuf.genBinding()}});
+      programInfo.dsetBuilder()
+        .setBuf("commands", ctx.indirectDrawBuf.genBinding())
+        .setBuf("vdata", ctx.viewDataBuf.genBinding())
+        .build());
     cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eCompute,
       resetViewContextPipeline.getVkPipelineLayout(),
@@ -168,15 +173,16 @@ void ViewContextManager::cullForView(
 
     auto programInfo = etna::get_shader_program("culling");
     auto set = etna::create_descriptor_set(
-      programInfo.getDescriptorLayoutId(0),
       cmd_buf,
-      {etna::Binding{0, sceneMgr.getInstanceMatricesBuf().genBinding()},
-       etna::Binding{1, sceneMgr.getInstancesBuf().genBinding()},
-       etna::Binding{2, sceneMgr.getBboxesBuf().genBinding()},
-       etna::Binding{3, ctx.culledInstancesBuf.genBinding()},
-       etna::Binding{4, ctx.indirectDrawBuf.genBinding()},
-       etna::Binding{8, constants.genBinding()},
-       etna::Binding{9, ctx.viewParamsBuf.get().genBinding()}});
+      programInfo.dsetBuilder()
+        .setBuf("instanceMatrices", sceneMgr.getInstanceMatricesBuf().genBinding())
+        .setBuf("allInstances", sceneMgr.getInstancesBuf().genBinding())
+        .setBuf("bboxes", sceneMgr.getBboxesBuf().genBinding())
+        .setBuf("instances", ctx.culledInstancesBuf.genBinding())
+        .setBuf("commands", ctx.indirectDrawBuf.genBinding())
+        .setCbuf("constants", constants.genBinding())
+        .setCbuf("viewParams", ctx.viewParamsBuf.get().genBinding())
+        .build());
 
     cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eCompute,
@@ -222,11 +228,12 @@ void ViewContextManager::cullForView(
 
     auto programInfo = etna::get_shader_program("calculate_depth_bounds");
     auto set = etna::create_descriptor_set(
-      programInfo.getDescriptorLayoutId(0),
       cmd_buf,
-      {etna::Binding{0, ctx.culledInstancesBuf.genBinding()},
-       etna::Binding{1, ctx.indirectDrawBuf.genBinding()},
-       etna::Binding{2, ctx.viewDataBuf.genBinding()}});
+      programInfo.dsetBuilder()
+        .setBuf("instances", ctx.culledInstancesBuf.genBinding())
+        .setBuf("commands", ctx.indirectDrawBuf.genBinding())
+        .setBuf("vdata", ctx.viewDataBuf.genBinding())
+        .build());
 
     cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eCompute,
@@ -307,7 +314,7 @@ void ViewContextManager::resetIndirectBufNoBarriers(
 {
   auto programInfo = etna::get_shader_program("reset_indirect_buf");
   auto set = etna::create_descriptor_set(
-    programInfo.getDescriptorLayoutId(0), cmd_buf, {etna::Binding{0, buf.genBinding()}});
+    cmd_buf, programInfo.dsetBuilder().setBuf("commands", buf.genBinding()).build());
   cmd_buf.bindDescriptorSets(
     vk::PipelineBindPoint::eCompute,
     resetIndirectBufPipeline.getVkPipelineLayout(),

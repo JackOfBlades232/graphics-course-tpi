@@ -4,6 +4,44 @@
 // look into improving code reuse and generics safety
 // complete more builtin type extensions
 
+static const int INT8_MIN = -128;
+static const int INT8_MAX = 127;
+
+static const int INT16_MIN = -32768;
+static const int INT16_MAX = 32767;
+
+static const int INT_MIN = (-2147483647 - 1);
+static const int INT_MAX = 2147483647;
+
+static const uint UINT8_MAX = 255u;
+static const uint UINT16_MAX = 65535u;
+static const uint UINT_MAX = 0xFFFFFFFFu;
+
+static const int64_t INT64_MAX = 9223372036854775807ll;
+static const uint64_t UINT64_MAX = 0xFFFFFFFFFFFFFFFFull;
+
+static const float FLT_MAX = 3.402823466e+38f;
+static const float FLT_MIN_NORMAL = 1.175494351e-38f;
+
+static const float BIG_EPSILON = 0.001f;
+
+func interlocked_fetch_add<T: IArithmeticAtomicable>(inout T dest, in T value) -> T
+{
+  var prev: T;
+  InterlockedAdd(dest, value, prev);
+  return prev;
+}
+
+func flagset(flags: uint, flag: uint) -> bool
+{
+  return (flags & flag) == flag;
+}
+
+func anyflagset(flags: uint, mask: uint) -> bool
+{
+  return (flags & mask) != 0;
+}
+
 interface ITexture1D
 {
   uint getSize();
@@ -26,6 +64,31 @@ extension<T: ITexelElement> Sampler2D<T> : ITexture2D
     uint width, height;
     GetDimensions(width, height);
     return uint2(width, height);
+  }
+}
+
+interface IBuffer
+{
+  uint getElementCount();
+}
+
+extension<T> StructuredBuffer<T> : IBuffer
+{
+  uint getElementCount()
+  {
+    uint numStructs, stride;
+    GetDimensions(numStructs, stride);
+    return numStructs;
+  }
+}
+
+extension<T> RWStructuredBuffer<T> : IBuffer
+{
+  uint getElementCount()
+  {
+    uint numStructs, stride;
+    GetDimensions(numStructs, stride);
+    return numStructs;
   }
 }
 
@@ -120,3 +183,20 @@ func sample_tex_catmull_rom_5tap(
   return float4(color.rgb / color.a, 1.f);
 }
 
+func float_to_ordered_uint(v: float) -> uint
+{
+  let i = asuint(v);
+  return i ^ ((i & 0x80000000) != 0 ? 0xFFFFFFFF : 0x80000000);
+}
+
+func ordered_uint_to_float(i: uint) -> float
+{
+  return asfloat(i ^ ((i & 0x80000000) != 0 ? 0x80000000 : 0xFFFFFFFF));
+}
+
+func translation(offs: float3) -> float4x4
+{
+  var m = float4x4(1.f);
+  m[3] = float4(offs, 1.f);
+  return m;
+}

@@ -14,9 +14,9 @@ target_include_directories(scene PUBLIC .. gltf_jb_ext)
 
 target_link_libraries(scene PUBLIC glm::glm tinygltf etna render_utils render_components)
 
-target_add_shaders(scene
-  shaders/culling.comp
-  shaders/reset_view_context.comp
-  shaders/reset_indirect_buf.comp
-  shaders/calculate_depth_bounds.comp
+target_add_shaders_slang(scene
+  SHADER shaders/culling_shaders.slang reset_indirect_buf
+  SHADER shaders/culling_shaders.slang reset_view_context
+  SHADER shaders/culling_shaders.slang perform_culling
+  SHADER shaders/culling_shaders.slang calculate_depth_bounds
 )
