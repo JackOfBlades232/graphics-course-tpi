@@ -60,7 +60,7 @@ v By-name parameter build for new dset API
     v Rewrite debug quad bindings with the new API
     v Fixup type compilation for entry point and global merging
     v Rework the type system to allow array offsets in subtypes
-- Migrate a serious feature
+v Migrate a serious feature
   v Medium -- postfx chain (tonemap & taa)
     v Port FXAA
     v Implement typeset merge & prune -- currently I had to order the compilation of entry points, and restore the order
@@ -69,10 +69,34 @@ v By-name parameter build for new dset API
     v Kill histogram tonemapper, it must be rewritten (along with glsl code)
     v Port TAA with all utils
     v Compare last time and remove glsl
-  - Finish the API with validation (all types, arrays, etc)
+  v Finish the API with validation (all types, arrays, etc)
+- Migrate my whole renderer
+  - Migrate scene
+    - Migrate culling code
+    - Migrate culling pipeline
+  - Migrate ssao
+    - Move to render components
+    - Migrate
+  - Migrate bindless system
+    - Design slang impl
+    - Make doubling written set(s)
+  - Migrate lighting lib
+  - Migrate fog
+  - Migrate brdf calculation
+  - Migrate gbuffer resolve
+  - Migrate static scene
+  - Migrate tesshquad and terrain
+  - Migrate grass
+  - Migrate water
+  - Migrate render utils
+    - Collect everything
+    - Use constants.hpp in cpu code
+  - Purge glsl
 - Shipping-qual implementation
-  - Reimplement everything with better architecture
+  - Redesign everything with better architecture
   - Error handling
   - Use spirv tools from sdk to not build too much
-- Migrate my whole renderer
-- Prepare 
+- Finish
+  - Refactor shaders
+  - Build in optimized and fix bugs
+  - Submit to Alexandr
