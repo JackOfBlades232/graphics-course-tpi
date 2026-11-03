@@ -71,9 +71,9 @@ v Migrate a serious feature
     v Compare last time and remove glsl
   v Finish the API with validation (all types, arrays, etc)
 - Migrate my whole renderer
-  - Migrate scene
-    - Migrate culling code
-    - Migrate culling pipeline
+  v Migrate scene
+    v Migrate culling code
+    v Migrate culling pipeline
   - Migrate ssao
     - Move to render components
     - Migrate

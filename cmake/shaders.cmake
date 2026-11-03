@@ -148,7 +148,8 @@ function(target_add_shaders_slang tgt)
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_binaries_dir}
       COMMAND $<TARGET_FILE:etna-slangc>
         "$<$<BOOL:${incl_dirs}>:-I;$<LIST:JOIN,${incl_dirs},;-I;>>"
-        "$<$<CONFIG:Debug>:-g>"
+        "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-g>"
+        -O "$<IF:$<CONFIG:Debug>,0,3>"
         "-werror"
         ${input_path}
         -o ${output_path}

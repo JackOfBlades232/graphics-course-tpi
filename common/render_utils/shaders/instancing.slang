@@ -27,7 +27,7 @@ func get_inst_matrix(
 {
   // Bboxes are already world-space for chunks relative to toroidal center.
   if (anyflagset(inst.flags, InstanceFlags::TERRAIN_CHUNK | InstanceFlags::WATER_CHUNK))
-    return translation(float3(constants.toroidalUpdatePlayerWorldPos.x, 0.f, constants.toroidalUpdatePlayerWorldPos.y));
+    return translation4x4(float3(constants.toroidalUpdatePlayerWorldPos.x, 0.f, constants.toroidalUpdatePlayerWorldPos.y));
   else
     return instance_matrices[inst.instId];
 }

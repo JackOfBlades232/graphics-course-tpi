@@ -25,13 +25,6 @@ static const float FLT_MIN_NORMAL = 1.175494351e-38f;
 
 static const float BIG_EPSILON = 0.001f;
 
-func interlocked_fetch_add<T: IArithmeticAtomicable>(inout T dest, in T value) -> T
-{
-  var prev: T;
-  InterlockedAdd(dest, value, prev);
-  return prev;
-}
-
 func flagset(flags: uint, flag: uint) -> bool
 {
   return (flags & flag) == flag;
@@ -194,9 +187,18 @@ func ordered_uint_to_float(i: uint) -> float
   return asfloat(i ^ ((i & 0x80000000) != 0 ? 0x80000000 : 0xFFFFFFFF));
 }
 
-func translation(offs: float3) -> float4x4
+func identity4x4() -> float4x4
 {
-  var m = float4x4(1.f);
+  return float4x4(
+    float4(1.f, 0.f, 0.f, 0.f),
+    float4(0.f, 1.f, 0.f, 0.f),
+    float4(0.f, 0.f, 1.f, 0.f),
+    float4(0.f, 0.f, 0.f, 1.f));
+}
+
+func translation4x4(offs: float3) -> float4x4
+{
+  var m = identity4x4();
   m[3] = float4(offs, 1.f);
   return m;
 }

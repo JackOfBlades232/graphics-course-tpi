@@ -14,13 +14,13 @@ func point_is_in_frustum(p: float3) -> bool
 
 func world_to_clip(v: float4, view_params: ViewParams) -> float3
 {
-  const float4 hom = mul(view_params.mProjView, v);
+  const float4 hom = mul(v, view_params.mProjView);
   return (hom / hom.w).xyz;
 }
 
 func world_to_view(v: float4, view_params: ViewParams) -> float3
 {
-  return mul(view_params.mView, v).xyz;
+  return mul(v, view_params.mView).xyz;
 }
 
 func project_obb_onto_ax(
@@ -76,17 +76,17 @@ func instance_is_in_view(
   bbox: BBox, inst_mat: float4x4, mode: CullingMode, view_params: ViewParams,
   out InstanceViewRelatedData payload) -> bool
 {
-  if (view_params.needDepthBounds != 0)
+  if (view_params.needDepthBounds)
   {
     let vps: float3[8] = {
-     world_to_view(mul(inst_mat, bbox.min), view_params),
-     world_to_view(mul(inst_mat, float4(bbox.min.x, bbox.min.y, bbox.max.z, 1.f)), view_params),
-     world_to_view(mul(inst_mat, float4(bbox.min.x, bbox.max.y, bbox.min.z, 1.f)), view_params),
-     world_to_view(mul(inst_mat, float4(bbox.max.x, bbox.min.y, bbox.min.z, 1.f)), view_params),
-     world_to_view(mul(inst_mat, float4(bbox.max.x, bbox.min.y, bbox.max.z, 1.f)), view_params),
-     world_to_view(mul(inst_mat, float4(bbox.min.x, bbox.max.y, bbox.max.z, 1.f)), view_params),
-     world_to_view(mul(inst_mat, float4(bbox.max.x, bbox.max.y, bbox.min.z, 1.f)), view_params),
-     world_to_view(mul(inst_mat, bbox.max), view_params)};
+     world_to_view(mul(bbox.min, inst_mat), view_params),
+     world_to_view(mul(float4(bbox.min.x, bbox.min.y, bbox.max.z, 1.f), inst_mat), view_params),
+     world_to_view(mul(float4(bbox.min.x, bbox.max.y, bbox.min.z, 1.f), inst_mat), view_params),
+     world_to_view(mul(float4(bbox.max.x, bbox.min.y, bbox.min.z, 1.f), inst_mat), view_params),
+     world_to_view(mul(float4(bbox.max.x, bbox.min.y, bbox.max.z, 1.f), inst_mat), view_params),
+     world_to_view(mul(float4(bbox.min.x, bbox.max.y, bbox.max.z, 1.f), inst_mat), view_params),
+     world_to_view(mul(float4(bbox.max.x, bbox.max.y, bbox.min.z, 1.f), inst_mat), view_params),
+     world_to_view(mul(bbox.max, inst_mat), view_params)};
     payload.minZ = payload.maxZ = vps[0].z;
     for (int i = 1; i < 8; ++i)
     {
@@ -97,14 +97,14 @@ func instance_is_in_view(
 
   if (mode == CullingMode::PER_VERTEX)
   {
-    let p1 = world_to_clip(mul(inst_mat, bbox.min), view_params);
-    let p2 = world_to_clip(mul(inst_mat, float4(bbox.min.x, bbox.min.y, bbox.max.z, 1.f)), view_params);
-    let p3 = world_to_clip(mul(inst_mat, float4(bbox.min.x, bbox.max.y, bbox.min.z, 1.f)), view_params);
-    let p4 = world_to_clip(mul(inst_mat, float4(bbox.max.x, bbox.min.y, bbox.min.z, 1.f)), view_params);
-    let p5 = world_to_clip(mul(inst_mat, float4(bbox.max.x, bbox.min.y, bbox.max.z, 1.f)), view_params);
-    let p6 = world_to_clip(mul(inst_mat, float4(bbox.min.x, bbox.max.y, bbox.max.z, 1.f)), view_params);
-    let p7 = world_to_clip(mul(inst_mat, float4(bbox.max.x, bbox.max.y, bbox.min.z, 1.f)), view_params);
-    let p8 = world_to_clip(mul(inst_mat, bbox.max), view_params);
+    let p1 = world_to_clip(mul(bbox.min, inst_mat), view_params);
+    let p2 = world_to_clip(mul(float4(bbox.min.x, bbox.min.y, bbox.max.z, 1.f), inst_mat), view_params);
+    let p3 = world_to_clip(mul(float4(bbox.min.x, bbox.max.y, bbox.min.z, 1.f), inst_mat), view_params);
+    let p4 = world_to_clip(mul(float4(bbox.max.x, bbox.min.y, bbox.min.z, 1.f), inst_mat), view_params);
+    let p5 = world_to_clip(mul(float4(bbox.max.x, bbox.min.y, bbox.max.z, 1.f), inst_mat), view_params);
+    let p6 = world_to_clip(mul(float4(bbox.min.x, bbox.max.y, bbox.max.z, 1.f), inst_mat), view_params);
+    let p7 = world_to_clip(mul(float4(bbox.max.x, bbox.max.y, bbox.min.z, 1.f), inst_mat), view_params);
+    let p8 = world_to_clip(mul(bbox.max, inst_mat), view_params);
     return point_is_in_frustum(p1)
       || point_is_in_frustum(p2)
       || point_is_in_frustum(p3)
@@ -131,10 +131,10 @@ func instance_is_in_view(
       float4(newMin, 1.f),
       float4(newMax, 1.f)};
 
-    let bbase = world_to_view(mul(inst_mat, extBbox.min), view_params);
-    let bx = world_to_view(mul(inst_mat, float4(extBbox.max.x, extBbox.min.y, extBbox.min.z, 1.f)), view_params) - bbase;
-    let by = world_to_view(mul(inst_mat, float4(extBbox.min.x, extBbox.max.y, extBbox.min.z, 1.f)), view_params) - bbase;
-    let bz = world_to_view(mul(inst_mat, float4(extBbox.min.x, extBbox.min.y, extBbox.max.z, 1.f)), view_params) - bbase;
+    let bbase = world_to_view(mul(extBbox.min, inst_mat), view_params);
+    let bx = world_to_view(mul(float4(extBbox.max.x, extBbox.min.y, extBbox.min.z, 1.f), inst_mat), view_params) - bbase;
+    let by = world_to_view(mul(float4(extBbox.min.x, extBbox.max.y, extBbox.min.z, 1.f), inst_mat), view_params) - bbase;
+    let bz = world_to_view(mul(float4(extBbox.min.x, extBbox.min.y, extBbox.max.z, 1.f), inst_mat), view_params) - bbase;
     let e = float3(length(bx), length(by), length(bz));
     let obb: OBBox = {
       bbase + (bx + by + bz) * 0.5f, e * 0.5f,

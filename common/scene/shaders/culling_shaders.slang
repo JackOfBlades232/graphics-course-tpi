@@ -57,9 +57,9 @@ func perform_culling(
 
     if (instance_is_in_view(bbox, instMat, constants.cullingMode, viewParams, payload))
     {
-      let destId =
-        commands[inst.commandId].firstInstance +
-        interlocked_fetch_add(commands[inst.commandId].instanceCount, 1);
+      var localId: uint;
+      InterlockedAdd(commands[inst.commandId].instanceCount, 1, localId);
+      let destId = commands[inst.commandId].firstInstance + localId;
 
       instances[destId].instId = inst.instId;
       instances[destId].materialId = inst.materialId;
