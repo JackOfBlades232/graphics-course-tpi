@@ -3351,6 +3351,7 @@ void WorldRenderer::renderWorld(
             .setCbuf("source", fog->source.genBinding())
             .setCbuf("constants", constants->get().genBinding())
             .setCbuf("viewParams", mainViewContext->viewParamsBuf.get().genBinding())
+            .setCbuf("lights", lights->get().genBinding())
             .build());
         // @TODO: lighting
         etna::flush_barriers(cmd_buf);

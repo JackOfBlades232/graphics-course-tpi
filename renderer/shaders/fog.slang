@@ -1,5 +1,6 @@
 import constants;
 import common;
+import lighting;
 
 func sample_perlin(tex: Sampler3D<float>, p: float3) -> float
 {
@@ -76,7 +77,8 @@ func fog_generate(
   perlinNoise: Sampler3D<float>,
   source: ConstantBuffer<FogSourceData>,
   constants: ConstantBuffer<Constants>,
-  viewParams: ConstantBuffer<ViewParams>)
+  viewParams: ConstantBuffer<ViewParams>,
+  lights: ConstantBuffer<UniformLights>)
 {
   let imCoord = threadId.xy;
   let imSize = uint2(constants.mainTargetResolution) / 2;
@@ -131,26 +133,27 @@ func fog_generate(
     {
       // @TODO: lighting
 
-      // CsmCascadeLightingData csmd = get_cascade_data_for_view_pos(vpos, viewParams);
-      // for (int i = 0; i < (scatterAllLights ? lights.directionalLightsCount : min(1, lights.directionalLightsCount)); ++i)
-      // {
-      //   LightData ld = calculate_directional_light_data(i, pos, csmd, SHADOW_TECHNIQUE_SIMPLE);
-      //   vec3 inscatter = ii * ld.intensity * ld.shadow; // * phase
-      //   transmitted.rgb += transmitted.a * inscatter * stp;
-      // }
-      //
-      // for (int i = 0; i < (scatterAllLights ? lights.pointLightsCount : 0); ++i)
-      // {
-      //   LightData ld = calculate_point_light_data(i, pos, SHADOW_TECHNIQUE_SIMPLE);
-      //   vec3 inscatter = ii * ld.intensity * ld.shadow * constants.fogSceneLightsScatterCoeff; // * phase
-      //   transmitted.rgb += transmitted.a * inscatter * stp;
-      // }
-      // for (int i = 0; i < (scatterAllLights ? lights.spotLightsCount : 0); ++i)
-      // {
-      //   LightData ld = calculate_spot_light_data(i, pos, SHADOW_TECHNIQUE_SIMPLE);
-      //   vec3 inscatter = ii * ld.intensity * ld.shadow * constants.fogSceneLightsScatterCoeff; // * phase
-      //   transmitted.rgb += transmitted.a * inscatter * stp;
-      // }
+      let csmd = get_cascade_data_for_view_pos(vpos, viewParams);
+
+      for (var i: int = 0; i < (scatterAllLights ? lights.directionalLightsCount : min(1, lights.directionalLightsCount)); ++i)
+      {
+        let ld = calculate_directional_light_data(i, pos, csmd, ShadowTechnique.SIMPLE, lights);
+        let inscatter = ii * ld.intensity * ld.shadow; // * phase
+        transmitted.rgb += transmitted.a * inscatter * stp;
+      }
+
+      for (int i = 0; i < (scatterAllLights ? lights.pointLightsCount : 0); ++i)
+      {
+        let ld = calculate_point_light_data(i, pos, ShadowTechnique.SIMPLE, lights);
+        let inscatter = ii * ld.intensity * ld.shadow * constants.fogSceneLightsScatterCoeff; // * phase
+        transmitted.rgb += transmitted.a * inscatter * stp;
+      }
+      for (int i = 0; i < (scatterAllLights ? lights.spotLightsCount : 0); ++i)
+      {
+        let ld = calculate_spot_light_data(i, pos, ShadowTechnique.SIMPLE, lights);
+        let inscatter = ii * ld.intensity * ld.shadow * constants.fogSceneLightsScatterCoeff; // * phase
+        transmitted.rgb += transmitted.a * inscatter * stp;
+      }
     }
 
     pos += posStep;

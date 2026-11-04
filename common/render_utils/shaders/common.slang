@@ -268,6 +268,22 @@ func adjust_viewproj_mat(params: ViewParams, data: ViewData) -> float4x4
   return mul(params.mView, pm);
 }
 
+func get_frustum_split(p: ViewParams, i: uint) -> float
+{
+  let comp = i & 3;
+  switch (comp)
+  {
+  case 0:
+    return p.csmFrustumSplits[i & ~3].x;
+  case 1:
+    return p.csmFrustumSplits[i & ~3].y;
+  case 2:
+    return p.csmFrustumSplits[i & ~3].z;
+  default:
+    return p.csmFrustumSplits[i & ~3].w;
+  }
+}
+
 func depth_and_tc_to_pos(depth: float, tc: float2, ivpm: float4x4) -> float3
 {
   let cameraToScreen = float4(2.f * tc - 1.f, depth, 1.f); 
