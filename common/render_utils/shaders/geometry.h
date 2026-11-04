@@ -62,6 +62,7 @@ struct ViewFrustum
 struct ViewParams
 {
   shader_mat4 mProjView;
+  shader_mat4 mInverseProjView;
   shader_mat4 mView;
   shader_mat4 mInverseView;
   shader_mat4 mProj;

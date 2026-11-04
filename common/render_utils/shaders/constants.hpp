@@ -181,6 +181,7 @@ struct ViewFrustum
 struct ViewParams
 {
   float4x4 mProjView;
+  float4x4 mInverseProjView;
   float4x4 mView;
   float4x4 mInverseView;
   float4x4 mProj;

@@ -23,6 +23,7 @@ static const uint64_t UINT64_MAX = 0xFFFFFFFFFFFFFFFFull;
 static const float FLT_MAX = 3.402823466e+38f;
 static const float FLT_MIN_NORMAL = 1.175494351e-38f;
 
+static const float EPSILON = 0.00001f;
 static const float BIG_EPSILON = 0.001f;
 
 func flagset(flags: uint, flag: uint) -> bool
@@ -201,4 +202,21 @@ func translation4x4(offs: float3) -> float4x4
   var m = identity4x4();
   m[3] = float4(offs, 1.f);
   return m;
+}
+
+func linearize_z(z: float, n: float, f: float) -> float
+{
+  return (f * n) / (f - z * (f - n));
+}
+
+func linearize_rev_z(z: float, n: float, f: float) -> float
+{
+  return (f * n) / (n - z * (n - f));
+}
+
+func depth_and_tc_to_pos(depth: float, tc: float2, ivpm: float4x4) -> float3
+{
+  let cameraToScreen = float4(2.f * tc - 1.f, depth, 1.f); 
+  let posHom = mul(cameraToScreen, ivpm);
+  return posHom.xyz / posHom.w;
 }

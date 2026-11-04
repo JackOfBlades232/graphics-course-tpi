@@ -38,8 +38,6 @@ target_add_shaders(renderer
   shaders/grass_mesh_no_prepass.frag
   shaders/grass_mesh_depth.vert
   shaders/grass_mesh_depth.frag
-  shaders/ssao_generate.frag
-  shaders/ssao_blur.frag
   shaders/water_time_indep_spectra_gen.comp
   shaders/water_time_indep_spectra_conjugate.comp
   shaders/water_time_spectra_gen.comp
@@ -52,4 +50,9 @@ target_add_shaders(renderer
   shaders/fog_apply.comp
   shaders/fog_noise_pregen.comp
   shaders/quad.vert
+)
+
+target_add_shaders_slang(renderer
+  SHADER shaders/ssao.slang postfx_vertex_main ssao_generate
+  SHADER shaders/ssao.slang postfx_vertex_main ssao_blur
 )

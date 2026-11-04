@@ -74,9 +74,9 @@ v Migrate a serious feature
   v Migrate scene
     v Migrate culling code
     v Migrate culling pipeline
-  - Migrate ssao
-    - Move to render components
-    - Migrate
+  v Migrate ssao
+    v Migrate
+    v Report matrix codegen bug to slang
   - Migrate bindless system
     - Design slang impl
     - Make doubling written set(s)
