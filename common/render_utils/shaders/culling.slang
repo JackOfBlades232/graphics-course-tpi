@@ -42,7 +42,7 @@ func project_frustum_onto_ax(
   x_near: float, y_near: float, z_near: float, z_far: float,
   m: float3, view_params: ViewParams) -> float2
 {
-  if (view_params.type == ViewType::PERSPECTIVE)
+  if (view_params.type == ViewType.PERSPECTIVE)
   {
     let p = x_near * abs(m.x) + y_near * abs(m.y);
     let nmd = z_near * m.z;
@@ -162,7 +162,7 @@ func instance_is_in_view(
     }
 
     // Frustum side normals
-    if (view_params.type == ViewType::PERSPECTIVE)
+    if (view_params.type == ViewType.PERSPECTIVE)
     {
       let ms: float3[4] = {
         float3(zNear, 0.f, xNear),
@@ -251,7 +251,7 @@ func instance_is_in_view(
     }
 
     // Frustum Edges x OBB axes
-    if (view_params.type == ViewType::PERSPECTIVE)
+    if (view_params.type == ViewType.PERSPECTIVE)
     {
       for (var i: uint = 0; i < 3; ++i)
       {

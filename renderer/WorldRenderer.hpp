@@ -276,7 +276,7 @@ private:
   etna::ComputePipeline resetTerrainChunkHeightBoundsPipeline{};
   etna::ComputePipeline generateTerrainChunkHeightBoundsPipeline{};
   etna::ComputePipeline transferTerrainChunkHeightBoundsPipeline{};
-  etna::ComputePipeline transferLightMatsPipeline{};
+  etna::ComputePipeline transferLightMatrixPipeline{};
   etna::ComputePipeline vegetationGenerateClearChunks{};
   etna::ComputePipeline vegetationGenerateCullChunks{};
   etna::ComputePipeline vegetationGenerateSortChunks{};

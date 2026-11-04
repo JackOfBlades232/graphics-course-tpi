@@ -829,7 +829,8 @@ void WorldRenderer::loadShaders()
     "transfer_terrain_chunk_height_bounds",
     {RENDERER_SHADERS_ROOT "transfer_terrain_chunk_height_bounds.comp.spv"});
   etna::create_program(
-    "transfer_light_mats", {RENDERER_SHADERS_ROOT "transfer_light_mats.comp.spv"});
+    "transfer_light_matrix",
+    RENDERER_SLANG_SHADERS_ROOT "lighting.slang-transfer_light_matrix.escb");
   etna::create_program(
     "grass_mesh",
     {RENDERER_SHADERS_ROOT "grass_mesh.frag.spv", RENDERER_SHADERS_ROOT "grass_mesh.vert.spv"});
@@ -1127,7 +1128,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     pipelineManager.createComputePipeline("generate_terrain_chunk_height_bounds", {});
   transferTerrainChunkHeightBoundsPipeline =
     pipelineManager.createComputePipeline("transfer_terrain_chunk_height_bounds", {});
-  transferLightMatsPipeline = pipelineManager.createComputePipeline("transfer_light_mats", {});
+  transferLightMatrixPipeline = pipelineManager.createComputePipeline("transfer_light_matrix", {});
   vegetationGenerateClearChunks =
     pipelineManager.createComputePipeline("grass_generate_clear_chunks", {});
   vegetationGenerateCullChunks =
@@ -2753,25 +2754,26 @@ void WorldRenderer::renderWorld(
       const auto& ls = sceneMgr->getLights();
 
       auto transferMat = [this, &cmd_buf](auto lid, const ViewContext& ctx) {
-        auto programInfo = etna::get_shader_program("transfer_light_mats");
+        auto programInfo = etna::get_shader_program("transfer_light_matrix");
         auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
           cmd_buf,
-          {etna::Binding{0, lightMatricesBuf.genBinding()},
-           etna::Binding{9, ctx.viewParamsBuf.get().genBinding()},
-           etna::Binding{10, ctx.viewDataBuf.genBinding()}});
+          programInfo.dsetBuilder()
+            .setBuf("lightMats", lightMatricesBuf.genBinding())
+            .setCbuf("viewParams", ctx.viewParamsBuf.get().genBinding())
+            .setBuf("viewData", ctx.viewDataBuf.genBinding())
+            .build());
 
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
-          transferLightMatsPipeline.getVkPipelineLayout(),
+          transferLightMatrixPipeline.getVkPipelineLayout(),
           0,
           {set.getVkSet()},
           {});
 
         cmd_buf.bindPipeline(
-          vk::PipelineBindPoint::eCompute, transferLightMatsPipeline.getVkPipeline());
+          vk::PipelineBindPoint::eCompute, transferLightMatrixPipeline.getVkPipeline());
         cmd_buf.pushConstants<shader_uint>(
-          transferLightMatsPipeline.getVkPipelineLayout(),
+          transferLightMatrixPipeline.getVkPipelineLayout(),
           vk::ShaderStageFlagBits::eCompute,
           0,
           shader_uint(lid));

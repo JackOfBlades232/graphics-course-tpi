@@ -1,3 +1,5 @@
+import constants;
+
 // @TODO:
 // study the algos
 // look into improving module structure via interface and impls
@@ -230,6 +232,40 @@ func linearize_z(z: float, n: float, f: float) -> float
 func linearize_rev_z(z: float, n: float, f: float) -> float
 {
   return (f * n) / (n - z * (n - f));
+}
+
+func patch_depth_bounds_persp(inout float4x4 pm, n: float, f: float) -> float4x4
+{
+  let invZRng = 1.f / (f - n);
+  pm[2][2] = f * invZRng;
+  pm[3][2] = -n * f * invZRng;
+  return pm;
+}
+
+func patch_depth_bounds_ortho(inout float4x4 pm, n: float, f: float) -> float4x4
+{
+  let invZRng = 1.f / (f - n);
+  pm[2][2] = invZRng;
+  pm[3][2] = -n * invZRng;
+  return pm;
+}
+
+func adjust_viewproj_mat(params: ViewParams, data: ViewData) -> float4x4
+{
+  if (!params.needDepthBounds)
+    return params.mProjView;
+  let sceneMinZ = ordered_uint_to_float(data.minViewZOrderedUint) - 0.001f;
+  let sceneMaxZ = ordered_uint_to_float(data.maxViewZOrderedUint) + 0.001f;
+  let correctedNearZ = max(sceneMinZ, params.viewFrustum.nearZ);
+  let correctedFarZ = min(sceneMaxZ, params.viewFrustum.farZ);
+  let znr = params.needReverseZ ? correctedFarZ : correctedNearZ;
+  let zfr = params.needReverseZ ? correctedNearZ : correctedFarZ;
+  var pm: float4x4 = params.mProj;
+  if (params.type == ViewType.PERSPECTIVE)
+    patch_depth_bounds_persp(pm, znr, zfr);
+  else // ORTHO
+    patch_depth_bounds_ortho(pm, znr, zfr);
+  return mul(params.mView, pm);
 }
 
 func depth_and_tc_to_pos(depth: float, tc: float2, ivpm: float4x4) -> float3

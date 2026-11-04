@@ -17,7 +17,6 @@ target_add_shaders(renderer
   shaders/reset_terrain_chunk_height_bounds.comp
   shaders/generate_terrain_chunk_height_bounds.comp
   shaders/transfer_terrain_chunk_height_bounds.comp
-  shaders/transfer_light_mats.comp
   shaders/static_mesh.vert
   shaders/static_mesh.frag
   shaders/static_mesh_depth.vert
@@ -55,4 +54,5 @@ target_add_shaders_slang(renderer
   SHADER shaders/fog.slang fog_noise_pregen
   SHADER shaders/fog.slang fog_apply
   SHADER shaders/fog.slang fog_generate
+  SHADER shaders/lighting.slang transfer_light_matrix
 )
