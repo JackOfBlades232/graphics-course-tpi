@@ -871,9 +871,10 @@ void WorldRenderer::loadShaders()
     "water_caustics_convert",
     {RENDERER_SHADERS_ROOT "water_caustics_convert.frag.spv",
      RENDERER_SHADERS_ROOT "quad.vert.spv"});
-  etna::create_program("fog_generate", {RENDERER_SHADERS_ROOT "fog_generate.comp.spv"});
-  etna::create_program("fog_apply", {RENDERER_SHADERS_ROOT "fog_apply.comp.spv"});
-  etna::create_program("fog_noise_pregen", {RENDERER_SHADERS_ROOT "fog_noise_pregen.comp.spv"});
+  etna::create_program("fog_generate", RENDERER_SLANG_SHADERS_ROOT "fog.slang-fog_generate.escb");
+  etna::create_program("fog_apply", RENDERER_SLANG_SHADERS_ROOT "fog.slang-fog_apply.escb");
+  etna::create_program(
+    "fog_noise_pregen", RENDERER_SLANG_SHADERS_ROOT "fog.slang-fog_noise_pregen.escb");
 
   for (auto& component : rcomponents)
     component->loadShaders();
@@ -3311,9 +3312,10 @@ void WorldRenderer::renderWorld(
         ETNA_PROFILE_GPU(cmd_buf, fogPerlinNoisePregen);
         auto programInfo = etna::get_shader_program("fog_noise_pregen");
         auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
           cmd_buf,
-          {etna::Binding{0, fog->perlinNoise.genBinding({}, vk::ImageLayout::eGeneral)}});
+          programInfo.dsetBuilder()
+            .setTex("perlinNoise", fog->perlinNoise.genBinding({}, vk::ImageLayout::eGeneral))
+            .build());
         etna::flush_barriers(cmd_buf);
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
@@ -3333,23 +3335,22 @@ void WorldRenderer::renderWorld(
         ETNA_PROFILE_GPU(cmd_buf, fogGenerate);
         auto programInfo = etna::get_shader_program("fog_generate");
         auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
           cmd_buf,
-          {etna::Binding{0, fog->halfresFogBuffer.genBinding({}, vk::ImageLayout::eGeneral)},
-           etna::Binding{
-             1,
-             mainViewDepth.genBinding(
-               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{
-             2,
-             fog->perlinNoise.genBinding(
-               defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{6, fog->source.genBinding()},
-           etna::Binding{8, constants->get().genBinding()},
-           etna::Binding{9, mainViewContext->viewParamsBuf.get().genBinding()},
-           etna::Binding{10, mainViewContext->viewDataBuf.genBinding()},
-           etna::Binding{11, lights->get().genBinding()},
-           etna::Binding{12, lightMatricesBuf.genBinding()}});
+          programInfo.dsetBuilder()
+            .setTex("fogHalfres", fog->halfresFogBuffer.genBinding({}, vk::ImageLayout::eGeneral))
+            .setTex(
+              "gbufDepth",
+              mainViewDepth.genBinding(
+                defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal))
+            .setTex(
+              "perlinNoise",
+              fog->perlinNoise.genBinding(
+                defaultWrapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal))
+            .setCbuf("source", fog->source.genBinding())
+            .setCbuf("constants", constants->get().genBinding())
+            .setCbuf("viewParams", mainViewContext->viewParamsBuf.get().genBinding())
+            .build());
+        // @TODO: lighting
         etna::flush_barriers(cmd_buf);
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
@@ -3373,15 +3374,16 @@ void WorldRenderer::renderWorld(
         ETNA_PROFILE_GPU(cmd_buf, fogApply);
         auto programInfo = etna::get_shader_program("fog_apply");
         auto set = etna::create_descriptor_set(
-          programInfo.getDescriptorLayoutId(0),
           cmd_buf,
-          {etna::Binding{0, hdrTarget.genBinding({}, vk::ImageLayout::eGeneral)},
-           etna::Binding{
-             1,
-             fog->halfresFogBuffer.genBinding(
-               defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-           etna::Binding{6, fog->source.genBinding()},
-           etna::Binding{8, constants->get().genBinding()}});
+          programInfo.dsetBuilder()
+            .setTex("hdrTarget", hdrTarget.genBinding({}, vk::ImageLayout::eGeneral))
+            .setTex(
+              "fogHalfres",
+              fog->halfresFogBuffer.genBinding(
+                defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal))
+            .setCbuf("source", fog->source.genBinding())
+            .setCbuf("constants", constants->get().genBinding())
+            .build());
         etna::flush_barriers(cmd_buf);
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute, fogApply.getVkPipelineLayout(), 0, {set.getVkSet()}, {});

@@ -71,14 +71,16 @@ func ssao_generate(
   let rot = comp == 0 ? rr.xy : rr.zw;
 
   // @TODO: report matrix addressing bug to slang
-  let invaspect = float2(1.f / viewParams.mProj[0].x, 1.f / viewParams.mProj[1].y);
+  let invaspect = float2(
+    1.f / viewParams.mProj[0][0],
+    1.f / viewParams.mProj[1][1]);
 
   let reconstructedPos = depth_and_tc_to_pos(depth, texCoord, viewParams.mInverseProjView);
   let normal = gbufNormal.SampleLevel(texCoord, 0);
 
   output.worldDepth = length(reconstructedPos - viewParams.viewPos);
 
-  let fovYW = output.worldDepth / abs(viewParams.mProj[1].y);
+  let fovYW = output.worldDepth / abs(viewParams.mProj[1][1]);
 
   let maxKernToFovy = 0.75f;
   let minKernToFovy = 0.05f;
@@ -88,7 +90,7 @@ func ssao_generate(
   let rad = kernelScalingFactor * constants.ssaoRadius;
 
   let ssradY = rad / fovYW;
-  let ssradX = ssradY * abs(viewParams.mProj[0].x) / abs(viewParams.mProj[1].y);
+  let ssradX = ssradY * abs(viewParams.mProj[0][0]) / abs(viewParams.mProj[1][1]);
 
   let dte = min(texCoord, 1.f - texCoord);
   let kernelCull = clamp(float2(dte.x / ssradX, dte.y / ssradY), 0.f, 1.f);

@@ -46,13 +46,13 @@ target_add_shaders(renderer
   shaders/water_generate_caustic_map.comp
   shaders/water_clear_caustic_map.comp
   shaders/water_caustics_convert.frag
-  shaders/fog_generate.comp
-  shaders/fog_apply.comp
-  shaders/fog_noise_pregen.comp
   shaders/quad.vert
 )
 
 target_add_shaders_slang(renderer
   SHADER shaders/ssao.slang postfx_vertex_main ssao_generate
   SHADER shaders/ssao.slang postfx_vertex_main ssao_blur
+  SHADER shaders/fog.slang fog_noise_pregen
+  SHADER shaders/fog.slang fog_apply
+  SHADER shaders/fog.slang fog_generate
 )

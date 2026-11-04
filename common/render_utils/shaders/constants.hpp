@@ -290,14 +290,21 @@ struct WeatherSourceData
   float pad1_, pad2_, pad3_;
 };
 
+// Fog
+//
+
+struct FogSourceData
+{
+  float3 color; 
+  float constantTransmittance;
+};
+
 // Water
 //
 
 static const int WATER_CASCADE_COUNT = 3;
 static const int WATER_CASCADE_RES_POW = 8;
 static const int WATER_CASCADE_RES = (1 << WATER_CASCADE_RES_POW);
-
-static const int WATER_WORKGROUP_DIM = 16;
 
 // 2 buffers per cascade -- (x, y, z, dXZ), (dYX, dYZ, dXX, dZZ)
 static const int WATER_FFT_BUFFER_COUNT = (2 * WATER_CASCADE_COUNT);

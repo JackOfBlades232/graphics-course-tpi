@@ -3,6 +3,8 @@
 // look into improving module structure via interface and impls
 // look into improving code reuse and generics safety
 // complete more builtin type extensions
+//
+// rewrite app code to grab thread group sizes from info
 
 static const int INT8_MIN = -128;
 static const int INT8_MAX = 127;
@@ -38,39 +40,53 @@ func anyflagset(flags: uint, mask: uint) -> bool
 
 interface ITexture1D
 {
-  uint getSize();
+  func getSize() -> uint;
 }
 
 interface ITexture2D
 {
-  uint2 getSize();
+  func getSize() -> uint2;
 }
 
 interface ITexture3D
 {
-  uint3 getSize();
+  func getSize() -> uint3;
 }
 
 extension<T: ITexelElement> Sampler2D<T> : ITexture2D
 {
-  uint2 getSize()
+  func getSize() -> uint2
   {
-    uint width, height;
+    var width: uint;
+    var height: uint;
     GetDimensions(width, height);
     return uint2(width, height);
   }
 }
 
+extension<T: ITexelElement> RWTexture3D<T> : ITexture3D
+{
+  func getSize() -> uint3
+  {
+    var width: uint;
+    var height: uint;
+    var depth: uint;
+    GetDimensions(width, height, depth);
+    return uint3(width, height, depth);
+  }
+}
+
 interface IBuffer
 {
-  uint getElementCount();
+  func getElementCount() -> uint;
 }
 
 extension<T> StructuredBuffer<T> : IBuffer
 {
-  uint getElementCount()
+  func getElementCount() -> uint
   {
-    uint numStructs, stride;
+    var numStructs: uint;
+    var stride: uint;
     GetDimensions(numStructs, stride);
     return numStructs;
   }
@@ -78,9 +94,10 @@ extension<T> StructuredBuffer<T> : IBuffer
 
 extension<T> RWStructuredBuffer<T> : IBuffer
 {
-  uint getElementCount()
+  func getElementCount() -> uint
   {
-    uint numStructs, stride;
+    var numStructs: uint;
+    var stride: uint;
     GetDimensions(numStructs, stride);
     return numStructs;
   }
@@ -149,7 +166,7 @@ func sample_tex_catmull_rom_9tap(
 func sample_tex_catmull_rom_5tap(
   tex_smp: Sampler2D, uv: float2, tex_size: float2, c: float) -> float4
 {
-  let rtMetrics = float4(1.0 / tex_size.xy, tex_size.xy);
+  let rtMetrics = float4(1.f / tex_size.xy, tex_size.xy);
 
   let position = rtMetrics.zw * uv;
   let centerPosition = floor(position - 0.5f) + 0.5f;
@@ -164,17 +181,18 @@ func sample_tex_catmull_rom_5tap(
 
   let w12 = w1 + w2;
   let tc12 = rtMetrics.xy * (centerPosition + w2 / w12);
-  let centerColor = tex_smp.SampleLevel(float2(tc12.x, tc12.y), 0).rgb;
+  let centerColor = tex_smp.SampleLevel(float2(tc12.x, tc12.y), 0);
 
-  let tc0 = rtMetrics.xy * (centerPosition - 1.0);
-  let tc3 = rtMetrics.xy * (centerPosition + 2.0);
+  let tc0 = rtMetrics.xy * (centerPosition - 1.f);
+  let tc3 = rtMetrics.xy * (centerPosition + 2.f);
   let color =
-    float4(tex_smp.SampleLevel(float2(tc12.x, tc0.y), 0).rgb, 1.f) * (w12.x * w0.y) +
-    float4(tex_smp.SampleLevel(float2(tc0.x, tc12.y), 0).rgb, 1.f) * (w0.x * w12.y) +
-    float4(centerColor, 1.f) * (w12.x * w12.y) +
-    float4(tex_smp.SampleLevel(float2(tc3.x, tc12.y), 0).rgb, 1.f) * (w3.x * w12.y) +
-    float4(tex_smp.SampleLevel(float2(tc12.x, tc3.y), 0).rgb, 1.f) * (w12.x * w3.y);
-  return float4(color.rgb / color.a, 1.f);
+    tex_smp.SampleLevel(float2(tc12.x, tc0.y), 0) * (w12.x * w0.y) +
+    tex_smp.SampleLevel(float2(tc0.x, tc12.y), 0) * (w0.x * w12.y) +
+    centerColor * (w12.x * w12.y) +
+    tex_smp.SampleLevel(float2(tc3.x, tc12.y), 0) * (w3.x * w12.y) +
+    tex_smp.SampleLevel(float2(tc12.x, tc3.y), 0) * (w12.x * w3.y);
+  let w = (w12.x * w0.y) + (w0.x * w12.y) + (w12.x * w12.y) + (w3.x * w12.y) + (w12.x * w3.y);
+  return color / w;
 }
 
 func float_to_ordered_uint(v: float) -> uint

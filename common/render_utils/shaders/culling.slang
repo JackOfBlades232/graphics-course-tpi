@@ -24,9 +24,9 @@ func world_to_view(v: float4, view_params: ViewParams) -> float3
 }
 
 func project_obb_onto_ax(
-    c: float3,
-    x_ax: float3, y_ax: float3, z_ax: float3,
-    exts: float3, m: float3) -> float2
+  c: float3,
+  x_ax: float3, y_ax: float3, z_ax: float3,
+  exts: float3, m: float3) -> float2
 {
   let mc = dot(m, c);
   let rad = 
@@ -39,8 +39,8 @@ func project_obb_onto_ax(
 }
 
 func project_frustum_onto_ax(
-    x_near: float, y_near: float, z_near: float, z_far: float,
-    m: float3, view_params: ViewParams) -> float2
+  x_near: float, y_near: float, z_near: float, z_far: float,
+  m: float3, view_params: ViewParams) -> float2
 {
   if (view_params.type == ViewType::PERSPECTIVE)
   {
