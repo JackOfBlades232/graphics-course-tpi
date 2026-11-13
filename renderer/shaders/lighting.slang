@@ -1,6 +1,67 @@
 import constants;
 import common;
 
+
+// from https://github.com/TheRealMJP/Shadows
+static const float PCF3X3_KERNEL[3][3] =
+{
+  { 0.5,1.0,0.5, },
+  { 1.0,1.0,1.0, },
+  { 0.5,1.0,0.5, }
+};
+
+static const float PCF5X5_KERNEL[5][5] =
+{
+  { 0.0,0.5,1.0,0.5,0.0 },
+  { 0.5,1.0,1.0,1.0,0.5 },
+  { 1.0,1.0,1.0,1.0,1.0 },
+  { 0.5,1.0,1.0,1.0,0.5 },
+  { 0.0,0.5,1.0,0.5,0.0 }
+};
+
+static const float PCF7X7_KERNEL[7][7] =
+{
+  { 0.0,0.0,0.5,1.0,0.5,0.0,0.0 },
+  { 0.0,1.0,1.0,1.0,1.0,1.0,0.0 },
+  { 0.5,1.0,1.0,1.0,1.0,1.0,0.5 },
+  { 1.0,1.0,1.0,1.0,1.0,1.0,1.0 },
+  { 0.5,1.0,1.0,1.0,1.0,1.0,0.5 },
+  { 0.0,1.0,1.0,1.0,1.0,1.0,0.0 },
+  { 0.0,0.0,0.5,1.0,0.5,0.0,0.0 }
+};
+
+static const float PCF9X9_KERNEL[9][9] =
+{
+  { 0.0,0.0,0.0,0.5,1.0,0.5,0.0,0.0,0.0 },
+  { 0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0 },
+  { 0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0 },
+  { 0.5,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.5 },
+  { 1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0 },
+  { 0.5,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.5 },
+  { 0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0 },
+  { 0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0 },
+  { 0.0,0.0,0.0,0.5,1.0,0.5,0.0,0.0,0.0 }
+};
+
+static const int PCF_KERNEL_SIZES[] = {0, 3, 5, 7, 9};
+
+func pcf_kernel_weight(x: int, y: int, tech: ShadowTechnique) -> float
+{
+  switch (tech)
+  {
+  case ShadowTechnique.PCF3X3:
+    return PCF3X3_KERNEL[y][x];
+  case ShadowTechnique.PCF5X5:
+    return PCF5X5_KERNEL[y][x];
+  case ShadowTechnique.PCF7X7:
+    return PCF7X7_KERNEL[y][x];
+  case ShadowTechnique.PCF9X9:
+    return PCF9X9_KERNEL[y][x];
+  default:
+    return 0.f;
+  }
+}
+
 func calculate_attenuation(pos: float3, light_pos: float3, range: float) -> float
 {
   let dist = length(pos - light_pos);
@@ -98,8 +159,9 @@ func calculate_point_light_data(
 }
 
 func calculate_spot_light_data(
-  lid: int , pos: float3,
-  tech: ShadowTechnique, lights: UniformLights) -> LightData
+  lid: int , pos: float3, tech: ShadowTechnique,
+  lights: UniformLights, constants: Constants,
+  mats: StructuredBuffer<LightMatrices>) -> LightData
 {
   LightData ld;
   ld.shadow = 1.f;
@@ -119,7 +181,46 @@ func calculate_spot_light_data(
   if (length(ld.intensity) < EPSILON)
     return ld;
 
-  // @TODO: impl shadow
+  if (constants.useSpotLightShadows)
+  {
+    let posLightClipSpace = mul(float4(pos, 1.f), mats[0].spotLightMats[lid]);
+    let posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
+    let shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
+
+
+    if (shadow_technique_is_pcf(tech))
+    {
+      ld.shadow = nonuniform(bindless_shadow2d(lights.spotLights[lid].shadowmap))
+        ->SampleCmpLevelZero(shadowUv, posLightSpaceNDC.z);
+
+      if (shadow_technique_is_pcf_kernel(tech))
+      {
+        let gridDim = PCF_KERNEL_SIZES[tech];
+        let mid = gridDim / 2 + 1;
+
+        let uvStep = float2(1.f / SPOT_SM_RESOLUTION);
+        let uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
+
+        float sampleCount = 1.f;
+
+        for (int y = 0; y < gridDim; ++y)
+          for (int x = 0; x < gridDim; ++x)
+          {
+            if (x == mid && y == mid)
+              continue;
+
+            let uv = uvBase + uvStep * float2(float(x), float(y));
+            let w = pcf_kernel_weight(x, y, tech);
+
+            ld.shadow = w * nonuniform(bindless_shadow2d(lights.spotLights[lid].shadowmap))
+              ->SampleCmpLevelZero(uv, posLightSpaceNDC.z);
+            sampleCount += w;
+          }
+
+        ld.shadow /= sampleCount;
+      }
+    }
+  }
 
   return ld;
 }

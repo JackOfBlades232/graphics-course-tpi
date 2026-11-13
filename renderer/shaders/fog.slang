@@ -78,7 +78,8 @@ func fog_generate(
   source: ConstantBuffer<FogSourceData>,
   constants: ConstantBuffer<Constants>,
   viewParams: ConstantBuffer<ViewParams>,
-  lights: ConstantBuffer<UniformLights>)
+  lights: ConstantBuffer<UniformLights>,
+  lightMats: StructuredBuffer<LightMatrices>)
 {
   let imCoord = threadId.xy;
   let imSize = uint2(constants.mainTargetResolution) / 2;
@@ -131,8 +132,6 @@ func fog_generate(
 
     if (ii > 0.f)
     {
-      // @TODO: lighting
-
       let csmd = get_cascade_data_for_view_pos(vpos, viewParams);
 
       for (var i: int = 0; i < (scatterAllLights ? lights.directionalLightsCount : min(1, lights.directionalLightsCount)); ++i)
@@ -150,7 +149,7 @@ func fog_generate(
       }
       for (int i = 0; i < (scatterAllLights ? lights.spotLightsCount : 0); ++i)
       {
-        let ld = calculate_spot_light_data(i, pos, ShadowTechnique.SIMPLE, lights);
+        let ld = calculate_spot_light_data(i, pos, ShadowTechnique.SIMPLE, lights, constants, lightMats);
         let inscatter = ii * ld.intensity * ld.shadow * constants.fogSceneLightsScatterCoeff; // * phase
         transmitted.rgb += transmitted.a * inscatter * stp;
       }

@@ -342,6 +342,9 @@ private:
     bindlessSamplersDsetFrag;
   etna::PersistentDescriptorSet materialParamsDsetComp, bindlessTexturesDsetComp,
     bindlessSamplersDsetComp;
+
+  etna::PersistentDescriptorSet bindlessDset;
+
   bool initialTransition = true; // @HACK
 
   const etna::GpuWorkCount& wc;

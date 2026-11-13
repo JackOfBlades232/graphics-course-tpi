@@ -290,3 +290,38 @@ func depth_and_tc_to_pos(depth: float, tc: float2, ivpm: float4x4) -> float3
   let posHom = mul(cameraToScreen, ivpm);
   return posHom.xyz / posHom.w;
 }
+
+func unpack_tex_smp(id: TexSmpIdPair) -> uint2
+{
+  return uint2(uint32_t(id) & 0xFFFF, uint32_t(id) >> 16);
+}
+
+func bindless2d<T: ITexelElement>(id: TexSmpIdPair) -> DescriptorHandle<Sampler2D<T>>
+{
+  return DescriptorHandle<Sampler2D<T>>(unpack_tex_smp(id));
+}
+
+func bindless_shadow2d(id: TexSmpIdPair) -> DescriptorHandle<Sampler2DShadow>
+{
+  return DescriptorHandle<Sampler2DShadow>(unpack_tex_smp(id));
+}
+
+func bindless_cube<T: ITexelElement>(id: TexSmpIdPair) -> DescriptorHandle<SamplerCube<T>>
+{
+  return DescriptorHandle<SamplerCube<T>>(unpack_tex_smp(id));
+}
+
+func bindless3d<T: ITexelElement>(id: TexSmpIdPair) -> DescriptorHandle<Sampler3D<T>>
+{
+  return DescriptorHandle<Sampler3D<T>>(unpack_tex_smp(id));
+}
+
+func shadow_technique_is_pcf(tech: ShadowTechnique) -> bool
+{
+  return tech <= ShadowTechnique.PCF9X9;
+}
+
+func shadow_technique_is_pcf_kernel(tech: ShadowTechnique) -> bool
+{
+  return shadow_technique_is_pcf(tech) && tech >= ShadowTechnique.PCF3X3;
+}

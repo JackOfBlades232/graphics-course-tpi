@@ -793,6 +793,29 @@ void WorldRenderer::loadScene(std::filesystem::path path)
     etna::create_persistent_descriptor_set(fragProgInfo.getDescriptorLayoutId(3), smpBindings);
   bindlessSamplersDsetComp = etna::create_persistent_descriptor_set(
     compProgInfo.getDescriptorLayoutId(3), std::move(smpBindings));
+
+  // @TODO wip
+  auto builder = etna::get_context().getParameterSets().bindlessDsetBuilder();
+  for (size_t i = 0; i < sceneMgr->getTextures().size(); ++i)
+  {
+    const auto& tex = sceneMgr->getTex(TexId(i));
+    etna::Image::ViewParams vps{};
+    if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
+      vps.type = vk::ImageViewType::eCube;
+    builder.setTex(i, tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps));
+    // registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", i, tex.getName()));
+  }
+  for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
+  {
+    const auto& smp = sceneMgr->getSmp(SmpId(i));
+    builder.setSmp(i, smp.genBinding());
+  }
+  for (size_t i = 0; i < sceneMgr->getSamplers().size(); ++i)
+  {
+    const auto& smp = sceneMgr->getSmp(SmpId(i));
+    smpBindings.emplace_back(etna::Binding{0, smp.genBinding(), uint32_t(i)});
+  }
+  bindlessDset = etna::create_persistent_descriptor_set(builder.build());
 }
 
 void WorldRenderer::loadShaders()
@@ -1819,6 +1842,21 @@ void WorldRenderer::renderWorld(
       bindlessTexturesDsetFrag.processBarriers(cmd_buf);
       bindlessTexturesDsetComp.processBarriers(cmd_buf);
     }
+
+    auto builder = etna::get_context().getParameterSets().bindlessDsetBuilder();
+    for (TexId tid : readyTids)
+    {
+      const auto& tex = sceneMgr->getTex(tid);
+      etna::Image::ViewParams vps{};
+      if (tex.getCreationFlags() & vk::ImageCreateFlagBits::eCubeCompatible)
+        vps.type = vk::ImageViewType::eCube;
+      builder.setTex(
+        uint32_t(tid), tex.genBinding({}, vk::ImageLayout::eShaderReadOnlyOptimal, vps));
+      // registerManagedImage(tex, fmt::format("bindless_tex_{}[{}]", size_t(tid), tex.getName()));
+    }
+    bindlessDset.updateBindings(builder.build());
+    // if (!initialTransition)
+    //   bindlessDset.processBarriers(cmd_buf);
 
     if (std::any_of(readyTids.begin(), readyTids.end(), [this](TexId tid) {
           return sceneMgr->isTerrainTexture(tid);
@@ -3352,17 +3390,23 @@ void WorldRenderer::renderWorld(
             .setCbuf("constants", constants->get().genBinding())
             .setCbuf("viewParams", mainViewContext->viewParamsBuf.get().genBinding())
             .setCbuf("lights", lights->get().genBinding())
+            .setBuf("lightMats", lightMatricesBuf.genBinding())
             .build());
-        // @TODO: lighting
         etna::flush_barriers(cmd_buf);
+
+        // @TODO hoist to beginning of frame (having purged all others from slot3)
+        cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eCompute,
+          fogGenerate.getVkPipelineLayout(),
+          3,
+          {bindlessDset.getVkSet()},
+          {});
+
         cmd_buf.bindDescriptorSets(
           vk::PipelineBindPoint::eCompute,
           fogGenerate.getVkPipelineLayout(),
           0,
-          {set.getVkSet(),
-           materialParamsDsetComp.getVkSet(),
-           bindlessTexturesDsetComp.getVkSet(),
-           bindlessSamplersDsetComp.getVkSet()},
+          {set.getVkSet()},
           {});
 
         cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, fogGenerate.getVkPipeline());
