@@ -37,27 +37,23 @@ void Renderer::initVulkan(const char* app_name, std::span<const char*> instance_
     .descriptorBindingVariableDescriptorCount = true,
     .runtimeDescriptorArray = true};
 
-  vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT featuresMutable = {
-    .pNext = &featuresDescIndexing};
-
-  etna::initialize(
-    etna::InitParams{
-      .applicationName = app_name,
-      .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
-      .instanceExtensions = instanceExtensions,
-      .deviceExtensions = deviceExtensions,
-      .features =
-        vk::PhysicalDeviceFeatures2{
-          .pNext = &featuresMutable,
-          .features =
-            {.tessellationShader = true,
-             .multiDrawIndirect = true,
-             .drawIndirectFirstInstance = true,
-             .depthBiasClamp = true,
-             .fillModeNonSolid = true}},
-      .physicalDeviceIndexOverride = {},
-      .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),
-      .generateBarriersAutomatically = true});
+  etna::initialize(etna::InitParams{
+    .applicationName = app_name,
+    .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
+    .instanceExtensions = instanceExtensions,
+    .deviceExtensions = deviceExtensions,
+    .features =
+      vk::PhysicalDeviceFeatures2{
+        .pNext = &featuresDescIndexing,
+        .features =
+          {.tessellationShader = true,
+           .multiDrawIndirect = true,
+           .drawIndirectFirstInstance = true,
+           .depthBiasClamp = true,
+           .fillModeNonSolid = true}},
+    .physicalDeviceIndexOverride = {},
+    .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount(),
+    .generateBarriersAutomatically = true});
 }
 
 void Renderer::initFrameDelivery(vk::UniqueSurfaceKHR a_surface, ResolutionProvider res_provider)
@@ -68,17 +64,15 @@ void Renderer::initFrameDelivery(vk::UniqueSurfaceKHR a_surface, ResolutionProvi
 
   commandManager = ctx.createPerFrameCmdMgr();
 
-  window = ctx.createWindow(
-    etna::Window::CreateInfo{
-      .surface = std::move(a_surface),
-    });
+  window = ctx.createWindow(etna::Window::CreateInfo{
+    .surface = std::move(a_surface),
+  });
 
-  auto [w, h] = window->recreateSwapchain(
-    etna::Window::DesiredProperties{
-      .resolution = {resolution.x, resolution.y},
-      .vsync = useVsync,
-      .autoGamma = true,
-      .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount()});
+  auto [w, h] = window->recreateSwapchain(etna::Window::DesiredProperties{
+    .resolution = {resolution.x, resolution.y},
+    .vsync = useVsync,
+    .autoGamma = true,
+    .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount()});
 
   resolution = {w, h};
 
@@ -102,11 +96,10 @@ void Renderer::debugInput(const Keyboard& kb, const Mouse& ms, bool mouse_captur
 
   if (kb[KeyboardKey::kB] == ButtonState::Falling)
   {
-    const int retval = std::system(
-      "cd " GRAPHICS_COURSE_ROOT "/build"
-      " && cmake --build . --target renderer_shaders"
-      " && cmake --build . --target render_utils_shaders"
-      " && cmake --build . --target render_components_shaders");
+    const int retval = std::system("cd " GRAPHICS_COURSE_ROOT "/build"
+                                   " && cmake --build . --target renderer_shaders"
+                                   " && cmake --build . --target render_utils_shaders"
+                                   " && cmake --build . --target render_components_shaders");
     if (retval != 0)
       spdlog::warn("Shader recompilation returned a non-zero return code!");
     else
@@ -187,12 +180,11 @@ void Renderer::drawFrame()
   if (!nextSwapchainImage && resolutionProvider() != glm::uvec2{0, 0})
   {
     auto newResolution = resolutionProvider();
-    auto [w, h] = window->recreateSwapchain(
-      etna::Window::DesiredProperties{
-        .resolution = {newResolution.x, newResolution.y},
-        .vsync = useVsync,
-        .autoGamma = true,
-        .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount()});
+    auto [w, h] = window->recreateSwapchain(etna::Window::DesiredProperties{
+      .resolution = {newResolution.x, newResolution.y},
+      .vsync = useVsync,
+      .autoGamma = true,
+      .numFramesInFlight = (uint32_t)gpuWorkCount.multiBufferingCount()});
 
     if (resolution != glm::uvec2{w, h})
     {
