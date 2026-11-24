@@ -136,14 +136,14 @@ func fog_generate(
 
       for (var i: int = 0; i < (scatterAllLights ? lights.directionalLightsCount : min(1, lights.directionalLightsCount)); ++i)
       {
-        let ld = calculate_directional_light_data(i, pos, csmd, ShadowTechnique.SIMPLE, lights);
+        let ld = calculate_directional_light_data(i, pos, csmd, ShadowTechnique.SIMPLE, lights, constants, lightMats);
         let inscatter = ii * ld.intensity * ld.shadow; // * phase
         transmitted.rgb += transmitted.a * inscatter * stp;
       }
 
       for (int i = 0; i < (scatterAllLights ? lights.pointLightsCount : 0); ++i)
       {
-        let ld = calculate_point_light_data(i, pos, ShadowTechnique.SIMPLE, lights);
+        let ld = calculate_point_light_data(i, pos, ShadowTechnique.SIMPLE, lights, constants, lightMats);
         let inscatter = ii * ld.intensity * ld.shadow * constants.fogSceneLightsScatterCoeff; // * phase
         transmitted.rgb += transmitted.a * inscatter * stp;
       }

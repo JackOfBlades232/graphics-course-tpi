@@ -75,8 +75,6 @@ func calculate_angular_attenuation(
   return 1.f - pow(angularAttenuation, 2.5f);
 }
 
-// @TODO: shadowing once we have bindless
-
 struct CsmCascadeData
 {
   var cascade: int;
@@ -127,23 +125,127 @@ struct LightData
   var shadow: float;
 }
 
+func calculate_csm_shadow_pcf_no_blend(
+  lid: int, cid: int, pos: float3, tech: ShadowTechnique,
+  lights: UniformLights, constants: Constants,
+  mats: StructuredBuffer<LightMatrices>) -> float
+{
+  let posLightClipSpace = mul(float4(pos, 1.f), mats[0].directionalLightMats[lid][cid]);
+  let posLightSpaceNDC = posLightClipSpace.xyz; // No perspective divide cuz ortho
+  let shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
+
+  var shadow: float =
+    BindlessSampler2DShadow(lights.directionalLights[lid].shadowmapCascades[cid].map).nuSampleCmpLevelZero(shadowUv, posLightSpaceNDC.z);
+
+  if (shadow_technique_is_pcf_kernel(tech))
+  {
+    let gridDim = PCF_KERNEL_SIZES[tech];
+    let mid = gridDim / 2 + 1;
+
+    let uvStep = float2(1.f / CSM_CASCADE_RESOLUTION);
+    let uvBase = shadowUv - float(gridDim) * 0.5f * uvStep;
+
+    var sampleCount: float = 1.f;
+
+    for (var y: int = 0; y < gridDim; ++y)
+      for (var x: int = 0; x < gridDim; ++x)
+      {
+        if (x == mid && y == mid)
+          continue;
+
+        let uv = uvBase + uvStep * float2(float(x), float(y));
+        let w = pcf_kernel_weight(x, y, tech);
+
+        shadow +=
+          BindlessSampler2DShadow(lights.directionalLights[lid].shadowmapCascades[cid].map).nuSampleCmpLevelZero(uv, posLightSpaceNDC.z);
+        sampleCount += w;
+      }
+
+    shadow /= sampleCount;
+  }
+
+  return shadow;
+}
+
+func calculate_csm_shadow_pcf(
+  lid: int, cid: int, pos: float3,
+  z_from_start: float, z_from_end: float, tech: ShadowTechnique,
+  lights: UniformLights, constants: Constants,
+  mats: StructuredBuffer<LightMatrices>) -> float
+{
+  let base = calculate_csm_shadow_pcf_no_blend(lid, cid, pos, tech, lights, constants, mats);
+  var prev: float = 0.f;
+  var next: float = 0.f;
+
+  var basew: float = 1.f;
+  var prevw: float = 0.f;
+  var nextw: float = 0.f;
+
+  // @TODO: non-linear blend without more samplings (sigmoid?)
+  if (cid > 0 && z_from_start <= constants.csmBlendingBeltSize)
+  {
+    prevw = 0.5f * (constants.csmBlendingBeltSize - z_from_start) / constants.csmBlendingBeltSize;
+    prev = calculate_csm_shadow_pcf_no_blend(lid, cid - 1, pos, tech, lights, constants, mats);
+  }
+
+  if (z_from_end <= constants.csmBlendingBeltSize)
+  {
+    nextw = (constants.csmBlendingBeltSize - z_from_end) / constants.csmBlendingBeltSize;
+    if (cid < CSM_CASCADE_COUNT - 1)
+    {
+      next = calculate_csm_shadow_pcf_no_blend(lid, cid + 1, pos, tech, lights, constants, mats);
+      nextw *= 0.5f;
+    }
+    else
+    {
+      next = 1.f;
+    }
+  }
+
+  if (prevw > 0.f || nextw > 0.f)
+  {
+    if (prevw > 0.f && nextw > 0.f)
+    {
+      prevw *= 0.5f;
+      nextw *= 0.5f;
+    }
+    basew = 1.f - prevw - nextw;
+  }
+
+  return base * basew + prev * prevw + next * nextw;
+}
+
 func calculate_directional_light_data(
   lid: int , pos: float3,
   data: CsmCascadeData, tech: ShadowTechnique,
-  lights: UniformLights) -> LightData
+  lights: UniformLights, constants: Constants,
+  mats: StructuredBuffer<LightMatrices>) -> LightData
 {
   var ld: LightData;
   ld.intensity = lights.directionalLights[lid].color * lights.directionalLights[lid].intensity;
   ld.direction = -normalize(lights.directionalLights[lid].direction);
 
-  ld.shadow = 1.f; // @TODO: impl
+  ld.shadow = 1.f;
+
+  if (constants.useDirectionalLightShadows && data.cascade < CSM_CASCADE_COUNT)
+  {
+    if (shadow_technique_is_pcf(tech))
+    {
+      ld.shadow = calculate_csm_shadow_pcf(
+        lid, data.cascade, pos,
+        data.zIntoCascadeStart / data.zCascadeSize,
+        data.zIntoCascadeEnd / data.zNextCascadeSize,
+        tech, lights, constants, mats);
+    }
+  }
 
   return ld;
 }
 
 func calculate_point_light_data(
-  lid: int , pos: float3,
-  tech: ShadowTechnique, lights: UniformLights) -> LightData
+  lid: int , pos: float3, tech: ShadowTechnique,
+  lights: UniformLights, constants: Constants,
+  mats: StructuredBuffer<LightMatrices>) -> LightData
 {
   var ld: LightData;
   ld.direction = normalize(lights.pointLights[lid].position - pos);
@@ -154,7 +256,59 @@ func calculate_point_light_data(
   ld.intensity = lightIntensity * lightAttenuation;
   if (length(ld.intensity) < EPSILON)
     return ld;
-  // @TODO: impl shadow
+
+  if (constants.usePointLightShadows)
+  {
+    let sampleDir = -float3(ld.direction.x, ld.direction.y, -ld.direction.z);
+
+    let faceIdx =
+      abs(sampleDir.x) > abs(sampleDir.y) && abs(sampleDir.x) > abs(sampleDir.z) ? (sampleDir.x > 0.f ? 0 : 1) :
+      abs(sampleDir.y) > abs(sampleDir.z) ? (sampleDir.y > 0.f ? 2 : 3) :
+      (sampleDir.z > 0.f ? 4 : 5);
+
+    let posLightClipSpace = mul(float4(pos, 1.f), mats[0].pointLightMats[lid][faceIdx]);
+    let posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
+
+    if (shadow_technique_is_pcf(tech))
+    {
+      ld.shadow = BindlessSamplerCubeShadow(lights.pointLights[lid].shadowmap).nuSampleCmpLevelZero(sampleDir, posLightSpaceNDC.z);
+
+      if (shadow_technique_is_pcf_kernel(tech))
+      {
+        let gridDim = PCF_KERNEL_SIZES[tech];
+        let mid = gridDim / 2 + 1;
+
+        let faceExt =
+          (faceIdx == 0 || faceIdx == 1) ? abs(sampleDir.x) :
+          (faceIdx == 2 || faceIdx == 3) ? abs(sampleDir.y) :
+          abs(sampleDir.z);
+
+        let baseDir = sampleDir / faceExt;
+
+        // PCF is symmetrical => dir does not matter
+        let ud = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 2 || faceIdx == 3) ? float3(1.f, 0.f, 0.f) : float3(0.f, 1.f, 0.f));
+        let vd = (2.f / float(POINT_SM_RESOLUTION)) * ((faceIdx == 4 || faceIdx == 5) ? float3(1.f, 0.f, 0.f) : float3(0.f, 0.f, 1.f));
+
+        var sampleCount: float = 1.f;
+
+        for (var y: int = 0; y < gridDim; ++y)
+          for (var x: int = 0; x < gridDim; ++x)
+          {
+            if (x == mid && y == mid)
+              continue;
+
+            let sdir = normalize(baseDir + (float(x) - float(gridDim) * 0.5f) * ud + (float(y) - float(gridDim) * 0.5f) * vd);
+            let w = pcf_kernel_weight(x, y, tech);
+
+            ld.shadow += w * BindlessSamplerCubeShadow(lights.pointLights[lid].shadowmap).nuSampleCmpLevelZero(sdir, posLightSpaceNDC.z);
+            sampleCount += w;
+          }
+
+        ld.shadow /= sampleCount;
+      }
+    }
+  }
+
   return ld;
 }
 
@@ -187,11 +341,9 @@ func calculate_spot_light_data(
     let posLightSpaceNDC = posLightClipSpace.xyz / posLightClipSpace.w;
     let shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
 
-
     if (shadow_technique_is_pcf(tech))
     {
-      ld.shadow = nonuniform(bindless_shadow2d(lights.spotLights[lid].shadowmap))
-        ->SampleCmpLevelZero(shadowUv, posLightSpaceNDC.z);
+      ld.shadow = BindlessSampler2DShadow(lights.spotLights[lid].shadowmap).nuSampleCmpLevelZero(shadowUv, posLightSpaceNDC.z);
 
       if (shadow_technique_is_pcf_kernel(tech))
       {
@@ -212,8 +364,7 @@ func calculate_spot_light_data(
             let uv = uvBase + uvStep * float2(float(x), float(y));
             let w = pcf_kernel_weight(x, y, tech);
 
-            ld.shadow = w * nonuniform(bindless_shadow2d(lights.spotLights[lid].shadowmap))
-              ->SampleCmpLevelZero(uv, posLightSpaceNDC.z);
+            ld.shadow = w * BindlessSampler2DShadow(lights.spotLights[lid].shadowmap).nuSampleCmpLevelZero(uv, posLightSpaceNDC.z);
             sampleCount += w;
           }
 

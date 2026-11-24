@@ -77,11 +77,11 @@ v Migrate a serious feature
   v Migrate ssao
     v Migrate
     v Report matrix codegen bug to slang
-  - Migrate bindless system
-    - Design slang impl
-    - Make doubling written set(s)
-  - Migrate lighting lib
-  - Migrate fog
+  v Migrate bindless system
+    v Design slang impl
+    v Make doubling written set(s)
+  v Migrate lighting lib
+  v Migrate fog
   - Migrate brdf calculation
   - Migrate gbuffer resolve
   - Migrate static scene

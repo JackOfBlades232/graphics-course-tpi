@@ -296,24 +296,40 @@ func unpack_tex_smp(id: TexSmpIdPair) -> uint2
   return uint2(uint32_t(id) & 0xFFFF, uint32_t(id) >> 16);
 }
 
-func bindless2d<T: ITexelElement>(id: TexSmpIdPair) -> DescriptorHandle<Sampler2D<T>>
+struct BindlessSampler2DShadow
 {
-  return DescriptorHandle<Sampler2D<T>>(unpack_tex_smp(id));
+  DescriptorHandle<Texture2D> tex;
+  DescriptorHandle<SamplerComparisonState> smp;
+
+  __init(TexSmpIdPair id)
+  {
+    let ids = unpack_tex_smp(id);
+    tex = DescriptorHandle<Texture2D>(ids.x);
+    smp = DescriptorHandle<SamplerComparisonState>(ids.y);
+  }
+
+  func nuSampleCmpLevelZero(uv: float2, ref: float) -> float
+  {
+    return nonuniform(tex).SampleCmpLevelZero(nonuniform(smp), uv, ref);
+  }
 }
 
-func bindless_shadow2d(id: TexSmpIdPair) -> DescriptorHandle<Sampler2DShadow>
+struct BindlessSamplerCubeShadow
 {
-  return DescriptorHandle<Sampler2DShadow>(unpack_tex_smp(id));
-}
+  DescriptorHandle<TextureCube> tex;
+  DescriptorHandle<SamplerComparisonState> smp;
 
-func bindless_cube<T: ITexelElement>(id: TexSmpIdPair) -> DescriptorHandle<SamplerCube<T>>
-{
-  return DescriptorHandle<SamplerCube<T>>(unpack_tex_smp(id));
-}
+  __init(TexSmpIdPair id)
+  {
+    let ids = unpack_tex_smp(id);
+    tex = DescriptorHandle<TextureCube>(ids.x);
+    smp = DescriptorHandle<SamplerComparisonState>(ids.y);
+  }
 
-func bindless3d<T: ITexelElement>(id: TexSmpIdPair) -> DescriptorHandle<Sampler3D<T>>
-{
-  return DescriptorHandle<Sampler3D<T>>(unpack_tex_smp(id));
+  func nuSampleCmpLevelZero(dir: float3, ref: float) -> float
+  {
+    return nonuniform(tex).SampleCmpLevelZero(nonuniform(smp), dir, ref);
+  }
 }
 
 func shadow_technique_is_pcf(tech: ShadowTechnique) -> bool
