@@ -82,8 +82,8 @@ v Migrate a serious feature
     v Make doubling written set(s)
   v Migrate lighting lib
   v Migrate fog
-  - Migrate brdf calculation
-  - Migrate gbuffer resolve
+  v Migrate brdf calculation
+  v Migrate gbuffer resolve
   - Migrate static scene
   - Migrate tesshquad and terrain
   - Migrate grass

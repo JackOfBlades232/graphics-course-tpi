@@ -12,7 +12,6 @@ target_link_libraries(renderer
   PRIVATE glfw etna glm::glm wsi gui scene render_utils render_components)
 
 target_add_shaders(renderer
-  shaders/gbuffer_resolve.frag
   shaders/clipmap_gen.comp
   shaders/reset_terrain_chunk_height_bounds.comp
   shaders/generate_terrain_chunk_height_bounds.comp
@@ -55,4 +54,5 @@ target_add_shaders_slang(renderer
   SHADER shaders/fog.slang fog_apply
   SHADER shaders/fog.slang fog_generate
   SHADER shaders/lighting.slang transfer_light_matrix
+  SHADER shaders/gbuffer.slang postfx_vertex_main resolve
 )

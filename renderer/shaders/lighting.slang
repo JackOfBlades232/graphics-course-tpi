@@ -118,6 +118,21 @@ func get_cascade_data_for_view_pos(
   return data;
 }
 
+func get_csm_cascade_debug_multiplier(data: CsmCascadeData, constants: Constants) -> float4
+{
+  var debugMultiplier = float4(1.f);
+  if (constants.drawCascadesInSolidColor)
+  {
+    let DEBUG_CASCADE_COLORS: float4[4] = {
+      {1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, 1.f}, {0.f, 1.f, 1.f}};
+
+    debugMultiplier = data.cascade == CSM_CASCADE_COUNT
+      ? float4(1.f, 0.f, 1.f, 1.f)
+      : DEBUG_CASCADE_COLORS[data.cascade & 3];
+  }
+  return debugMultiplier;
+}
+
 struct LightData
 {
   var intensity: float3;
@@ -135,7 +150,7 @@ func calculate_csm_shadow_pcf_no_blend(
   let shadowUv = posLightSpaceNDC.xy * 0.5f + 0.5f;
 
   var shadow: float =
-    BindlessSampler2DShadow(lights.directionalLights[lid].shadowmapCascades[cid].map).nuSampleCmpLevelZero(shadowUv, posLightSpaceNDC.z);
+    BindlessSampler2DShadow(lights.directionalLights[lid].shadowmapCascades[cid].map).SampleCmpLevelZero(shadowUv, posLightSpaceNDC.z);
 
   if (shadow_technique_is_pcf_kernel(tech))
   {
@@ -157,7 +172,7 @@ func calculate_csm_shadow_pcf_no_blend(
         let w = pcf_kernel_weight(x, y, tech);
 
         shadow +=
-          BindlessSampler2DShadow(lights.directionalLights[lid].shadowmapCascades[cid].map).nuSampleCmpLevelZero(uv, posLightSpaceNDC.z);
+          BindlessSampler2DShadow(lights.directionalLights[lid].shadowmapCascades[cid].map).SampleCmpLevelZero(uv, posLightSpaceNDC.z);
         sampleCount += w;
       }
 
@@ -243,7 +258,7 @@ func calculate_directional_light_data(
 }
 
 func calculate_point_light_data(
-  lid: int , pos: float3, tech: ShadowTechnique,
+  lid: int, pos: float3, tech: ShadowTechnique,
   lights: UniformLights, constants: Constants,
   mats: StructuredBuffer<LightMatrices>) -> LightData
 {
@@ -271,7 +286,7 @@ func calculate_point_light_data(
 
     if (shadow_technique_is_pcf(tech))
     {
-      ld.shadow = BindlessSamplerCubeShadow(lights.pointLights[lid].shadowmap).nuSampleCmpLevelZero(sampleDir, posLightSpaceNDC.z);
+      ld.shadow = BindlessSamplerCubeShadow(lights.pointLights[lid].shadowmap).SampleCmpLevelZero(sampleDir, posLightSpaceNDC.z);
 
       if (shadow_technique_is_pcf_kernel(tech))
       {
@@ -300,7 +315,7 @@ func calculate_point_light_data(
             let sdir = normalize(baseDir + (float(x) - float(gridDim) * 0.5f) * ud + (float(y) - float(gridDim) * 0.5f) * vd);
             let w = pcf_kernel_weight(x, y, tech);
 
-            ld.shadow += w * BindlessSamplerCubeShadow(lights.pointLights[lid].shadowmap).nuSampleCmpLevelZero(sdir, posLightSpaceNDC.z);
+            ld.shadow += w * BindlessSamplerCubeShadow(lights.pointLights[lid].shadowmap).SampleCmpLevelZero(sdir, posLightSpaceNDC.z);
             sampleCount += w;
           }
 
@@ -343,7 +358,7 @@ func calculate_spot_light_data(
 
     if (shadow_technique_is_pcf(tech))
     {
-      ld.shadow = BindlessSampler2DShadow(lights.spotLights[lid].shadowmap).nuSampleCmpLevelZero(shadowUv, posLightSpaceNDC.z);
+      ld.shadow = BindlessSampler2DShadow(lights.spotLights[lid].shadowmap).SampleCmpLevelZero(shadowUv, posLightSpaceNDC.z);
 
       if (shadow_technique_is_pcf_kernel(tech))
       {
@@ -364,7 +379,7 @@ func calculate_spot_light_data(
             let uv = uvBase + uvStep * float2(float(x), float(y));
             let w = pcf_kernel_weight(x, y, tech);
 
-            ld.shadow = w * BindlessSampler2DShadow(lights.spotLights[lid].shadowmap).nuSampleCmpLevelZero(uv, posLightSpaceNDC.z);
+            ld.shadow = w * BindlessSampler2DShadow(lights.spotLights[lid].shadowmap).SampleCmpLevelZero(uv, posLightSpaceNDC.z);
             sampleCount += w;
           }
 

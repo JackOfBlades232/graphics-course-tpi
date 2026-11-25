@@ -290,6 +290,15 @@ struct WeatherSourceData
   float pad1_, pad2_, pad3_;
 };
 
+// Sky
+// 
+
+struct SkyboxSourceData
+{
+  TexSmpIdPair cubemapTexSmp;
+  uint pad1_, pad2_, pad3_;
+};
+
 // Fog
 //
 

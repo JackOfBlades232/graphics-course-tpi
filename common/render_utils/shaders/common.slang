@@ -30,6 +30,8 @@ static const float FLT_MIN_NORMAL = 1.175494351e-38f;
 static const float EPSILON = 0.00001f;
 static const float BIG_EPSILON = 0.001f;
 
+static const float PI = 3.1415927f;
+
 func flagset(flags: uint, flag: uint) -> bool
 {
   return (flags & flag) == flag;
@@ -113,6 +115,16 @@ func ldr_luminance(col: float3) -> float
 func ldr_luminance(col: float4) -> float
 {
   return ldr_luminance(col.xyz);
+}
+
+func luminance_bt601(col: float3) -> float
+{
+  return dot(col, float3(0.299f, 0.587f, 0.114f));
+}
+
+func luminance_bt601(col: float4) -> float
+{
+  return luminance_bt601(col.xyz);
 }
 
 // https://gist.github.com/TheRealMJP/bc503b0b87b643d3505d41eab8b332ae
@@ -208,6 +220,71 @@ func ordered_uint_to_float(i: uint) -> float
   return asfloat(i ^ ((i & 0x80000000) != 0 ? 0x80000000 : 0xFFFFFFFF));
 }
 
+func dequantize3fnorm(q: uint) -> float3
+{
+  let aEncX = (q & 0x000000FFu);
+  let aEncY = ((q & 0x0000FF00u) >> 8);
+  let aEncZ = ((q & 0x00FF0000u) >> 16);
+
+  let usX = uint(aEncX & 0x000000FFu);
+  let usY = uint(aEncY & 0x000000FFu);
+  let usZ = uint(aEncZ & 0x000000FFu);
+
+  let sX = (usX <= 127) ? int(usX) : (int(usX) - 256);
+  let sY = (usY <= 127) ? int(usY) : (int(usY) - 256);
+  let sZ = (usZ <= 127) ? int(usZ) : (int(usZ) - 256);
+
+  let x = max(float(sX) / 127.0f, -1.0f);
+  let y = max(float(sY) / 127.0f, -1.0f);
+  let z = max(float(sZ) / 127.0f, -1.0f);
+
+  return float3(x, y, z);
+}
+
+func dequantize3f1snorm(q: uint) -> float4
+{
+  let aEncX = (q & 0x000000FFu);
+  let aEncY = ((q & 0x0000FF00u) >> 8);
+  let aEncZ = ((q & 0x00FF0000u) >> 16);
+  let aEncOri = ((q & 0xFF000000u) >> 24);
+
+  let usX = uint(aEncX & 0x000000FFu);
+  let usY = uint(aEncY & 0x000000FFu);
+  let usZ = uint(aEncZ & 0x000000FFu);
+  let usOri = uint(aEncOri & 0x000000FFu);
+
+  let sX = (usX <= 127) ? int(usX) : (int(usX) - 256);
+  let sY = (usY <= 127) ? int(usY) : (int(usY) - 256);
+  let sZ = (usZ <= 127) ? int(usZ) : (int(usZ) - 256);
+  let sOri = (usOri <= 127) ? int(usOri) : (int(usOri) - 256);
+
+  let x = max(float(sX) / 127.0f, -1.0f);
+  let y = max(float(sY) / 127.0f, -1.0f);
+  let z = max(float(sZ) / 127.0f, -1.0f);
+  let ori = sOri >= 0.0f ? 1.0f : -1.0f;
+
+  return float4(x, y, z, ori);
+}
+
+func dequantize4fcol(c: uint) -> float4
+{
+  let aEncR = (c & 0x000000FFu);
+  let aEncG = ((c & 0x0000FF00u) >> 8);
+  let aEncB = ((c & 0x00FF0000u) >> 16);
+  let aEncA = ((c & 0xFF000000u) >> 24);
+  return float4(
+    float(aEncR) / 255.0f, float(aEncG) / 255.0f, float(aEncB) / 255.0f, float(aEncA) / 255.0f);
+}
+
+func quantize4fcol(c: float4) -> uint
+{
+  let ur = uint(c.r * 255.f) & 0xFF;
+  let ug = uint(c.g * 255.f) & 0xFF;
+  let ub = uint(c.b * 255.f) & 0xFF;
+  let ua = uint(c.a * 255.f) & 0xFF;
+  return (ua << 24) | (ub << 16) | (ug << 8) | ur;
+}
+
 func identity4x4() -> float4x4
 {
   return float4x4(
@@ -296,7 +373,38 @@ func unpack_tex_smp(id: TexSmpIdPair) -> uint2
   return uint2(uint32_t(id) & 0xFFFF, uint32_t(id) >> 16);
 }
 
-struct BindlessSampler2DShadow
+struct BindlessSamplerCube<T: ITexelElement> : ITexture2D
+{
+  DescriptorHandle<TextureCube<T>> tex;
+  DescriptorHandle<SamplerState> smp;
+
+  __init(TexSmpIdPair id)
+  {
+    let ids = unpack_tex_smp(id);
+    tex = DescriptorHandle<TextureCube<T>>(ids.x);
+    smp = DescriptorHandle<SamplerState>(ids.y);
+  }
+
+  func Sample(dir: float3) -> T
+  {
+    return nonuniform(tex).Sample(nonuniform(smp), dir);
+  }
+
+  func SampleLevel(dir: float3, level: float) -> T
+  {
+    return nonuniform(tex).SampleLevel(nonuniform(smp), dir, level);
+  }
+
+  func getSize() -> uint2
+  {
+    var width: uint;
+    var height: uint;
+    nonuniform(tex).GetDimensions(width, height);
+    return uint2(width, height);
+  }
+}
+
+struct BindlessSampler2DShadow : ITexture2D
 {
   DescriptorHandle<Texture2D> tex;
   DescriptorHandle<SamplerComparisonState> smp;
@@ -308,13 +416,21 @@ struct BindlessSampler2DShadow
     smp = DescriptorHandle<SamplerComparisonState>(ids.y);
   }
 
-  func nuSampleCmpLevelZero(uv: float2, ref: float) -> float
+  func SampleCmpLevelZero(uv: float2, ref: float) -> float
   {
     return nonuniform(tex).SampleCmpLevelZero(nonuniform(smp), uv, ref);
   }
+
+  func getSize() -> uint2
+  {
+    var width: uint;
+    var height: uint;
+    nonuniform(tex).GetDimensions(width, height);
+    return uint2(width, height);
+  }
 }
 
-struct BindlessSamplerCubeShadow
+struct BindlessSamplerCubeShadow : ITexture2D
 {
   DescriptorHandle<TextureCube> tex;
   DescriptorHandle<SamplerComparisonState> smp;
@@ -326,9 +442,17 @@ struct BindlessSamplerCubeShadow
     smp = DescriptorHandle<SamplerComparisonState>(ids.y);
   }
 
-  func nuSampleCmpLevelZero(dir: float3, ref: float) -> float
+  func SampleCmpLevelZero(dir: float3, ref: float) -> float
   {
     return nonuniform(tex).SampleCmpLevelZero(nonuniform(smp), dir, ref);
+  }
+
+  func getSize() -> uint2
+  {
+    var width: uint;
+    var height: uint;
+    nonuniform(tex).GetDimensions(width, height);
+    return uint2(width, height);
   }
 }
 
